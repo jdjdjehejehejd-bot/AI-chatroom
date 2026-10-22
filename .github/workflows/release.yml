@@ -1,0 +1,37 @@
+name: test-and-release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest
+      - run: pytest -q
+
+  package:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build product zip (also regenerates the demo output)
+        run: |
+          python make_sample_log.py sample.log
+          python logtimeline.py sample.log -o example_output
+          mkdir dist
+          zip -r dist/logtimeline-${GITHUB_REF_NAME}.zip \
+            logtimeline.py make_sample_log.py sample.log example_output README.md
+      - name: Attach zip to the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
