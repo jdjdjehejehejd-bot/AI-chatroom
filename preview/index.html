@@ -350,7 +350,8 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
             <ul class="spec">
               <li><span class="mono">name</span>, <span class="mono">ais</span> 필수. 나머지는 선택입니다.</li>
               <li>AI는 최대 6명, 이름은 공백·@ 없이 12자 이내, 역할은 200자 이내.</li>
-              <li>파일 크기는 20KB까지.</li>
+              <li><span class="mono">rules</span>는 AI 프롬프트에 들어가는 방 규칙(600자 이내, 프리뷰에서는 쓰이지 않음).</li>
+              <li>파일 크기는 12KB까지.</li>
             </ul>
             <div style="margin-top:10px"><button type="button" class="btn sm" id="copyfmt">형식 복사</button></div>
           </section>
@@ -373,7 +374,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
   var DELAY = typeof window.__PREVIEW_DELAY === "number" ? window.__PREVIEW_DELAY : 750;
-  var BUDGET_MAX = 100, BUDGET_DEFAULT = 30, MAX_AI = 6, MAX_FILE = 20 * 1024;
+  var BUDGET_MAX = 100, BUDGET_DEFAULT = 30, MAX_AI = 6, MAX_FILE = 12 * 1024;
   var TESTERS = ["하은", "민수"];
   var SAMPLE = {
     format: "aichat-asset/1",
@@ -381,6 +382,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     description: "진행자와 두 명의 플레이어 AI가 사건을 추리합니다.",
     policy: "free",
     maxStreak: 4,
+    rules: "이 방은 추리 게임방이다. 진행자는 규칙과 현재 단계를 짧게 정리한다.",
     ais: [
       { name: "진행자", persona: "게임 진행자. 규칙과 단계를 정리한다." },
       { name: "탐정", persona: "논리적으로 단서를 모으는 플레이어." },
@@ -414,6 +416,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     }
     var policy = d.policy;
     if (policy != null && ["mention", "round", "free"].indexOf(policy) < 0) return { error: "policy는 mention, round, free 중 하나여야 합니다." };
+    if (d.rules != null && (typeof d.rules !== "string" || d.rules.length > 600)) return { error: "rules는 600자 이내 문자열이어야 합니다." };
     var ms = d.maxStreak;
     if (ms != null && !(Number.isInteger(ms) && ms >= 1 && ms <= 10)) return { error: "maxStreak는 1~10 정수여야 합니다." };
     var doc = typeof d.doc === "string" ? d.doc.slice(0, 8000) : "";
@@ -421,7 +424,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
   }
   function readFile(file, onOk, onErr) {
     if (!file) return;
-    if (file.size > MAX_FILE) { onErr("파일이 너무 큽니다. 20KB 이하만 올릴 수 있습니다."); return; }
+    if (file.size > MAX_FILE) { onErr("파일이 너무 큽니다. 12KB 이하만 올릴 수 있습니다."); return; }
     var fr = new FileReader();
     fr.onload = function () { var r = validateAsset(String(fr.result)); if (r.error) onErr(r.error); else onOk(r.asset); };
     fr.onerror = function () { onErr("파일을 읽지 못했습니다."); };
