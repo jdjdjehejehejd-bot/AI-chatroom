@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 이사회</title>
+<style>
+  :root { --bg:#fafaf7; --fg:#1d1d1b; --muted:#6b6b66; --card:#ffffff; --line:#e4e4de; --accent:#2f5d50; --warn:#a4452c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161715; --fg:#ecece6; --muted:#9b9b93; --card:#1f201d; --line:#33342f; --accent:#7fb7a4; --warn:#e08a6f; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 -apple-system,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:1.5rem; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-size:.85rem; color:var(--muted); margin:10px 0 4px; }
+  textarea, input, select { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg); font:inherit; }
+  textarea { min-height:110px; resize:vertical; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:560px) { .row { grid-template-columns:1fr; } }
+  button { font:inherit; padding:10px 16px; border-radius:8px; border:1px solid var(--accent); background:var(--accent); color:#fff; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--accent); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:14px; }
+  .est { color:var(--muted); font-size:.9rem; }
+  .turn { border-left:3px solid var(--line); padding:6px 12px; margin:10px 0; }
+  .turn b { font-size:.85rem; color:var(--accent); }
+  .turn p { margin:4px 0 0; white-space:pre-wrap; }
+  .err { color:var(--warn); white-space:pre-wrap; }
+  .report p { white-space:pre-wrap; margin:0; }
+  .hidden { display:none; }
+  .note { font-size:.85rem; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>AI 이사회</h1>
+  <p class="sub">안건을 올리면 낙관가·비판가·실무자·고객이 토론하고, 의장이 결정 리포트 1장으로 정리합니다.</p>
+
+  <section class="card">
+    <label for="idea">안건 (아이디어, 글, 결정할 일)</label>
+    <textarea id="idea" placeholder="예: 손글씨를 사진으로 찍으면 점수와 교정 플랜을 주는 구독 앱을 만들려고 한다."></textarea>
+
+    <div class="row">
+      <div>
+        <label for="provider">AI 연결 방식</label>
+        <select id="provider">
+          <option value="demo">데모 모드 (키 불필요, 고정 문구)</option>
+          <option value="anthropic">Anthropic (본인 API 키)</option>
+          <option value="openai">OpenAI 호환 (본인 API 키)</option>
+        </select>
+      </div>
+      <div>
+        <label for="rounds">토론 라운드 (1~3)</label>
+        <select id="rounds"><option>1</option><option selected>2</option><option>3</option></select>
+      </div>
+    </div>
+
+    <div id="keybox" class="hidden">
+      <div class="row">
+        <div>
+          <label for="apikey">API 키 (이 페이지 메모리에만 보관, 새로고침하면 삭제)</label>
+          <input id="apikey" type="password" autocomplete="off" placeholder="sk-...">
+        </div>
+        <div>
+          <label for="model">모델 이름</label>
+          <input id="model" placeholder="사용할 모델 이름을 직접 입력">
+        </div>
+      </div>
+      <div id="basebox" class="hidden">
+        <label for="base">API 주소 (OpenAI 호환)</label>
+        <input id="base" value="https://api.openai.com/v1">
+      </div>
+      <p class="note">브라우저에서 제공사 API를 직접 호출합니다. 제공사 약관과 요금은 본인 키 기준으로 적용됩니다. 호출 수가 많을수록 비용이 늘어납니다.</p>
+    </div>
+
+    <div class="actions">
+      <button id="run">토론 시작</button>
+      <button id="stop" class="ghost hidden">중단</button>
+      <span id="est" class="est"></span>
+    </div>
+  </section>
+
+  <section id="log" class="card hidden" aria-live="polite"></section>
+  <section id="report" class="card report hidden"></section>
+  <p class="note">설계 문서: PLAN.md · 이 페이지는 프로토타입입니다.</p>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var PERSONAS = [
+    { id: "opt",  name: "낙관가",  role: "이 안건의 가능성과 기회, 잘 풀릴 조건을 찾는 투자자" },
+    { id: "crit", name: "비판가",  role: "이 안건이 실패할 이유와 숨은 가정을 파고드는 회의론자" },
+    { id: "ops",  name: "실무자",  role: "비용, 일정, 만드는 난이도 등 실행 가능성을 따지는 엔지니어" },
+    { id: "cust", name: "고객",    role: "실제로 돈을 내고 쓸지, 왜 쓰는지/안 쓰는지 솔직히 말하는 잠재 고객" }
+  ];
+  var MAX_TURN_CHARS = 300;
+  var CONTEXT_TURNS = 6;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var abortCtl = null;
+
+  function calls() { return PERSONAS.length * Number($("rounds").value) + 1; }
+  function updateUI() {
+    var p = $("provider").value;
+    $("keybox").classList.toggle("hidden", p === "demo");
+    $("basebox").classList.toggle("hidden", p !== "openai");
+    $("est").textContent = "AI 호출 " + calls() + "회 예정" + (p === "demo" ? " (데모: 실제 호출 없음)" : "");
+  }
+  $("provider").addEventListener("change", updateUI);
+  $("rounds").addEventListener("change", updateUI);
+  updateUI();
+
+  function addTurn(name, text) {
+    var box = $("log");
+    box.classList.remove("hidden");
+    var d = document.createElement("div"); d.className = "turn";
+    var b = document.createElement("b"); b.textContent = name;
+    var p = document.createElement("p"); p.textContent = text;
+    d.appendChild(b); d.appendChild(p); box.appendChild(d);
+    return d;
+  }
+  function showError(msg) {
+    var box = $("log"); box.classList.remove("hidden");
+    var p = document.createElement("p"); p.className = "err"; p.textContent = msg; box.appendChild(p);
+  }
+
+  /* ---- providers ---- */
+  async function callAnthropic(cfg, system, user, signal) {
+    var r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", signal: signal,
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": cfg.key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({ model: cfg.model, max_tokens: 700, system: system, messages: [{ role: "user", content: user }] })
+    });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error("Anthropic 오류 " + r.status + ": " + ((j.error && j.error.message) || "응답을 읽지 못함"));
+    return (j.content || []).map(function (c) { return c.text || ""; }).join("");
+  }
+  async function callOpenAI(cfg, system, user, signal) {
+    var r = await fetch(cfg.base.replace(/\/+$/, "") + "/chat/completions", {
+      method: "POST", signal: signal,
+      headers: { "content-type": "application/json", "authorization": "Bearer " + cfg.key },
+      body: JSON.stringify({ model: cfg.model, messages: [{ role: "system", content: system }, { role: "user", content: user }] })
+    });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error("API 오류 " + r.status + ": " + ((j.error && j.error.message) || "응답을 읽지 못함"));
+    return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "";
+  }
+  function sleep(ms, signal) {
+    return new Promise(function (res, rej) {
+      var t = setTimeout(res, ms);
+      signal.addEventListener("abort", function () { clearTimeout(t); rej(new DOMException("aborted", "AbortError")); });
+    });
+  }
+  async function callDemo(kind, idea, signal) {
+    await sleep(350, signal);
+    var short = idea.length > 40 ? idea.slice(0, 40) + "…" : idea;
+    var T = {
+      opt:  "[데모] '" + short + "'은(는) 수요가 있는 영역과 맞닿아 있어 보입니다. 공유하기 쉬운 결과물을 만들면 초기 유입이 쉬울 수 있습니다.",
+      crit: "[데모] 가장 큰 가정은 '사람들이 돈을 낸다'는 점입니다. 비슷한 서비스가 이미 있다면 차별점이 무엇인지 아직 보이지 않습니다.",
+      ops:  "[데모] 최소 기능만 만든다면 2~3주 안에 가능해 보입니다. 다만 호출 비용과 유지 비용을 먼저 계산해야 합니다.",
+      cust: "[데모] 무료로 한 번 써보는 건 좋지만, 매달 내려면 계속 쓸 이유가 필요합니다. 결과가 정확한지부터 보고 싶습니다.",
+      chair: "결론: 보류 (검증 후 진행)\n\n근거\n1. 관심을 끌 소재는 있다 (데모 문구)\n2. 실행 난이도는 낮다 (데모 문구)\n3. 지불 의향은 아직 모른다 (데모 문구)\n\n가장 큰 리스크\n1. 차별성 부족\n2. 유지 비용\n3. 반복 사용 이유 없음\n\n7일 안에 할 검증 실험\n앱 없이 결과 예시 이미지로 영상 5개를 올려 반응과 대기명단 가입 수를 확인한다.\n\n(데모 모드의 고정 문구입니다. 실제 AI 분석이 아닙니다.)"
+    };
+    return T[kind];
+  }
+
+  function config() {
+    var p = $("provider").value;
+    if (p === "demo") return { type: "demo" };
+    var key = $("apikey").value.trim(), model = $("model").value.trim();
+    if (!key || !model) throw new Error("API 키와 모델 이름을 입력하세요.");
+    return { type: p, key: key, model: model, base: $("base").value.trim() };
+  }
+  async function ask(cfg, kind, system, user, idea, signal) {
+    if (cfg.type === "demo") return callDemo(kind, idea, signal);
+    var out = cfg.type === "anthropic" ? await callAnthropic(cfg, system, user, signal) : await callOpenAI(cfg, system, user, signal);
+    return out.trim();
+  }
+
+  function tail(transcript) {
+    return transcript.slice(-CONTEXT_TURNS).map(function (t) { return t.name + ": " + t.text; }).join("\n\n");
+  }
+
+  async function run() {
+    var idea = $("idea").value.trim();
+    $("log").textContent = ""; $("log").classList.add("hidden");
+    $("report").textContent = ""; $("report").classList.add("hidden");
+    if (!idea) { showError("안건을 입력하세요."); return; }
+    var cfg;
+    try { cfg = config(); } catch (e) { showError(e.message); return; }
+
+    abortCtl = new AbortController();
+    var signal = abortCtl.signal;
+    $("run").disabled = true; $("stop").classList.remove("hidden");
+    var rounds = Number($("rounds").value), transcript = [];
+
+    try {
+      for (var r = 1; r <= rounds; r++) {
+        for (var i = 0; i < PERSONAS.length; i++) {
+          var P = PERSONAS[i];
+          var sys = "당신은 'AI 이사회'의 " + P.name + "이다. 역할: " + P.role + ". 한국어로 " + MAX_TURN_CHARS + "자 이내, 핵심만 말한다. 다른 이사의 의견에 동의/반박을 분명히 한다.";
+          var user = "안건:\n" + idea + "\n\n지금까지의 토론:\n" + (transcript.length ? tail(transcript) : "(아직 없음)") + "\n\n" + r + "라운드, 당신(" + P.name + ")의 발언 차례입니다.";
+          var node = addTurn(P.name + " · " + r + "라운드", "생각 중…");
+          var text = await ask(cfg, P.id, sys, user, idea, signal);
+          node.querySelector("p").textContent = text;
+          transcript.push({ name: P.name, text: text });
+        }
+      }
+      var chairSys = "당신은 AI 이사회의 의장이다. 토론을 읽고 한국어로 아래 형식만 출력한다.\n결론: 진행 / 보류 / 중단 중 하나와 한 줄 이유\n\n근거\n1.\n2.\n3.\n\n가장 큰 리스크\n1.\n2.\n3.\n\n7일 안에 할 검증 실험\n(하나, 구체적으로)";
+      var chairUser = "안건:\n" + idea + "\n\n전체 토론:\n" + transcript.map(function (t) { return t.name + ": " + t.text; }).join("\n\n");
+      var rep = await ask(cfg, "chair", chairSys, chairUser, idea, signal);
+      var box = $("report"); box.classList.remove("hidden");
+      var h = document.createElement("b"); h.textContent = "의장 리포트";
+      var p = document.createElement("p"); p.textContent = rep;
+      box.appendChild(h); box.appendChild(p);
+    } catch (e) {
+      if (e && e.name === "AbortError") showError("중단했습니다.");
+      else showError("오류: " + (e && e.message ? e.message : e) + "\n브라우저 직접 호출이 막힌 경우(CORS) 이 방식은 해당 제공사에서 쓸 수 없습니다.");
+    } finally {
+      $("run").disabled = false; $("stop").classList.add("hidden"); abortCtl = null;
+    }
+  }
+  $("run").addEventListener("click", run);
+  $("stop").addEventListener("click", function () { if (abortCtl) abortCtl.abort(); });
+})();
+</script>
+</body>
+</html>
