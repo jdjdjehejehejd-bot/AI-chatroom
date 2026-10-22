@@ -452,6 +452,35 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
           <p class="hint" id="budhint">사용량보다 낮게 설정할 수 없습니다. 예산을 다 쓰면 AI가 멈추고 사람끼리만 대화합니다.</p>
           <div style="margin-top:14px"><button class="btn primary sm" id="apply" type="button">설정 적용</button></div>
         </section>
+        <section>
+          <h3>AI 진행 순서 <span class="pill" id="pipelock" hidden>플러스</span></h3>
+          <p class="hint" style="margin:0 0 8px">사람이 말할 때마다 이 순서대로 AI가 이어 받습니다. 같은 AI를 여러 번 넣을 수 있어요. 한 번에 단계 수만큼 호출 예산을 씁니다.</p>
+          <div class="flow" id="pipesteps" style="margin:0 0 10px"></div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap">
+            <select class="field" id="pipeadd" style="width:auto; flex:1; min-width:120px" aria-label="추가할 AI"></select>
+            <button type="button" class="btn sm" id="pipeplus">단계 추가</button>
+          </div>
+          <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap"><button type="button" class="btn primary sm" id="pipeapply">순서 적용</button><button type="button" class="btn sm" id="pipereset">기본으로</button></div>
+        </section>
+        <section>
+          <h3>브랜드 키트 <span class="pill">Make 모드</span></h3>
+          <p class="hint" style="margin:0 0 4px">설정하면 Make 모드의 웹페이지·보고서에 이름, 색, 글꼴, 말투가 자동으로 반영됩니다.</p>
+          <label class="lb" for="bname">브랜드 이름</label>
+          <input class="field" id="bname" maxlength="20" placeholder="예: 관저동 로스터리" autocomplete="off">
+          <div style="display:flex; gap:12px; margin-top:4px">
+            <div style="flex:1"><label class="lb" for="bprimary">대표색</label><input class="field" id="bprimary" type="color" value="#4f46e5" style="padding:3px; height:42px"></div>
+            <div style="flex:1"><label class="lb" for="bbg">배경색</label><input class="field" id="bbg" type="color" value="#fbf6ee" style="padding:3px; height:42px"></div>
+          </div>
+          <label class="lb" for="bfont">글꼴</label>
+          <select class="field" id="bfont"><option value="gothic">고딕</option><option value="serif">명조</option><option value="round">둥근 글꼴</option></select>
+          <label class="lb" for="btone">말투 (선택)</label>
+          <input class="field" id="btone" maxlength="80" placeholder="예: 친근한 존댓말" autocomplete="off">
+          <div style="display:flex; gap:8px; margin-top:12px"><button type="button" class="btn primary sm" id="bsave">키트 저장</button><button type="button" class="btn sm" id="bclear">해제</button></div>
+        </section>
+        <section>
+          <h3>이 방의 사용량</h3>
+          <div id="stats"></div>
+        </section>
       </div>
       <div class="pn" data-panel="doc">
         <section>
@@ -465,6 +494,17 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
         <section>
           <h3>산출물</h3>
           <div id="delivbox"></div>
+        </section>
+        <section>
+          <h3>다시 만들기</h3>
+          <p class="hint" style="margin:0 0 8px" id="retryhint"></p>
+          <button type="button" class="btn sm" id="retry">같은 요청 다시 만들기</button>
+        </section>
+        <section>
+          <h3>링크로 공유</h3>
+          <p class="hint" style="margin:0 0 8px" id="sharehint"></p>
+          <div style="display:flex; gap:8px; flex-wrap:wrap"><button type="button" class="btn sm" id="shareres">산출물 링크 만들기</button><button type="button" class="btn sm" id="sharechat">대화 하이라이트 링크</button></div>
+          <div id="sharebox"></div>
         </section>
       </div>
       <div class="pn" data-panel="assets">
@@ -641,7 +681,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     r.addEventListener("change", function () { jmode = r.value; $("jassetbox").hidden = inRoomUrl || jmode !== "asset"; showFlow(); });
   });
   function resetRoomState() {
-    meta = null; deliv = null; dview = "preview"; errAI = null; budgetAlert = false; joined = false; colors = {}; colorCount = 0; aiShown = 0; last = null; lastDay = ""; typRow = null; me = "";
+    meta = null; pipeDirty = false; deliv = null; dview = "preview"; errAI = null; budgetAlert = false; joined = false; colors = {}; colorCount = 0; aiShown = 0; last = null; lastDay = ""; typRow = null; me = "";
     $("log").textContent = ""; $("status").textContent = ""; $("text").value = ""; $("doc").value = ""; autosize(); closeInfo(); setTab("ai");
   }
   function goHome() {
@@ -845,7 +885,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     if (active !== $("stplus") && active !== $("stminus")) $("stval").textContent = s.maxStreak;
     if (errAI && !s.ais.some(function (a) { return a.id === errAI.id; })) errAI = null;
     $("text").placeholder = s.mode ? "요청을 입력하세요" : "메시지 입력 (@이름 으로 AI 호출)";
-    renderFlowBox(); renderDeliv(); renderModeCards(); renderLib();
+    renderFlowBox(); renderDeliv(); renderModeCards(); renderLib(); renderPipe(); renderBrand(); renderStats(); renderShareHints();
     renderBudget(s.budget); renderFree(); renderStatus(); renderEmpty();
     if (joined) saveRoom(s.id, title);
   }
@@ -855,9 +895,9 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     var box = mk("section"); box.id = "flowbox";
     box.appendChild(mk("h3", "", MODEINFO[meta.mode.id].label + " 진행 순서"));
     var f = mk("div", "flow"); f.style.marginTop = "0";
-    meta.mode.pipeline.forEach(function (n, i) { if (i) f.appendChild(document.createTextNode("→")); f.appendChild(mk("i", "", n)); });
+    (meta.pipeline || meta.mode.pipeline).forEach(function (n, i) { if (i) f.appendChild(document.createTextNode("→")); f.appendChild(mk("i", "", n)); });
     box.appendChild(f);
-    box.appendChild(mk("p", "hint", "사람이 요청을 보낼 때마다 이 순서로 AI가 이어 받고, 결과가 산출물 탭에 쌓입니다. 한 번에 AI 호출 " + meta.mode.pipeline.length + "회를 씁니다."));
+    box.appendChild(mk("p", "hint", "사람이 요청을 보낼 때마다 이 순서로 AI가 이어 받고, 결과가 산출물 탭에 쌓입니다. 한 번에 AI 호출 " + (meta.pipeline || meta.mode.pipeline).length + "회를 씁니다."));
     var host = document.querySelector('[data-panel="ai"]'), first = host.querySelector("section");
     host.insertBefore(box, first);
   }
@@ -913,6 +953,72 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     });
   }
   $("expcur").addEventListener("click", function () { send({ t: "getAsset", id: "current" }); });
+  var pipeDraft = null, pipeDirty = false;
+  function renderPipe() {
+    var box = $("pipesteps"); box.textContent = "";
+    var can = !!(meta && meta.canPipeline), names = meta ? meta.ais.map(function (a) { return a.name; }) : [];
+    $("pipelock").hidden = can;
+    if (!pipeDirty) pipeDraft = (meta && meta.pipeline ? meta.pipeline.slice() : names.slice());
+    if (!pipeDraft.length) box.appendChild(mk("span", "hint", "AI가 없습니다."));
+    pipeDraft.forEach(function (n, i) {
+      if (i) box.appendChild(document.createTextNode("→"));
+      var c = mk("i", "", n + " "), x = mk("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", n + " 단계 빼기");
+      x.style.cssText = "border:none;background:transparent;color:var(--muted);padding:0 2px;font-size:14px";
+      x.addEventListener("click", function () { pipeDraft.splice(i, 1); pipeDirty = true; renderPipe(); });
+      c.appendChild(x); box.appendChild(c);
+    });
+    var sel = $("pipeadd"), cur = sel.value; sel.textContent = "";
+    names.forEach(function (n) { var o = mk("option", "", n); o.value = n; sel.appendChild(o); });
+    if (cur && names.indexOf(cur) >= 0) sel.value = cur;
+    ["pipeadd", "pipeplus", "pipeapply", "pipereset"].forEach(function (id) { $(id).disabled = !can; });
+  }
+  $("pipeplus").addEventListener("click", function () { if (pipeDraft.length >= 8) { toast("단계는 최대 8개입니다."); return; } pipeDraft.push($("pipeadd").value); pipeDirty = true; renderPipe(); });
+  $("pipeapply").addEventListener("click", function () { send({ t: "pipeline", steps: pipeDraft }); pipeDirty = false; toast("진행 순서를 적용했습니다."); });
+  $("pipereset").addEventListener("click", function () { send({ t: "pipeline", steps: [] }); pipeDirty = false; });
+  function renderBrand() {
+    var b = meta && meta.brand;
+    if (document.activeElement && ["bname", "btone", "bprimary", "bbg", "bfont"].indexOf(document.activeElement.id) >= 0) return;
+    $("bname").value = b ? b.name : ""; $("btone").value = b ? b.tone : "";
+    $("bprimary").value = b && b.primary ? b.primary : "#4f46e5"; $("bbg").value = b && b.bg ? b.bg : "#fbf6ee"; $("bfont").value = b ? b.font : "gothic";
+    $("bclear").disabled = !b;
+  }
+  $("bsave").addEventListener("click", function () {
+    send({ t: "brand", name: $("bname").value.trim(), primary: $("bprimary").value, bg: $("bbg").value, font: $("bfont").value, tone: $("btone").value.trim() });
+    toast("브랜드 키트를 저장했습니다.");
+  });
+  $("bclear").addEventListener("click", function () { send({ t: "brand", clear: true }); });
+  function renderStats() {
+    var box = $("stats"), st = meta && meta.stats; box.textContent = "";
+    if (!st) return;
+    var rows = [["AI 요청 실행", st.runs + "회"], ["AI 호출", st.calls + "회"], ["산출물 버전", st.versions ? "v" + st.versions : "없음"], ["공유 링크", st.shares + "개"]];
+    if (meta.refund) rows.push(["품질 보증 환불", st.refunds + " / 5회"]);
+    rows.forEach(function (r) { var d = mk("div", "ai-item"); var n = mk("div", "nm"); n.appendChild(mk("b", "", r[0])); d.appendChild(n); d.appendChild(mk("span", "mono", r[1])); box.appendChild(d); });
+    var names = Object.keys(st.byAI), max = 1; names.forEach(function (n) { max = Math.max(max, st.byAI[n]); });
+    if (names.length) { var h = mk("div", "hint", "AI별 발언 수"); h.style.marginTop = "12px"; box.appendChild(h); }
+    names.forEach(function (n) {
+      var row = mk("div", "ai-item c" + colorOf(n)), l = mk("div", "nm"); l.appendChild(mk("b", "", n));
+      var bar = mk("div"); bar.style.cssText = "height:6px;border-radius:3px;background:var(--h-sf);margin-top:4px;overflow:hidden";
+      var f = mk("i"); f.style.cssText = "display:block;height:100%;background:var(--av);width:" + Math.round(st.byAI[n] / max * 100) + "%"; bar.appendChild(f); l.appendChild(bar);
+      row.appendChild(l); row.appendChild(mk("span", "mono", String(st.byAI[n]))); box.appendChild(row);
+    });
+  }
+  function renderShareHints() {
+    if (!meta) return;
+    $("retryhint").textContent = meta.refund ? "플러스 품질 보증: 결과가 마음에 안 들면 이전 실행에서 쓴 호출을 돌려받고 다시 만듭니다(방당 5회)." : "같은 요청을 처음부터 다시 실행합니다. 호출 예산을 씁니다. 플러스 플랜은 이전 호출을 돌려받아요.";
+    $("sharehint").textContent = "링크가 있는 누구나 볼 수 있고 " + meta.shareDays + "일 뒤 사라집니다." + (meta.badge ? " 무료 플랜은 페이지 위에 앱 안내 배너가 붙어요." : "");
+  }
+  function showShared(m) {
+    var box = $("sharebox"); box.textContent = "";
+    var url = location.origin + m.url, f = mk("input", "field mono"); f.value = url; f.readOnly = true; f.style.marginTop = "10px"; f.setAttribute("aria-label", "공유 링크");
+    f.addEventListener("focus", function () { f.select(); });
+    var b = mk("button", "btn sm", "링크 복사"); b.type = "button"; b.style.marginTop = "8px"; b.id = "copyshare";
+    b.addEventListener("click", function () { try { navigator.clipboard.writeText(url).then(function () { toast("링크를 복사했습니다."); }, function () { f.select(); }); } catch (e) { f.select(); } });
+    var a = mk("a", "", "새 탭에서 열기"); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.style.cssText = "margin-left:12px;font-size:13px;color:var(--accent-text)";
+    box.appendChild(f); box.appendChild(b); box.appendChild(a);
+  }
+  $("retry").addEventListener("click", function () { send({ t: "retry" }); toast("다시 만들고 있습니다."); });
+  $("shareres").addEventListener("click", function () { send({ t: "share", kind: "result" }); });
+  $("sharechat").addEventListener("click", function () { send({ t: "share", kind: "chat" }); });
   var modeCand = null;
   function renderModeCards() {
     var box = $("modecards"); box.textContent = ""; $("modeconfirm").textContent = "";
@@ -974,6 +1080,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
         typTimer = setTimeout(dropTyping, 65000);
       }
     }
+    else if (m.t === "shared") { showShared(m); openInfo("deliv"); toast("공유 링크를 만들었습니다."); }
     else if (m.t === "assetfile") {
       var nm = String(m.asset.name || "asset").replace(/[^\w가-힣-]+/g, "_").slice(0, 30) || "asset";
       saveJson(m.asset, nm + ".aichat.json"); toast("에셋 파일을 저장했습니다.");

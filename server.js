@@ -6,6 +6,7 @@
  * - AI 응답: ANTHROPIC_API_KEY 또는 OPENAI_API_KEY 환경변수가 있으면 실제 호출, 없으면 데모 응답
  */
 const http = require('http');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
@@ -17,8 +18,8 @@ const BUDGET_MAX = Number(process.env.ROOM_CALL_BUDGET_MAX || 50);
 /* 방 단위 플랜. 방의 AI 인원수, AI 호출 예산, 프롬프트에 넣는 대화량, 서버 유료 모델 사용 여부, 광고 표시를 플랜이 정한다.
    결제는 아직 없고, 개발용 스위치(ALLOW_DEV_PLAN=1)로만 바꿀 수 있다 */
 const PLANS = {
-  free: { label: '무료', ais: 3, budgetDefault: BUDGET_DEFAULT, budgetMax: BUDGET_MAX, ctx: 10, premium: false, ads: true },
-  plus: { label: '플러스', ais: 6, budgetDefault: 100, budgetMax: 300, ctx: 20, premium: true, ads: false }
+  free: { label: '무료', ais: 3, budgetDefault: BUDGET_DEFAULT, budgetMax: BUDGET_MAX, ctx: 10, premium: false, ads: true, customPipeline: false, shareDays: 7, refund: false },
+  plus: { label: '플러스', ais: 6, budgetDefault: 100, budgetMax: 300, ctx: 20, premium: true, ads: false, customPipeline: true, shareDays: 30, refund: true }
 };
 const ALLOW_DEV_PLAN = process.env.ALLOW_DEV_PLAN === '1';
 let HOUSE_ADS = [{ text: '여기에 광고가 표시됩니다 (샘플 광고)', url: '' }];
@@ -91,6 +92,7 @@ const freeAvailable = () => FREE_BACKENDS.some(freeConfigured);
 
 const rooms = new Map();
 let aiCounter = 0;
+const shares = new Map(), SHARE_MAX = 200;
 
 /* ---------- 유틸 ---------- */
 function send(ws, obj) { if (ws.readyState === 1) ws.send(JSON.stringify(obj)); }
@@ -117,7 +119,7 @@ function newRoom(id) {
   return {
     id, asset: null, rules: '', clients: new Set(), ais: [], messages: [], seq: 0,
     policy: 'mention', maxStreak: 4, streak: 0, lastAI: null, gen: 0,
-    mode: null, pipeline: null, deliv: null, library: [], plan: 'free', budget: { used: 0, limit: PLANS.free.budgetDefault }, doc: '', cleanup: null
+    mode: null, pipeline: null, pipelineDefault: null, deliv: null, library: [], brand: null, shareCount: 0, refunds: 0, runCalls: 0, stats: { runs: 0, calls: 0, byAI: {} }, plan: 'free', budget: { used: 0, limit: PLANS.free.budgetDefault }, doc: '', cleanup: null
   };
 }
 
@@ -180,6 +182,10 @@ function libAdd(room, asset, by) {
   if (i >= 0) room.library[i] = it;
   else { if (room.library.length >= LIB_MAX) room.library.shift(); room.library.push(it); }
 }
+function firstFor(room, text) {
+  if (room.pipeline) return room.pipeline.map(n => room.ais.find(a => a.name === n)).filter(Boolean);
+  return room.policy === 'round' ? room.ais.slice() : mentioned(room, text, null);
+}
 function currentAsset(room) {
   return {
     format: 'aichat-asset/1', name: room.asset ? room.asset.name : '내 방 구성',
@@ -192,7 +198,7 @@ function applyMode(room, id) {
   const a = modeAsset(id, room);
   if (!a) return false;
   applyAsset(room, a);
-  room.mode = id; room.pipeline = a.pipeline; room.deliv = null;
+  room.mode = id; room.pipeline = a.pipeline; room.pipelineDefault = a.pipeline; room.deliv = null;
   return true;
 }
 function harvestDeliverable(room, ai, text) {
@@ -230,7 +236,7 @@ function validateAsset(d) {
 }
 function applyAsset(room, a) {
   room.gen++;
-  room.mode = null; room.pipeline = null;
+  room.mode = null; room.pipeline = null; room.pipelineDefault = null;
   room.asset = { name: a.name, description: a.description, ais: a.ais.length };
   room.rules = a.rules; room.policy = a.policy; room.maxStreak = a.maxStreak;
   room.ais = a.ais.map(newAI); room.lastAI = null;
@@ -240,6 +246,9 @@ function applyAsset(room, a) {
 function meta(room) {
   return {
     t: 'meta', id: room.id, asset: room.asset, mode: room.mode ? { id: room.mode, hint: MODES[room.mode].hint, examples: MODES[room.mode].examples, pipeline: room.pipeline } : null,
+    pipeline: room.pipeline ? room.pipeline.filter(n => room.ais.some(a => a.name === n)) : null, canPipeline: !!planOf(room).customPipeline, refund: !!planOf(room).refund,
+    brand: room.brand, shareDays: planOf(room).shareDays, badge: !!planOf(room).ads,
+    stats: { runs: room.stats.runs, calls: room.stats.calls, byAI: room.stats.byAI, versions: room.deliv ? room.deliv.v : 0, shares: room.shareCount, refunds: room.refunds },
     policy: room.policy, maxStreak: room.maxStreak, budget: room.budget, budgetMax: planOf(room).budgetMax,
     plan: { id: room.plan, label: planOf(room).label, ais: planOf(room).ais, premium: planOf(room).premium, ads: planOf(room).ads, dev: ALLOW_DEV_PLAN },
     adList: planOf(room).ads ? HOUSE_ADS : [],
@@ -276,6 +285,7 @@ function buildPrompt(room, ai) {
   const system =
     '당신은 그룹 채팅방의 AI 참가자 "' + ai.name + '"이다. 역할/성격: ' + ai.persona + '\n' +
     (room.rules ? room.rules + '\n' : '') +
+    (room.brand && room.mode === 'make' ? '브랜드 키트(산출물에 반드시 반영): 이름 ' + room.brand.name + ', 대표색 ' + (room.brand.primary || '자유') + ', 배경색 ' + (room.brand.bg || '자유') + ', 글꼴 ' + (FONT_LABEL[room.brand.font] || '고딕') + (room.brand.tone ? ', 말투 ' + room.brand.tone : '') + '\n' : '') +
     '참가자 - 사람: ' + humans + ' / AI: ' + ais + '\n' +
     '규칙: 한국어로 ' + (room.mode ? '짧게(코드블록 제외 ' + TURN_CHARS + '자 이내)' : TURN_CHARS + '자 이내로 짧게') + ' 말한다. 자기 이름을 앞에 붙이지 않는다. 다른 참가자를 부르려면 @이름 을 쓴다. ' +
     '공유 문서에 남길 결정이나 메모는 한 줄을 "[문서] "로 시작해 적으면 자동으로 기록되며, 이미 있는 내용은 반복하지 않는다. ' +
@@ -327,6 +337,9 @@ async function callChat(room, ai, cfg) {
   if (!r.ok) throw new Error('API ' + r.status + ': ' + ((j.error && j.error.message) || '응답 오류'));
   return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
 }
+const FONTS = { gothic: 'Noto Sans KR,sans-serif', serif: 'Noto Serif KR,serif', round: 'Jua,Noto Sans KR,sans-serif' };
+const FONT_LABEL = { gothic: '고딕', serif: '명조', round: '둥근 글꼴' };
+const brandFont = room => FONTS[room.brand && room.brand.font] || FONTS.gothic;
 function demoMode(room, ai, t) {
   const web = /웹|사이트|페이지|랜딩/.test(t);
   switch (ai.name) {
@@ -344,7 +357,7 @@ function demoMode(room, ai, t) {
     case '작성자': return '[데모] 소개: ' + t + '. 핵심 내용은 세 가지로 정리합니다. [확인 필요] 운영 시간과 가격.';
     case '디자이너': return '[데모] 따뜻한 배경색에 큰 제목, 카드 세 장 배치, 글꼴은 고딕 계열을 추천합니다.';
     case '편집자': return web
-      ? '[데모] 최종본입니다.\n```html\n<!doctype html><html lang="ko"><meta charset="utf-8"><title>' + t + '</title><style>body{font-family:sans-serif;margin:0;background:#fbf6ee;color:#2b2118}header{padding:48px 24px;text-align:center}h1{margin:0 0 8px}main{display:grid;gap:12px;padding:24px;max-width:720px;margin:auto}.c{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 4px #0002}</style><header><h1>' + t + '</h1><p>소개 문구가 들어갑니다.</p></header><main><div class="c">핵심 내용 1</div><div class="c">핵심 내용 2</div><div class="c">[확인 필요] 운영 시간과 가격</div></main></html>\n```'
+      ? '[데모] 최종본입니다.\n```html\n<!doctype html><html lang="ko"><meta charset="utf-8"><title>' + t + '</title><style>body{font-family:' + brandFont(room) + ';margin:0;background:' + (room.brand && room.brand.bg || '#fbf6ee') + ';color:#2b2118}header{padding:48px 24px;text-align:center;color:' + (room.brand && room.brand.primary || '#2b2118') + '}h1{margin:0 0 8px}main{display:grid;gap:12px;padding:24px;max-width:720px;margin:auto}.c{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 4px #0002;border-left:4px solid ' + (room.brand && room.brand.primary || '#c9a36a') + '}</style><header><h1>' + (room.brand && room.brand.name || t) + '</h1><p>소개 문구가 들어갑니다.</p></header><main><div class="c">핵심 내용 1</div><div class="c">핵심 내용 2</div><div class="c">[확인 필요] 운영 시간과 가격</div></main></html>\n```'
       : '[데모] 최종본입니다.\n```markdown\n# ' + t + '\n\n## 1. 소개\n내용이 들어갑니다.\n\n---\n\n## 2. 핵심 내용\n- 항목 하나\n- 항목 둘\n- [확인 필요] 수치\n```';
     default: return null;
   }
@@ -410,6 +423,7 @@ function harvestDoc(room, ai, text) {
 async function orchestrate(room, first) {
   const gen = ++room.gen;
   const order = first.slice();
+  room.runCalls = 0; room.stats.runs++;
   room.streak = 0;
   while (gen === room.gen) {
     let ai = null;
@@ -425,7 +439,7 @@ async function orchestrate(room, first) {
       system(room, '이 방의 AI 호출 예산(' + room.budget.limit + '회)을 모두 사용했습니다.', 'BUDGET_EXHAUSTED');
       break;
     }
-    room.budget.used++;
+    room.budget.used++; room.runCalls++; room.stats.calls++;
     broadcast(room, { t: 'budget', budget: room.budget });
     broadcast(room, { t: 'typing', who: ai.name });
     let text;
@@ -438,6 +452,7 @@ async function orchestrate(room, first) {
     if (gen !== room.gen) return;
     text = cleanText(text, room.mode ? 4500 : 1500) || '(응답 없음)';
     addMsg(room, 'ai', ai.name, text);
+    room.stats.byAI[ai.name] = (room.stats.byAI[ai.name] || 0) + 1;
     room.lastAI = ai;
     room.streak++;
     harvestDoc(room, ai, text);
@@ -512,7 +527,7 @@ function handle(ws, m) {
       if (!text) return;
       addMsg(room, 'human', name, text);
       if (!room.ais.length) return;
-      const first = room.mode && room.pipeline ? room.pipeline.map(n => room.ais.find(a => a.name === n)).filter(Boolean) : room.policy === 'round' ? room.ais.slice() : mentioned(room, text, null);
+      const first = firstFor(room, text);
       if (first.length || room.policy === 'free') orchestrate(room, first);
       return;
     }
@@ -541,6 +556,58 @@ function handle(ws, m) {
       applyAsset(room, r.asset); libAdd(room, r.asset, name);
       system(room, name + ' 님이 에셋 "' + r.asset.name + '"을(를) 적용했습니다.', 'ASSET_APPLIED');
       broadcast(room, { t: 'doc', text: room.doc, by: name });
+      return broadcast(room, meta(room));
+    }
+    case 'brand': {
+      if (m.clear) { room.brand = null; return broadcast(room, meta(room)); }
+      const hex = v => (v == null || v === '') ? '' : /^#[0-9a-fA-F]{6}$/.test(String(v)) ? String(v).toLowerCase() : null;
+      const bn = cleanText(m.name, 20), pr = hex(m.primary), bg = hex(m.bg), tone = cleanText(m.tone, 80);
+      if (!bn) return send(ws, { t: 'err', text: '브랜드 이름을 입력하세요.' });
+      if (pr === null || bg === null) return send(ws, { t: 'err', text: '색은 #RRGGBB 형식이어야 합니다.' });
+      room.brand = { name: bn, primary: pr, bg, font: FONTS[m.font] ? m.font : 'gothic', tone };
+      return broadcast(room, meta(room));
+    }
+    case 'pipeline': {
+      if (!planOf(room).customPipeline) return send(ws, { t: 'err', text: '순서 편집은 플러스 플랜에서 쓸 수 있습니다.' });
+      const steps = Array.isArray(m.steps) ? m.steps.map(x => String(x)) : [];
+      if (!steps.length) { room.pipeline = room.pipelineDefault; return broadcast(room, meta(room)); }
+      if (steps.length > 8) return send(ws, { t: 'err', text: '단계는 최대 8개입니다.' });
+      if (steps.some(n => !room.ais.some(a => a.name === n))) return send(ws, { t: 'err', text: '방에 없는 AI가 들어 있습니다.' });
+      room.pipeline = steps;
+      room.maxStreak = Math.max(room.maxStreak, steps.length);
+      room.policy = 'round';
+      return broadcast(room, meta(room));
+    }
+    case 'retry': {
+      const lh = [...room.messages].reverse().find(x => x.kind === 'human');
+      if (!lh) return send(ws, { t: 'err', text: '다시 만들 요청이 없습니다.' });
+      if (!room.ais.length) return;
+      let note = '';
+      if (planOf(room).refund && room.refunds < 5 && room.runCalls > 0) {
+        room.budget.used = Math.max(0, room.budget.used - room.runCalls); room.refunds++;
+        note = ' 품질 보증으로 이전 실행의 호출 ' + room.runCalls + '회를 돌려드렸습니다.';
+        broadcast(room, { t: 'budget', budget: room.budget });
+      }
+      system(room, name + ' 님이 같은 요청을 다시 만들도록 했습니다.' + note, 'RETRY');
+      const first = firstFor(room, lh.text);
+      if (first.length || room.policy === 'free') orchestrate(room, first);
+      return;
+    }
+    case 'share': {
+      if (room.shareCount >= 10) return send(ws, { t: 'err', text: '이 방에서 만들 수 있는 공유 링크는 10개입니다.' });
+      const kind = m.kind === 'chat' ? 'chat' : 'result';
+      const rec = { id: crypto.randomBytes(6).toString('hex'), kind, ts: Date.now(), exp: Date.now() + planOf(room).shareDays * 86400000, badge: !!planOf(room).ads,
+        title: room.asset ? room.asset.name : '방 ' + room.id };
+      if (kind === 'result') {
+        if (!room.deliv) return send(ws, { t: 'err', text: '공유할 산출물이 아직 없습니다.' });
+        rec.lang = room.deliv.lang; rec.text = room.deliv.text;
+      } else {
+        rec.msgs = room.messages.filter(x => x.kind !== 'system').slice(-30).map(x => ({ who: x.who, kind: x.kind, text: x.text.slice(0, 600) }));
+        if (!rec.msgs.length) return send(ws, { t: 'err', text: '공유할 대화가 아직 없습니다.' });
+      }
+      if (shares.size >= SHARE_MAX) { const old = [...shares.keys()][0]; shares.delete(old); }
+      shares.set(rec.id, rec); room.shareCount++;
+      send(ws, { t: 'shared', url: '/s/' + rec.id, kind, days: planOf(room).shareDays, badge: rec.badge });
       return broadcast(room, meta(room));
     }
     case 'applyLib': {
@@ -605,8 +672,28 @@ function handle(ws, m) {
 }
 
 /* ---------- HTTP / WS ---------- */
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function sharePage(r) {
+  const bar = r.badge ? '<a class="badge" href="/">AI 채팅방으로 만들었어요 · 나도 만들어 보기 →</a>' : '';
+  let body;
+  if (r.kind === 'result' && r.lang === 'html') body = '<iframe sandbox="" title="' + esc(r.title) + '" srcdoc="' + esc(r.text) + '"></iframe>';
+  else if (r.kind === 'result') body = '<pre>' + esc(r.text) + '</pre>';
+  else body = '<div class="chat">' + r.msgs.map(m => '<div class="m' + (m.kind === 'ai' ? ' ai' : '') + '"><b>' + esc(m.who) + (m.kind === 'ai' ? ' · AI' : '') + '</b><p>' + esc(m.text) + '</p></div>').join('') + '</div>';
+  return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>' + esc(r.title) + '</title><style>' +
+    'html,body{height:100%;margin:0}body{display:flex;flex-direction:column;font:15px/1.6 system-ui,sans-serif;background:#f5f6fa;color:#101322}.badge{flex:none;display:block;text-align:center;padding:10px 12px;background:#4f46e5;color:#fff;text-decoration:none;font-weight:600;font-size:13.5px}' +
+    'iframe{flex:1;border:0;width:100%;background:#fff}pre{flex:1;margin:0;padding:16px;overflow:auto;white-space:pre-wrap;background:#fff}.chat{flex:1;overflow:auto;padding:16px;max-width:720px;width:100%;margin:0 auto;box-sizing:border-box}' +
+    '.m{background:#fff;border-radius:14px;padding:10px 14px;margin-bottom:10px}.m.ai{background:#eeedfd}.m p{margin:4px 0 0;white-space:pre-wrap;word-break:break-word}</style></head><body>' + bar + body + '</body></html>';
+}
 const server = http.createServer((req, res) => {
   const u = req.url.split('?')[0];
+  const sm = /^\/s\/([0-9a-f]{12})$/.exec(u);
+  if (sm) {
+    const r = shares.get(sm[1]);
+    if (!r || r.exp < Date.now()) { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('만료되었거나 없는 링크입니다.'); }
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
+      'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data: https:; font-src data: https:; base-uri 'none'; form-action 'none'" });
+    return res.end(sharePage(r));
+  }
   if (u === '/health') { res.writeHead(200); return res.end('ok'); }
   if (u === '/') {
     return fs.readFile(PAGE, (e, b) => {
