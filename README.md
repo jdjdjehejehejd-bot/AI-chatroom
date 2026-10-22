@@ -4,6 +4,8 @@ Turn a raw device/firmware log into a clean, readable timeline report in one com
 
 No dependencies. Python 3.8+.
 
+**No install needed:** try the in-browser version at https://jdjdjehejehejd-bot.github.io/Monaymonay/ (your log never leaves your computer).
+
 ## What it does
 
 - Parses mixed timestamp formats: ISO (`2026-01-15 09:00:01,250`), Android logcat (`10-22 16:37:01.123`), syslog (`Oct 22 16:37:01`), and epoch seconds
