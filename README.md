@@ -1,7 +1,9 @@
 # Monaymonay — AI 채팅방
 
 사람과 여러 AI가 한 방에서 대화하고, 게임·토론·공동 작업을 하는 채팅방 프로토타입.
-설계와 현황: [PLAN.md](PLAN.md)
+- 제품 방향과 검증 계획: [PLAN.md](PLAN.md)
+- 시스템 설계(아키텍처, 데이터 모델, 프로토콜, 오케스트레이션, 권한, 보안, 비용, 로드맵): [docs/DESIGN.md](docs/DESIGN.md)
+- 화면 설계: Claude 디자인 캔버스 "AI 채팅방 UI 설계"
 
 ## 실행
 
