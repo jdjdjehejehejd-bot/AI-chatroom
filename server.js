@@ -19,39 +19,58 @@ const TURN_CHARS = 300;
 const PAGE = path.join(__dirname, 'public', 'index.html');
 
 /* 제공사 설정. 사용자가 주소를 직접 넣을 수 없게 해서 서버가 임의 주소로 요청을 보내는 일(SSRF)을 막는다 */
-const PROVIDERS = ['default', 'demo', 'free', 'anthropic', 'openai', 'openrouter'];
+const PROVIDERS = ['default', 'demo', 'free', 'anthropic', 'openai', 'openrouter', 'groq', 'nvidia'];
 const BASES = {
   anthropic: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com',
   openai: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-  openrouter: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'
+  openrouter: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
+  groq: process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1',
+  nvidia: process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1'
 };
-const ENV_KEYS = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
+const ENV_KEYS = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY' };
+/* 서버 키로 다른 사람에게 대신 호출해 주면 약관에 어긋나는 제공사. 사용자가 본인 키를 직접 넣을 때만 쓴다.
+   NVIDIA API 체험(build.nvidia.com) 약관은 내부 테스트·평가 용도로만 쓰고 제3자에게 제공하지 못하게 한다 */
+const BYOK_ONLY = new Set(['nvidia']);
 
 /* 무료 모델 풀: 서버가 가진 무료 티어 키로 사용자 대신 호출한다. 무료 티어는 계정 전체 한도가 작으므로
-   (OpenRouter :free 는 하루 50회, Groq 는 하루 약 1000회) 백엔드별 일일 상한, 방별 상한, 실패 시 다음 백엔드로 넘어가는 로직을 둔다.
-   모델 이름은 제공사가 자주 바꾸므로 환경변수로 교체할 수 있게 한다 */
+   백엔드별 일일 상한, 방별 상한, 실패 시 다음 백엔드로 넘어가는 로직을 둔다.
+   모델 이름은 제공사가 자주 바꾸므로 환경변수로 교체할 수 있고, FREE_EXTRA_BACKENDS(JSON)로 운영자가
+   OpenAI 호환 백엔드를 더 추가할 수 있다. 주소는 운영자만 정하므로 사용자가 서버를 임의 주소로 향하게 할 수 없다 */
 const csv = (v, d) => String(v || d).split(',').map(s => s.trim()).filter(Boolean);
 const FREE_BACKENDS = [
-  { id: 'openrouter', label: 'OpenRouter 무료', keyEnv: 'OPENROUTER_API_KEY', base: BASES.openrouter,
-    models: csv(process.env.FREE_OPENROUTER_MODELS, 'meta-llama/llama-3.3-70b-instruct:free'), cap: Number(process.env.FREE_CAP_OPENROUTER || 45) },
-  { id: 'groq', label: 'Groq 무료', keyEnv: 'GROQ_API_KEY', base: process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1',
-    models: csv(process.env.FREE_GROQ_MODELS, 'llama-3.3-70b-versatile'), cap: Number(process.env.FREE_CAP_GROQ || 900) }
+  { id: 'openrouter', keyEnv: 'OPENROUTER_API_KEY', base: BASES.openrouter,
+    models: csv(process.env.FREE_OPENROUTER_MODELS, 'qwen/qwen3.8-27b:free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free'),
+    cap: Number(process.env.FREE_CAP_OPENROUTER || 45) },
+  { id: 'groq', keyEnv: 'GROQ_API_KEY', base: BASES.groq,
+    models: csv(process.env.FREE_GROQ_MODELS, 'openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b'),
+    cap: Number(process.env.FREE_CAP_GROQ || 900) }
 ];
+try {
+  const extra = JSON.parse(process.env.FREE_EXTRA_BACKENDS || '[]');
+  (Array.isArray(extra) ? extra : []).forEach(e => {
+    if (e && /^[a-z0-9_-]{2,20}$/.test(e.id) && /^https?:\/\//.test(e.base) && Array.isArray(e.models) && e.models.length && !FREE_BACKENDS.some(b => b.id === e.id)) {
+      FREE_BACKENDS.push({ id: e.id, key: e.key ? String(e.key) : '', keyEnv: '', noKey: !e.key, base: String(e.base),
+        models: e.models.map(String), cap: Number(e.cap) > 0 ? Number(e.cap) : 100 });
+    }
+  });
+} catch (e) { console.error('FREE_EXTRA_BACKENDS 형식 오류: 무시합니다.'); }
 const FREE_ROOM_CAP = Number(process.env.FREE_ROOM_CAP || 20);
 const freeState = { day: '', used: {}, cool: {}, rr: 0 };
+const freeKey = b => b.key || (b.keyEnv && process.env[b.keyEnv]) || '';
+const freeConfigured = b => b.noKey || !!freeKey(b);
 function freeTick() {
   const day = new Date().toISOString().slice(0, 10);
   if (freeState.day !== day) { freeState.day = day; freeState.used = {}; freeState.cool = {}; }
 }
 function freeUsable(b) {
   freeTick();
-  return !!process.env[b.keyEnv] && (freeState.used[b.id] || 0) < b.cap && (freeState.cool[b.id] || 0) <= Date.now();
+  return freeConfigured(b) && (freeState.used[b.id] || 0) < b.cap && (freeState.cool[b.id] || 0) <= Date.now();
 }
 function freeLeft() {
   freeTick();
-  return FREE_BACKENDS.filter(b => process.env[b.keyEnv]).reduce((s, b) => s + Math.max(0, b.cap - (freeState.used[b.id] || 0)), 0);
+  return FREE_BACKENDS.filter(freeConfigured).reduce((s, b) => s + Math.max(0, b.cap - (freeState.used[b.id] || 0)), 0);
 }
-const freeAvailable = () => FREE_BACKENDS.some(b => !!process.env[b.keyEnv]);
+const freeAvailable = () => FREE_BACKENDS.some(freeConfigured);
 
 const TEMPLATES = {
   free: { label: '자유 방', rules: '', ais: [] },
@@ -176,9 +195,9 @@ function resolve(ai) {
       : process.env.OPENROUTER_API_KEY && process.env.AI_MODEL ? 'openrouter' : freeAvailable() ? 'free' : 'demo';
   }
   if (provider === 'demo' || provider === 'free') return { provider };
-  const key = ai.apiKey || process.env[ENV_KEYS[provider]];
+  const key = ai.apiKey || (BYOK_ONLY.has(provider) ? '' : process.env[ENV_KEYS[provider]]);
   const model = ai.model || process.env.AI_MODEL;
-  if (!key) throw new Error(provider + ' API 키가 없습니다. (서버 환경변수 또는 AI 초대 시 개인 키)');
+  if (!key) throw new Error(BYOK_ONLY.has(provider) ? provider + '는 본인 API 키를 직접 입력해야 합니다.' : provider + ' API 키가 없습니다. (서버 환경변수 또는 AI 초대 시 개인 키)');
   if (!model) throw new Error('모델 이름이 필요합니다.');
   return { provider, key, model, base: BASES[provider].replace(/\/+$/, '') };
 }
@@ -197,7 +216,7 @@ async function callChat(room, ai, cfg) {
   const { system, user } = buildPrompt(room, ai);
   const r = await fetch(cfg.base + '/chat/completions', {
     method: 'POST', signal: AbortSignal.timeout(60000),
-    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + cfg.key },
+    headers: Object.assign({ 'content-type': 'application/json' }, cfg.key ? { authorization: 'Bearer ' + cfg.key } : {}),
     body: JSON.stringify({ model: cfg.model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] })
   });
   const j = await r.json().catch(() => ({}));
@@ -228,7 +247,7 @@ async function callFree(room, ai) {
     freeState.used[b.id] = (freeState.used[b.id] || 0) + 1;
     const model = b.models[(freeState.used[b.id]) % b.models.length];
     try {
-      const text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: process.env[b.keyEnv], model });
+      const text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model });
       freeState.rr = (freeState.rr + i + 1) % n;
       room.freeUsed = (room.freeUsed || 0) + 1;
       return text;
@@ -245,7 +264,7 @@ async function generate(room, ai) {
   const cfg = resolve(ai);
   if (cfg.provider === 'free') return callFree(room, ai);
   if (cfg.provider === 'anthropic') return callAnthropic(room, ai, cfg);
-  if (cfg.provider === 'openai' || cfg.provider === 'openrouter') return callChat(room, ai, cfg);
+  if (['openai', 'openrouter', 'groq', 'nvidia'].includes(cfg.provider)) return callChat(room, ai, cfg);
   await new Promise(r => setTimeout(r, DEMO_DELAY));
   return demoReply(room, ai);
 }

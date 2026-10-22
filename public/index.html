@@ -100,6 +100,8 @@
         <option value="anthropic">Anthropic</option>
         <option value="openai">OpenAI</option>
         <option value="openrouter">OpenRouter</option>
+        <option value="groq">Groq</option>
+        <option value="nvidia">NVIDIA NIM (본인 키 필수)</option>
         <option value="demo">데모 (고정 문구)</option>
       </select>
       <div id="aiextra" class="hidden">
@@ -251,7 +253,7 @@
     (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { toast("초대 링크를 복사했습니다."); }, function () { toast(url); });
   });
   $("aiprov").addEventListener("change", function () {
-    var live = ["anthropic", "openai", "openrouter"].indexOf($("aiprov").value) >= 0;
+    var live = ["anthropic", "openai", "openrouter", "groq", "nvidia"].indexOf($("aiprov").value) >= 0;
     $("aiextra").classList.toggle("hidden", !live);
   });
   $("addai").addEventListener("click", function () {

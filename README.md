@@ -25,16 +25,19 @@ npm start          # http://localhost:3000
 
 제공사 주소 변경(테스트용): `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `OPENROUTER_BASE_URL`
 
-**무료 모델 (키 없이 쓰기)**: 서버 운영자가 무료 티어 키를 환경변수로 넣어 두면, 참가자는 "AI 제공사"에서 "무료 모델"을 골라 키 없이 AI를 초대할 수 있다. `default`도 유료 키가 없으면 무료 풀로 연결된다.
+**무료 모델 (키 없이 쓰기)**: 서버 운영자가 무료 티어 키를 환경변수로 넣어 두면, 참가자는 "AI 제공사"에서 "무료 모델"을 골라 키 없이 AI를 초대할 수 있다. `default`도 유료 키가 없으면 무료 풀로 연결된다. 여러 백엔드를 돌려 쓰고, 한 곳이 429/오류를 내면 1분(인증·모델 오류는 10분) 쉬고 다음으로 넘어간다.
 
 | 환경변수 | 설명 |
 |---|---|
-| `OPENROUTER_API_KEY` | OpenRouter 키. `:free` 모델만 호출. `FREE_OPENROUTER_MODELS`(쉼표 목록)로 모델 교체 |
-| `GROQ_API_KEY` | Groq 키. `FREE_GROQ_MODELS`로 모델 교체 |
+| `OPENROUTER_API_KEY` | OpenRouter `:free` 모델. 기본 `qwen/qwen3.8-27b:free`, `nvidia/nemotron-3-super-120b-a12b:free`, `google/gemma-4-31b-it:free`. `FREE_OPENROUTER_MODELS`로 교체 |
+| `GROQ_API_KEY` | Groq. 기본 `openai/gpt-oss-120b`, `qwen/qwen3.8-27b`, `openai/gpt-oss-20b`. `FREE_GROQ_MODELS`로 교체 |
+| `FREE_EXTRA_BACKENDS` | 운영자가 OpenAI 호환 백엔드를 더 추가하는 JSON. 예: `[{"id":"ovh","base":"https://.../v1","models":["gpt-oss-120b"],"cap":100}]`, 키가 있으면 `"key"` 추가. http(s) 주소만 허용, 사용자는 못 바꿈 |
 | `FREE_CAP_OPENROUTER` / `FREE_CAP_GROQ` | 서버 전체 하루 호출 상한(기본 45 / 900, UTC 기준 초기화) |
 | `FREE_ROOM_CAP` | 방당 무료 호출 상한(기본 20) |
 
-한 백엔드가 429/오류를 내면 1분(인증·모델 오류는 10분) 쉬고 다음 백엔드로 넘어간다. 무료 티어는 계정 전체 한도가 작아서(OpenRouter `:free`는 하루 50회, 크레딧 10달러 이상 구매 시 1000회 / Groq 하루 약 1000회, 2026년 기준 제3자 정리 자료) 방당·서버당 상한이 없으면 금방 소진된다. 모델 이름과 한도는 제공사가 바꾸므로 운영 전에 각 제공사 문서로 확인한다.
+**개인 키 전용 제공사**: Anthropic, OpenAI, OpenRouter, Groq는 서버 키 또는 개인 키, **NVIDIA NIM은 개인 키만** 쓴다. NVIDIA API 체험 약관(2026-10 확인)은 내부 테스트·평가 용도로만 쓰고 제3자에게 제공하지 못하게 해서, 서버 키로 다른 사람에게 대신 호출해 주는 구성에는 넣지 않았다.
+
+**한도 참고(2026-10, 공식 문서 또는 제3자 정리 기준이라 운영 전 재확인)**: OpenRouter `:free` 분당 20회, 하루 50회(크레딧 10달러 이상 구매 시 1000회). Groq 무료 플랜 모델당 분당 30회, 하루 1000회, 하루 20만 토큰. 모델 이름과 한도는 제공사가 자주 바꾼다.
 
 **검증 범위**: 가짜 API 서버로 요청 형식(경로, 헤더, 모델, 키 분리, 오류 처리)만 검증했다. 실제 제공사 서버로는 아직 호출해 보지 않았다.
 
