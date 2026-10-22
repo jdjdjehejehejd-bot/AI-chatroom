@@ -18,6 +18,15 @@ const LIMITS = { rooms: 200, humans: 12, ais: 6, text: 1000, history: 300, doc: 
 const TURN_CHARS = 300;
 const PAGE = path.join(__dirname, 'public', 'index.html');
 
+/* 제공사 설정. 사용자가 주소를 직접 넣을 수 없게 해서 서버가 임의 주소로 요청을 보내는 일(SSRF)을 막는다 */
+const PROVIDERS = ['default', 'demo', 'anthropic', 'openai', 'openrouter'];
+const BASES = {
+  anthropic: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com',
+  openai: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+  openrouter: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'
+};
+const ENV_KEYS = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
+
 const TEMPLATES = {
   free: { label: '자유 방', rules: '', ais: [] },
   game: {
@@ -61,7 +70,17 @@ function broadcast(room, obj) {
 function cleanText(s, max) {
   return String(s == null ? '' : s).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').trim().slice(0, max);
 }
-function newAI(spec) { return { id: 'a' + (++aiCounter), name: spec.name, persona: spec.persona }; }
+function newAI(spec) {
+  return {
+    id: 'a' + (++aiCounter), name: spec.name, persona: spec.persona,
+    provider: spec.provider || 'default', model: spec.model || '', apiKey: spec.apiKey || ''
+  };
+}
+/* 오류 문구에 개인 키가 섞여 나가지 않게 가린다 */
+function redact(msg, ai) {
+  const s = String(msg || '');
+  return ai.apiKey ? s.split(ai.apiKey).join('***') : s;
+}
 
 function newRoom(id, template) {
   const room = {
@@ -83,7 +102,7 @@ function meta(room) {
     t: 'meta', id: room.id, template: room.template, templateLabel: TEMPLATES[room.template].label,
     policy: room.policy, maxStreak: room.maxStreak, budget: room.budget, budgetMax: BUDGET_MAX,
     humans: [...room.clients].map(c => c.meta.name),
-    ais: room.ais.map(a => ({ id: a.id, name: a.name, persona: a.persona }))
+    ais: room.ais.map(a => ({ id: a.id, name: a.name, persona: a.persona, provider: a.provider, model: a.model, ownKey: !!a.apiKey }))
   };
 }
 function addMsg(room, kind, who, text) {
@@ -121,28 +140,38 @@ function buildPrompt(room, ai) {
   const user = '최근 대화:\n' + (recent || '(아직 없음)') + '\n\n이제 ' + ai.name + '이(가) 말할 차례다.';
   return { system, user };
 }
-async function callAnthropic(room, ai) {
-  const model = process.env.AI_MODEL;
-  if (!model) throw new Error('AI_MODEL 환경변수가 필요합니다.');
+/* AI 하나가 쓸 제공사·키·모델을 정한다. 개인 키가 있으면 그것을, 없으면 서버 환경변수 키를 쓴다 */
+function resolve(ai) {
+  let provider = ai.provider;
+  if (!provider || provider === 'default') {
+    provider = process.env.ANTHROPIC_API_KEY ? 'anthropic'
+      : process.env.OPENAI_API_KEY ? 'openai'
+      : process.env.OPENROUTER_API_KEY ? 'openrouter' : 'demo';
+  }
+  if (provider === 'demo') return { provider };
+  const key = ai.apiKey || process.env[ENV_KEYS[provider]];
+  const model = ai.model || process.env.AI_MODEL;
+  if (!key) throw new Error(provider + ' API 키가 없습니다. (서버 환경변수 또는 AI 초대 시 개인 키)');
+  if (!model) throw new Error('모델 이름이 필요합니다.');
+  return { provider, key, model, base: BASES[provider].replace(/\/+$/, '') };
+}
+async function callAnthropic(room, ai, cfg) {
   const { system, user } = buildPrompt(room, ai);
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
+  const r = await fetch(cfg.base + '/v1/messages', {
     method: 'POST', signal: AbortSignal.timeout(60000),
-    headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model, max_tokens: 500, system, messages: [{ role: 'user', content: user }] })
+    headers: { 'content-type': 'application/json', 'x-api-key': cfg.key, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({ model: cfg.model, max_tokens: 500, system, messages: [{ role: 'user', content: user }] })
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error('Anthropic ' + r.status + ': ' + ((j.error && j.error.message) || '응답 오류'));
   return (j.content || []).map(c => c.text || '').join('');
 }
-async function callOpenAI(room, ai) {
-  const model = process.env.AI_MODEL;
-  if (!model) throw new Error('AI_MODEL 환경변수가 필요합니다.');
-  const base = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+async function callChat(room, ai, cfg) {
   const { system, user } = buildPrompt(room, ai);
-  const r = await fetch(base + '/chat/completions', {
+  const r = await fetch(cfg.base + '/chat/completions', {
     method: 'POST', signal: AbortSignal.timeout(60000),
-    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + process.env.OPENAI_API_KEY },
-    body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] })
+    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + cfg.key },
+    body: JSON.stringify({ model: cfg.model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] })
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error('API ' + r.status + ': ' + ((j.error && j.error.message) || '응답 오류'));
@@ -162,8 +191,9 @@ function demoReply(room, ai) {
   return text;
 }
 async function generate(room, ai) {
-  if (process.env.ANTHROPIC_API_KEY) return callAnthropic(room, ai);
-  if (process.env.OPENAI_API_KEY) return callOpenAI(room, ai);
+  const cfg = resolve(ai);
+  if (cfg.provider === 'anthropic') return callAnthropic(room, ai, cfg);
+  if (cfg.provider === 'openai' || cfg.provider === 'openrouter') return callChat(room, ai, cfg);
   await new Promise(r => setTimeout(r, DEMO_DELAY));
   return demoReply(room, ai);
 }
@@ -200,7 +230,7 @@ async function orchestrate(room, first) {
     broadcast(room, { t: 'typing', who: ai.name });
     let text;
     try { text = await generate(room, ai); }
-    catch (e) { system(room, ai.name + ' 응답 오류: ' + e.message); break; }
+    catch (e) { system(room, ai.name + ' 응답 오류: ' + redact(e.message, ai)); break; }
     if (gen !== room.gen) return;
     text = cleanText(text, 1500) || '(응답 없음)';
     addMsg(room, 'ai', ai.name, text);
@@ -294,8 +324,17 @@ function handle(ws, m) {
       if (room.ais.length >= LIMITS.ais) return send(ws, { t: 'err', text: 'AI는 최대 ' + LIMITS.ais + '명까지 초대할 수 있습니다.' });
       const used = new Set([...room.clients].map(c => c.meta.name).concat(room.ais.map(a => a.name)));
       if (used.has(an)) return send(ws, { t: 'err', text: '이미 사용 중인 이름입니다.' });
-      room.ais.push(newAI({ name: an, persona }));
-      system(room, name + ' 님이 AI "' + an + '"을(를) 초대했습니다.');
+      const provider = m.provider == null || m.provider === '' ? 'default' : String(m.provider);
+      if (!PROVIDERS.includes(provider)) return send(ws, { t: 'err', text: '지원하지 않는 제공사입니다.' });
+      const model = cleanText(m.model, 80);
+      if (model && !/^[A-Za-z0-9._:\/@-]+$/.test(model)) return send(ws, { t: 'err', text: '모델 이름에 쓸 수 없는 문자가 있습니다.' });
+      const apiKey = cleanText(m.apiKey, 300);
+      if (apiKey && (/\s/.test(apiKey) || provider === 'default' || provider === 'demo')) {
+        return send(ws, { t: 'err', text: 'API 키는 공백 없이, 제공사를 직접 골랐을 때만 입력할 수 있습니다.' });
+      }
+      room.ais.push(newAI({ name: an, persona, provider, model, apiKey }));
+      const via = provider === 'default' ? '' : ' (' + provider + (model ? '/' + model : '') + ')';
+      system(room, name + ' 님이 AI "' + an + '"' + via + '을(를) 초대했습니다.');
       return broadcast(room, meta(room));
     }
     case 'removeAI': {

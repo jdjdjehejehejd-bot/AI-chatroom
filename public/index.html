@@ -42,6 +42,7 @@
   #side { overflow-y:auto; display:flex; flex-direction:column; gap:12px; min-height:0; }
   #side h3 { margin:0 0 6px; font-size:.9rem; }
   .row { display:flex; gap:8px; align-items:center; justify-content:space-between; }
+  .hint { font-size:.75rem; color:var(--muted); margin:6px 0 0; }
   .chip { display:inline-block; padding:1px 8px; margin:2px 4px 2px 0; border:1px solid var(--line); border-radius:999px; font-size:.82rem; }
   .ai-item { display:flex; justify-content:space-between; align-items:center; gap:6px; padding:3px 0; font-size:.85rem; }
   .ai-item a { color:var(--accent); cursor:pointer; text-decoration:underline; }
@@ -92,6 +93,21 @@
       <input id="ainame" maxlength="12" placeholder="예: 번역가" autocomplete="off">
       <label for="aipersona">역할/성격</label>
       <input id="aipersona" maxlength="200" placeholder="예: 모든 말을 영어로 옮겨주는 AI" autocomplete="off">
+      <label for="aiprov">AI 제공사</label>
+      <select id="aiprov">
+        <option value="default">서버 기본 설정</option>
+        <option value="anthropic">Anthropic</option>
+        <option value="openai">OpenAI</option>
+        <option value="openrouter">OpenRouter</option>
+        <option value="demo">데모 (고정 문구)</option>
+      </select>
+      <div id="aiextra" class="hidden">
+        <label for="aimodel">모델 이름</label>
+        <input id="aimodel" maxlength="80" placeholder="제공사의 모델 이름을 직접 입력" autocomplete="off">
+        <label for="aikey">개인 API 키 (선택)</label>
+        <input id="aikey" type="password" maxlength="300" placeholder="비우면 서버 설정 키 사용" autocomplete="off">
+        <p class="hint">키는 서버 메모리에만 보관되고 다른 참가자에게 보이지 않으며, 방이 정리되면 사라집니다. 그래도 서버를 거치므로 신뢰할 수 있는 서버에서만 입력하세요.</p>
+      </div>
       <div style="margin-top:8px"><button id="addai" class="ghost tiny">초대</button></div>
     </div>
 
@@ -184,7 +200,8 @@
       var left = document.createElement("div");
       var nm = document.createElement("a"); nm.textContent = "@" + ai.name; nm.title = "클릭하면 입력창에 넣습니다";
       nm.addEventListener("click", function () { var t = $("text"); t.value += (t.value && !/\s$/.test(t.value) ? " " : "") + "@" + ai.name + " "; t.focus(); });
-      var pr = document.createElement("small"); pr.textContent = ai.persona;
+      var pr = document.createElement("small");
+      pr.textContent = ai.persona + (ai.provider && ai.provider !== "default" ? " · " + ai.provider + (ai.model ? "/" + ai.model : "") + (ai.ownKey ? " · 개인 키" : "") : "");
       left.appendChild(nm); left.appendChild(pr);
       var rm = document.createElement("button"); rm.className = "ghost tiny"; rm.textContent = "내보내기";
       rm.addEventListener("click", function () { send({ t: "removeAI", id: ai.id }); });
@@ -232,9 +249,16 @@
     var url = location.origin + location.pathname + "?room=" + roomId;
     (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () { toast("초대 링크를 복사했습니다."); }, function () { toast(url); });
   });
+  $("aiprov").addEventListener("change", function () {
+    var live = ["anthropic", "openai", "openrouter"].indexOf($("aiprov").value) >= 0;
+    $("aiextra").classList.toggle("hidden", !live);
+  });
   $("addai").addEventListener("click", function () {
-    send({ t: "addAI", name: $("ainame").value.trim(), persona: $("aipersona").value.trim() });
-    $("ainame").value = ""; $("aipersona").value = "";
+    send({
+      t: "addAI", name: $("ainame").value.trim(), persona: $("aipersona").value.trim(),
+      provider: $("aiprov").value, model: $("aimodel").value.trim(), apiKey: $("aikey").value.trim()
+    });
+    $("ainame").value = ""; $("aipersona").value = ""; $("aikey").value = "";
   });
   $("apply").addEventListener("click", function () {
     send({ t: "config", policy: $("policy").value, maxStreak: Number($("streak").value), budgetLimit: Number($("budget").value) });
