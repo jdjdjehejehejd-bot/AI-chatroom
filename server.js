@@ -19,13 +19,39 @@ const TURN_CHARS = 300;
 const PAGE = path.join(__dirname, 'public', 'index.html');
 
 /* 제공사 설정. 사용자가 주소를 직접 넣을 수 없게 해서 서버가 임의 주소로 요청을 보내는 일(SSRF)을 막는다 */
-const PROVIDERS = ['default', 'demo', 'anthropic', 'openai', 'openrouter'];
+const PROVIDERS = ['default', 'demo', 'free', 'anthropic', 'openai', 'openrouter'];
 const BASES = {
   anthropic: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com',
   openai: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
   openrouter: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1'
 };
 const ENV_KEYS = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
+
+/* 무료 모델 풀: 서버가 가진 무료 티어 키로 사용자 대신 호출한다. 무료 티어는 계정 전체 한도가 작으므로
+   (OpenRouter :free 는 하루 50회, Groq 는 하루 약 1000회) 백엔드별 일일 상한, 방별 상한, 실패 시 다음 백엔드로 넘어가는 로직을 둔다.
+   모델 이름은 제공사가 자주 바꾸므로 환경변수로 교체할 수 있게 한다 */
+const csv = (v, d) => String(v || d).split(',').map(s => s.trim()).filter(Boolean);
+const FREE_BACKENDS = [
+  { id: 'openrouter', label: 'OpenRouter 무료', keyEnv: 'OPENROUTER_API_KEY', base: BASES.openrouter,
+    models: csv(process.env.FREE_OPENROUTER_MODELS, 'meta-llama/llama-3.3-70b-instruct:free'), cap: Number(process.env.FREE_CAP_OPENROUTER || 45) },
+  { id: 'groq', label: 'Groq 무료', keyEnv: 'GROQ_API_KEY', base: process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1',
+    models: csv(process.env.FREE_GROQ_MODELS, 'llama-3.3-70b-versatile'), cap: Number(process.env.FREE_CAP_GROQ || 900) }
+];
+const FREE_ROOM_CAP = Number(process.env.FREE_ROOM_CAP || 20);
+const freeState = { day: '', used: {}, cool: {}, rr: 0 };
+function freeTick() {
+  const day = new Date().toISOString().slice(0, 10);
+  if (freeState.day !== day) { freeState.day = day; freeState.used = {}; freeState.cool = {}; }
+}
+function freeUsable(b) {
+  freeTick();
+  return !!process.env[b.keyEnv] && (freeState.used[b.id] || 0) < b.cap && (freeState.cool[b.id] || 0) <= Date.now();
+}
+function freeLeft() {
+  freeTick();
+  return FREE_BACKENDS.filter(b => process.env[b.keyEnv]).reduce((s, b) => s + Math.max(0, b.cap - (freeState.used[b.id] || 0)), 0);
+}
+const freeAvailable = () => FREE_BACKENDS.some(b => !!process.env[b.keyEnv]);
 
 const TEMPLATES = {
   free: { label: '자유 방', rules: '', ais: [] },
@@ -101,6 +127,7 @@ function meta(room) {
   return {
     t: 'meta', id: room.id, template: room.template, templateLabel: TEMPLATES[room.template].label,
     policy: room.policy, maxStreak: room.maxStreak, budget: room.budget, budgetMax: BUDGET_MAX,
+    free: { available: freeAvailable(), left: freeLeft(), roomUsed: room.freeUsed || 0, roomCap: FREE_ROOM_CAP },
     humans: [...room.clients].map(c => c.meta.name),
     ais: room.ais.map(a => ({ id: a.id, name: a.name, persona: a.persona, provider: a.provider, model: a.model, ownKey: !!a.apiKey }))
   };
@@ -146,9 +173,9 @@ function resolve(ai) {
   if (!provider || provider === 'default') {
     provider = process.env.ANTHROPIC_API_KEY ? 'anthropic'
       : process.env.OPENAI_API_KEY ? 'openai'
-      : process.env.OPENROUTER_API_KEY ? 'openrouter' : 'demo';
+      : process.env.OPENROUTER_API_KEY && process.env.AI_MODEL ? 'openrouter' : freeAvailable() ? 'free' : 'demo';
   }
-  if (provider === 'demo') return { provider };
+  if (provider === 'demo' || provider === 'free') return { provider };
   const key = ai.apiKey || process.env[ENV_KEYS[provider]];
   const model = ai.model || process.env.AI_MODEL;
   if (!key) throw new Error(provider + ' API 키가 없습니다. (서버 환경변수 또는 AI 초대 시 개인 키)');
@@ -190,8 +217,33 @@ function demoReply(room, ai) {
   if (room.template === 'project') text += '\n[문서] ' + ai.name + ' 메모 #' + (n + 1) + ': ' + (topic || '주제 미정');
   return text;
 }
+async function callFree(room, ai) {
+  if ((room.freeUsed || 0) >= FREE_ROOM_CAP) throw new Error('이 방의 무료 모델 사용 한도(' + FREE_ROOM_CAP + '회)에 도달했습니다. 개인 API 키를 쓰는 AI를 초대하면 계속할 수 있습니다.');
+  const n = FREE_BACKENDS.length;
+  let lastErr = null, tried = 0;
+  for (let i = 0; i < n; i++) {
+    const b = FREE_BACKENDS[(freeState.rr + i) % n];
+    if (!freeUsable(b)) continue;
+    tried++;
+    freeState.used[b.id] = (freeState.used[b.id] || 0) + 1;
+    const model = b.models[(freeState.used[b.id]) % b.models.length];
+    try {
+      const text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: process.env[b.keyEnv], model });
+      freeState.rr = (freeState.rr + i + 1) % n;
+      room.freeUsed = (room.freeUsed || 0) + 1;
+      return text;
+    } catch (e) {
+      lastErr = e;
+      const m = /API (\d+)/.exec(e.message), code = m ? Number(m[1]) : 0;
+      freeState.cool[b.id] = Date.now() + (code === 429 || code >= 500 || !code ? 60000 : 600000);
+    }
+  }
+  if (tried && lastErr) throw new Error('무료 모델이 지금 응답하지 못했습니다. 잠시 뒤 다시 시도하세요.');
+  throw new Error('오늘의 무료 모델 사용량이 모두 소진되었거나 아직 설정되지 않았습니다.');
+}
 async function generate(room, ai) {
   const cfg = resolve(ai);
+  if (cfg.provider === 'free') return callFree(room, ai);
   if (cfg.provider === 'anthropic') return callAnthropic(room, ai, cfg);
   if (cfg.provider === 'openai' || cfg.provider === 'openrouter') return callChat(room, ai, cfg);
   await new Promise(r => setTimeout(r, DEMO_DELAY));
@@ -326,10 +378,11 @@ function handle(ws, m) {
       if (used.has(an)) return send(ws, { t: 'err', text: '이미 사용 중인 이름입니다.' });
       const provider = m.provider == null || m.provider === '' ? 'default' : String(m.provider);
       if (!PROVIDERS.includes(provider)) return send(ws, { t: 'err', text: '지원하지 않는 제공사입니다.' });
-      const model = cleanText(m.model, 80);
+      if (provider === 'free' && !freeAvailable()) return send(ws, { t: 'err', text: '이 서버에는 무료 모델이 설정되어 있지 않습니다.' });
+      const model = provider === 'free' ? '' : cleanText(m.model, 80);
       if (model && !/^[A-Za-z0-9._:\/@-]+$/.test(model)) return send(ws, { t: 'err', text: '모델 이름에 쓸 수 없는 문자가 있습니다.' });
       const apiKey = cleanText(m.apiKey, 300);
-      if (apiKey && (/\s/.test(apiKey) || provider === 'default' || provider === 'demo')) {
+      if (apiKey && (/\s/.test(apiKey) || provider === 'default' || provider === 'demo' || provider === 'free')) {
         return send(ws, { t: 'err', text: 'API 키는 공백 없이, 제공사를 직접 골랐을 때만 입력할 수 있습니다.' });
       }
       room.ais.push(newAI({ name: an, persona, provider, model, apiKey }));
