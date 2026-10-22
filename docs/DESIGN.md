@@ -46,7 +46,7 @@
 
 | 엔티티 | 주요 필드 | 비고 |
 |---|---|---|
-| Room | id(방 코드), template, policy, maxStreak, budgetLimit, budgetUsed, createdAt, hostId | 현재 코드에는 hostId 없음 |
+| Room | id(방 코드), asset(이름·설명·AI 수), rules, policy, maxStreak, budgetLimit, budgetUsed, createdAt, hostId | 현재 코드에는 hostId 없음 |
 | Member(사람) | id, roomId, displayName, role(host/member), joinedAt | 현재는 접속 중인 연결(ws)과 이름만 있음 |
 | AIParticipant | id, roomId, name, persona, provider, model, secretRef, addedBy | secretRef는 개인 키 참조. 값 자체는 별도 보관 |
 | Message | id(방 안 순번), roomId, kind(human/ai/system), who, text, code, createdAt | **code**(이벤트 종류)는 아직 없음. 6장 참고 |
@@ -61,10 +61,10 @@
 
 | 타입 | 내용 | 상태 |
 |---|---|---|
-| join | room, name, template(새 방일 때만) | 구현 |
+| join | room, name, asset(새 방일 때만, 선택) | 구현 |
 | msg | text (최대 1000자) | 구현 |
 | config | policy, maxStreak(1~10), budgetLimit(사용량 이상, 최대 100) | 구현 |
-| template | id | 구현 (AI 구성이 교체됨) |
+| asset | asset(JSON 객체, 12KB 이하) | 구현 (서버가 검증, AI 구성이 교체됨. 기존 template 메시지는 제거됨) |
 | addAI | name, persona, provider, model, apiKey | 구현 |
 | removeAI | id | 구현 |
 | doc | text | 구현 |
