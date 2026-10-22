@@ -190,6 +190,9 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
 .curasset b { display:block; }
 .curasset small { color:var(--muted); font-size:12px; }
 #toast { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(16px + env(safe-area-inset-bottom, 0px)); background:var(--bar); color:var(--bar-ink); padding:9px 16px; border-radius:8px; font-size:13px; max-width:90vw; z-index:20; }
+.adrow { align-self:center; max-width:92%; display:flex; gap:8px; align-items:center; font-size:11.5px; color:var(--muted); border:1px dashed var(--line2); border-radius:8px; padding:4px 10px; }
+.adrow b { font-size:10px; letter-spacing:.06em; border:1px solid var(--line2); border-radius:4px; padding:0 4px; }
+.adrow a { color:var(--accent-text); }
 .dots { display:inline-flex; gap:3px; margin-right:6px; vertical-align:middle; }
 .dots i { width:5px; height:5px; border-radius:50%; background:var(--av, var(--muted)); display:block; animation:bl 1s infinite; }
 .dots i:nth-child(2) { animation-delay:.15s; } .dots i:nth-child(3) { animation-delay:.3s; }
@@ -250,7 +253,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
   <header id="top">
     <div class="ttl"><div class="mark" aria-hidden="true">AI</div><div><b id="rtitle">방</b><small><span class="dot" aria-hidden="true"></span><span id="rsub"></span></small></div></div>
     <div class="bud"><div class="row"><span>AI 호출 예산</span><span class="mono" id="budtxt"></span></div><div class="meter" id="meter"><div></div></div></div>
-    <div><button type="button" class="btn sm" id="invite">초대 링크 복사</button></div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap"><span class="pill" id="planbadge"></span><button type="button" class="btn sm" id="upgrade">업그레이드</button><button type="button" class="btn sm" id="devplan" hidden>플랜 전환 (개발용)</button><button type="button" class="btn sm" id="invite">초대 링크 복사</button></div>
   </header>
   <div id="cols">
     <main id="chat">
@@ -395,7 +398,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
   var MAX_AI = 6, MAX_FILE = 12 * 1024;
   var ws = null, me = "", typingTimer = null, toastTimer = null, pendingAsset = null, applyCand = null;
   var meta = null, errAI = null, budgetAlert = false;
-  var colors = {}, colorCount = 0;
+  var colors = {}, colorCount = 0, aiShown = 0;
 
   var SAMPLE = {
     format: "aichat-asset/1",
@@ -514,6 +517,12 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     }
     log.appendChild(row); log.scrollTop = log.scrollHeight;
   }
+  function insertAd(ad) {
+    var row = mk("div", "adrow"); row.appendChild(mk("b", "", "광고"));
+    if (ad.url) { var a = mk("a", "", ad.text); a.href = ad.url; a.target = "_blank"; a.rel = "noopener noreferrer sponsored"; row.appendChild(a); }
+    else row.appendChild(mk("span", "", ad.text));
+    var log = $("log"); log.appendChild(row); log.scrollTop = log.scrollHeight;
+  }
   function renderEmpty() {
     var log = $("log");
     if (log.querySelector(".m") || log.querySelector(".empty")) return;
@@ -569,7 +578,9 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     var h = $("humans"); h.textContent = "";
     $("humtitle").textContent = "사람 " + s.humans.length + "명";
     s.humans.forEach(function (n) { var p = mk("span", "pill" + (n === me ? " me" : "")); p.appendChild(mk("span", "dot")); p.appendChild(document.createTextNode(n === me ? n + " (나)" : n)); h.appendChild(p); });
-    $("aititle").textContent = "AI " + s.ais.length + "명";
+    $("aititle").textContent = "AI " + s.ais.length + " / " + s.plan.ais + "명";
+    $("planbadge").textContent = "방 플랜 " + s.plan.label + (s.plan.ads ? " · 광고 표시" : " · 광고 없음");
+    $("upgrade").hidden = s.plan.premium; $("devplan").hidden = !s.plan.dev;
     var box = $("ais"); box.textContent = "";
     if (!s.ais.length) box.appendChild(mk("div", "hint", "아직 AI가 없습니다. 아래에서 초대하거나 에셋을 불러오세요."));
     s.ais.forEach(function (ai) {
@@ -614,6 +625,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     } else if (m.t === "meta") { renderMeta(m); }
     else if (m.t === "msg") {
       addMessage(m.msg);
+      if (m.msg.kind === "ai" && meta && meta.plan.ads && meta.adList.length && ++aiShown % 4 === 0) insertAd(meta.adList[(aiShown / 4 - 1) % meta.adList.length]);
       if (m.msg.kind === "ai") { $("typing").textContent = ""; if (errAI && errAI.name === m.msg.who) { errAI = null; renderStatus(); } }
       if (m.msg.code === "BUDGET_EXHAUSTED") { budgetAlert = true; renderStatus(); }
       if (m.msg.code === "AI_ERROR" && m.msg.extra) { errAI = { id: m.msg.extra.aiId, name: m.msg.extra.aiName, text: m.msg.extra.text }; renderStatus(); }
@@ -662,6 +674,8 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     send({ t: "config", policy: document.querySelector('input[name="policy"]:checked').value, maxStreak: Number($("stval").textContent), budgetLimit: Number($("budget").value) });
     toast("설정을 적용했습니다.");
   });
+  $("upgrade").addEventListener("click", function () { toast("결제는 아직 준비 중입니다. 플러스 플랜은 AI 6명, 호출 예산 300회, 광고 없음입니다."); });
+  $("devplan").addEventListener("click", function () { send({ t: "plan", id: meta.plan.id === "free" ? "plus" : "free" }); });
   $("savedoc").addEventListener("click", function () { send({ t: "doc", text: $("doc").value }); toast("문서를 저장했습니다."); });
 
   function assetErr(t) { var e = $("aerr"); e.textContent = t || ""; e.hidden = !t; }
