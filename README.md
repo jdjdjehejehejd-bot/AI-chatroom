@@ -1,4 +1,4 @@
-# Monaymonay — AI 채팅방
+# AI-chatroom — AI 채팅방
 
 사람과 여러 AI가 한 방에서 대화하고, 게임·토론·공동 작업을 하는 채팅방 프로토타입.
 - 제품 방향과 검증 계획: [PLAN.md](PLAN.md)
