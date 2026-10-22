@@ -213,12 +213,12 @@ label.lb { display:block; font-size:12px; font-weight:700; margin:14px 0 6px; co
 #info header b { flex:1; font-size:15px; }
 #grab { display:none; }
 #seg { flex:none; display:flex; gap:4px; margin:10px 14px 0; padding:4px; background:var(--h-sf); border-radius:12px; }
-#seg button { flex:1; min-height:32px; border:none; border-radius:9px; background:transparent; font-size:13px; color:var(--muted); font-weight:500; }
+#seg button { flex:1; min-width:0; min-height:32px; border:none; border-radius:9px; background:transparent; font-size:12.5px; white-space:nowrap; color:var(--muted); font-weight:500; }
 #seg button[aria-current="page"] { background:var(--surface); color:var(--ink); font-weight:700; box-shadow:0 1px 3px rgba(16,19,34,.12); }
 #side { flex:1; min-height:0; overflow-y:auto; padding:14px 16px calc(18px + env(safe-area-inset-bottom,0px)); }
 .pn { display:none; }
 #info[data-tab="ai"] .pn[data-panel="ai"], #info[data-tab="settings"] .pn[data-panel="settings"],
-#info[data-tab="doc"] .pn[data-panel="doc"], #info[data-tab="assets"] .pn[data-panel="assets"] { display:block; }
+#info[data-tab="doc"] .pn[data-panel="doc"], #info[data-tab="deliv"] .pn[data-panel="deliv"], #info[data-tab="assets"] .pn[data-panel="assets"] { display:block; }
 .pn h3 { margin:0 0 10px; font-size:13px; }
 .pn section + section { margin-top:20px; padding-top:18px; border-top:1px solid var(--line); }
 .ai-item { display:flex; align-items:center; gap:10px; padding:8px 0; }
@@ -284,6 +284,29 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
   .entry { padding:22px; border-radius:20px; }
   #chipbud { display:none; }
 }
+/* 모드 선택, 산출물 */
+.codechip { display:block; margin:6px 0 2px; padding:7px 11px; border-radius:10px; border:1px dashed var(--tx, var(--line2)); background:color-mix(in srgb, var(--surface) 70%, transparent); color:var(--tx, var(--ink)); font-size:12.5px; font-weight:500; text-align:left; }
+.modes { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+.mode { position:relative; display:flex; flex-direction:column; gap:2px; padding:11px 12px; border:1px solid var(--line); border-radius:14px; background:var(--surface); cursor:pointer; min-height:62px; }
+.mode input { position:absolute; opacity:0; inset:0; margin:0; cursor:pointer; }
+.mode b { font-size:14px; letter-spacing:-.01em; }
+.mode span { font-size:11.5px; color:var(--muted); line-height:1.35; }
+.mode:has(input:checked) { border-color:var(--accent); background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent); }
+.mode:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:2px; }
+.flow { display:flex; flex-wrap:wrap; align-items:center; gap:4px 6px; margin-top:10px; font-size:12px; color:var(--muted); }
+.flow i { font-style:normal; padding:1px 9px; border-radius:999px; background:var(--h-sf); color:var(--ink); }
+#seg button { position:relative; }
+#seg button.new::after { content:""; position:absolute; top:6px; right:8px; width:6px; height:6px; border-radius:50%; background:var(--c4); }
+.dmeta { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; font-size:12px; color:var(--muted); margin-bottom:10px; }
+.dmeta .btn { margin-left:auto; }
+#dframe { width:100%; height:380px; border:1px solid var(--line2); border-radius:14px; background:#fff; display:block; }
+.dpre { max-height:420px; overflow:auto; white-space:pre-wrap; }
+.dact { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+.mcard { display:flex; align-items:center; gap:10px; padding:10px 0; }
+.mcard + .mcard { border-top:1px solid var(--line); }
+.mcard div { flex:1; min-width:0; }
+.mcard b { display:block; font-size:13.5px; }
+.mcard small { color:var(--muted); font-size:12px; }
 @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
 </style>
 </head>
@@ -308,7 +331,18 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
         <p class="lead" id="jhint">이름만 정하면 빈 방으로 시작할 수 있어요.</p>
         <label class="lb" for="jname">이름</label>
         <input class="field" id="jname" maxlength="16" placeholder="채팅방에 표시할 이름" autocomplete="nickname">
-        <div class="assetbox" id="jassetbox">
+        <div id="jmodes">
+          <div class="eyebrow" style="margin-top:20px">모드</div>
+          <div class="modes" role="radiogroup" aria-label="방 모드">
+            <label class="mode"><input type="radio" name="jmode" value="" checked><b>빈 방</b><span>AI를 직접 초대</span></label>
+            <label class="mode"><input type="radio" name="jmode" value="code"><b>Code</b><span>설계·구현·리뷰로 코드 완성</span></label>
+            <label class="mode"><input type="radio" name="jmode" value="brainstorm"><b>Brainstorm</b><span>발산·비판·정리로 아이디어</span></label>
+            <label class="mode"><input type="radio" name="jmode" value="make"><b>Make</b><span>웹사이트·보고서·PPT 제작</span></label>
+            <label class="mode" style="grid-column:1 / -1"><input type="radio" name="jmode" value="asset"><b>에셋 불러오기</b><span>내가 만든 방 구성 파일(.json)</span></label>
+          </div>
+          <div class="flow" id="jflow" hidden></div>
+        </div>
+        <div class="assetbox" id="jassetbox" hidden>
           <div class="eyebrow">에셋 (선택)</div>
           <div id="jasset" style="margin-top:8px"></div>
           <div class="row2">
@@ -352,6 +386,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
       <button type="button" data-go="ai" aria-current="page">참가자</button>
       <button type="button" data-go="settings">설정</button>
       <button type="button" data-go="doc">문서</button>
+      <button type="button" data-go="deliv">산출물</button>
       <button type="button" data-go="assets">에셋</button>
     </nav>
     <div id="side">
@@ -426,8 +461,20 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
           <div style="margin-top:10px"><button class="btn sm" id="savedoc" type="button">저장</button></div>
         </section>
       </div>
+      <div class="pn" data-panel="deliv">
+        <section>
+          <h3>산출물</h3>
+          <div id="delivbox"></div>
+        </section>
+      </div>
       <div class="pn" data-panel="assets">
         <section><h3>현재 에셋</h3><div class="curasset" id="curasset"></div></section>
+        <section>
+          <h3>모드 적용</h3>
+          <p class="hint" style="margin:0 0 6px">모드를 적용하면 지금의 AI 구성과 산출물이 모드의 구성으로 교체됩니다.</p>
+          <div id="modecards"></div>
+          <div id="modeconfirm"></div>
+        </section>
         <section>
           <h3>에셋 불러오기</h3>
           <p class="hint" style="margin:0 0 10px">에셋을 적용하면 지금의 AI 구성이 에셋의 구성으로 교체됩니다.</p>
@@ -484,6 +531,12 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
   };
   var SAMPLE_TEXT = JSON.stringify(SAMPLE, null, 2);
   $("fmt").textContent = SAMPLE_TEXT;
+  var MODEINFO = {
+    code: { label: "Code", desc: "설계 → 구현 → 리뷰 → 수정", flow: ["설계자", "구현자", "리뷰어", "(테스터)", "구현자"] },
+    brainstorm: { label: "Brainstorm", desc: "발산 → 비판 → 정리", flow: ["발산자", "비평가", "(조합가)", "정리자"] },
+    make: { label: "Make", desc: "기획 → 작성 → 편집", flow: ["기획자", "작성자", "(디자이너)", "편집자"] }
+  };
+  var jmode = "", deliv = null, dview = "preview";
   var POLNAME = { mention: "@멘션했을 때만", round: "순서대로", free: "AI끼리 자유롭게" };
   var LIVE = ["anthropic", "openai", "openrouter", "groq", "google", "mistral", "nvidia"];
 
@@ -570,17 +623,27 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
   function setEntry() {
     $("jtitle").textContent = inRoomUrl ? "방 " + roomId + " 참가" : "방 만들기";
     $("jgo").textContent = inRoomUrl ? "입장" : "방 만들고 입장";
-    $("jassetbox").hidden = inRoomUrl;
+    $("jmodes").hidden = inRoomUrl; $("jassetbox").hidden = inRoomUrl || jmode !== "asset"; showFlow();
     $("jhint").textContent = inRoomUrl ? "초대받은 방에 들어갑니다. 방 구성은 방을 만든 사람의 에셋을 따릅니다." : "이름만 정하면 빈 방으로 시작할 수 있어요.";
     $("jgo").disabled = false; joinErr(""); assetJoinErr("");
   }
+  function showFlow() {
+    var f = $("jflow"), info = MODEINFO[jmode];
+    f.textContent = ""; f.hidden = !info;
+    if (!info) return;
+    info.flow.forEach(function (n, i) { if (i) f.appendChild(document.createTextNode("→")); f.appendChild(mk("i", "", n)); });
+    f.appendChild(mk("span", "", "  괄호는 플러스 플랜에서 추가"));
+  }
+  document.querySelectorAll('input[name="jmode"]').forEach(function (r) {
+    r.addEventListener("change", function () { jmode = r.value; $("jassetbox").hidden = inRoomUrl || jmode !== "asset"; showFlow(); });
+  });
   function resetRoomState() {
-    meta = null; errAI = null; budgetAlert = false; joined = false; colors = {}; colorCount = 0; aiShown = 0; last = null; lastDay = ""; typRow = null; me = "";
+    meta = null; deliv = null; dview = "preview"; errAI = null; budgetAlert = false; joined = false; colors = {}; colorCount = 0; aiShown = 0; last = null; lastDay = ""; typRow = null; me = "";
     $("log").textContent = ""; $("status").textContent = ""; $("text").value = ""; $("doc").value = ""; autosize(); closeInfo(); setTab("ai");
   }
   function goHome() {
     if (ws) { ws.onclose = null; ws.onerror = null; try { ws.close(); } catch (e) {} ws = null; }
-    resetRoomState(); roomId = ""; inRoomUrl = false; pendingAsset = null; showJoinAsset();
+    resetRoomState(); roomId = ""; inRoomUrl = false; pendingAsset = null; showJoinAsset(); jmode = ""; document.querySelector('input[name="jmode"][value=""]').checked = true;
     try { history.replaceState(null, "", location.pathname); } catch (e) {}
     $("room").hidden = true; $("entrypane").hidden = false; document.title = "AI 채팅방";
     setEntry(); renderRooms(); setView("list");
@@ -625,7 +688,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     if (!inRoomUrl) { roomId = rand(6); try { history.replaceState(null, "", "?room=" + roomId); } catch (e) {} }
     $("jgo").disabled = true; joinErr("");
     ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
-    ws.onopen = function () { var j = { t: "join", room: roomId, name: name }; if (!inRoomUrl && pendingAsset) j.asset = pendingAsset; send(j); };
+    ws.onopen = function () { var j = { t: "join", room: roomId, name: name }; if (!inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; } send(j); };
     ws.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (x) { return; } onMsg(m); };
     ws.onclose = function () { if (joined) toast("연결이 끊어졌습니다. 새로고침하세요."); else $("jgo").disabled = false; };
     ws.onerror = function () { joinErr("서버에 연결하지 못했습니다."); $("jgo").disabled = false; };
@@ -643,6 +706,18 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     }
     if (i < text.length) el.appendChild(document.createTextNode(text.slice(i)));
   }
+  function renderBody(el, text) {
+    var re = /```([\w+-]*)\n([\s\S]*?)```/g, i = 0, m, any = false;
+    while ((m = re.exec(text))) {
+      any = true;
+      var before = text.slice(i, m.index).trim(); if (before) { var d = mk("div"); withMentions(d, before); el.appendChild(d); }
+      var chip = mk("button", "codechip", "코드블록 · " + (m[1] || "text") + " · " + m[2].trim().length + "자 — 산출물에서 보기"); chip.type = "button";
+      chip.addEventListener("click", function () { openInfo("deliv"); });
+      el.appendChild(chip); i = m.index + m[0].length;
+    }
+    if (!any) { withMentions(el, text); return; }
+    var rest = text.slice(i).trim(); if (rest) { var d2 = mk("div"); withMentions(d2, rest); el.appendChild(d2); }
+  }
   function dropTyping() { if (typRow) { typRow.remove(); typRow = null; } clearTimeout(typTimer); }
   function addMessage(m) {
     var log = $("log"), ts = m.ts || Date.now();
@@ -657,7 +732,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
       var av = mk("div", "av", m.who.charAt(0)); av.setAttribute("aria-hidden", "true"); if (!ai) humanStyle(av, m.who);
       var col = mk("div", "col");
       if (!cont && !mine) { var nm = mk("div", "name"); nm.appendChild(mk("span", "", m.who)); if (ai) nm.appendChild(mk("span", "tag", "AI")); col.appendChild(nm); }
-      var b = mk("div", "bubble"); withMentions(b, m.text); col.appendChild(b); col.appendChild(mk("div", "time", fmtTime(ts)));
+      var b = mk("div", "bubble"); renderBody(b, m.text); col.appendChild(b); col.appendChild(mk("div", "time", fmtTime(ts)));
       if (!mine) row.appendChild(av);
       row.appendChild(col);
       if (cont && last.el) last.el.classList.remove("last");
@@ -677,9 +752,13 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     if (log.querySelector(".row") || log.querySelector(".empty")) return;
     var e = mk("div", "empty"), art = mk("div", "art"), has = meta && meta.ais.length;
     art.appendChild(mk("i")); art.appendChild(mk("i")); art.appendChild(mk("i")); e.appendChild(art);
-    e.appendChild(mk("h2", "", has ? "대화를 시작해 보세요" : "아직 AI가 없어요"));
-    e.appendChild(mk("p", "", has ? "@이름 으로 AI를 부르거나, 발언 방식을 바꿔 보세요." : "에셋을 불러오거나 AI를 직접 초대하면 @이름 으로 불러서 대화할 수 있어요."));
-    if (!has) {
+    e.appendChild(mk("h2", "", meta && meta.mode ? "요청을 보내 보세요" : has ? "대화를 시작해 보세요" : "아직 AI가 없어요"));
+    e.appendChild(mk("p", "", meta && meta.mode ? meta.mode.hint : has ? "@이름 으로 AI를 부르거나, 발언 방식을 바꿔 보세요." : "에셋을 불러오거나 AI를 직접 초대하면 @이름 으로 불러서 대화할 수 있어요."));
+    if (meta && meta.mode) {
+      var ex = mk("div", "cast"); ex.style.justifyContent = "center";
+      meta.mode.examples.forEach(function (t) { var b = mk("button", "btn sm", t); b.type = "button"; b.style.textAlign = "left"; b.addEventListener("click", function () { $("text").value = t; autosize(); $("text").focus(); }); ex.appendChild(b); });
+      e.appendChild(ex);
+    } else if (!has) {
       var b1 = mk("button", "btn primary sm", "에셋 불러오기"); b1.type = "button"; b1.addEventListener("click", function () { openInfo("assets"); });
       var b2 = mk("button", "btn sm", "AI 초대"); b2.type = "button"; b2.style.marginLeft = "8px"; b2.addEventListener("click", function () { openInfo("ai"); $("invdet").open = true; $("ainame").focus(); });
       e.appendChild(b1); e.appendChild(b2);
@@ -751,10 +830,10 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
       row.appendChild(av); row.appendChild(nm); row.appendChild(rm); box.appendChild(row);
     });
     var chips = $("chips"); chips.textContent = "";
-    s.ais.forEach(function (ai) {
+    if (!s.mode) s.ais.forEach(function (ai) {
       var c = mk("button", "c" + colorOf(ai.name), "@" + ai.name); c.type = "button"; c.addEventListener("click", function () { insertMention(ai.name); }); chips.appendChild(c);
     });
-    if (s.ais.length) { var a2 = mk("button", "", "@모두"); a2.type = "button"; a2.addEventListener("click", function () { insertMention("모두"); }); chips.appendChild(a2); }
+    if (s.ais.length && !s.mode) { var a2 = mk("button", "", "@모두"); a2.type = "button"; a2.addEventListener("click", function () { insertMention("모두"); }); chips.appendChild(a2); }
     var cur = $("curasset"); cur.textContent = "";
     if (s.asset) { cur.appendChild(mk("b", "", s.asset.name)); cur.appendChild(mk("small", "", (s.asset.description || "설명 없음") + " · AI " + s.asset.ais + "명")); }
     else { cur.appendChild(mk("b", "", "적용된 에셋 없음")); cur.appendChild(mk("small", "", "빈 방이거나 AI를 직접 초대한 상태입니다.")); }
@@ -762,8 +841,71 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     document.querySelectorAll('input[name="policy"]').forEach(function (r) { r.checked = r.value === s.policy; });
     if (active !== $("stplus") && active !== $("stminus")) $("stval").textContent = s.maxStreak;
     if (errAI && !s.ais.some(function (a) { return a.id === errAI.id; })) errAI = null;
+    $("text").placeholder = s.mode ? "요청을 입력하세요" : "메시지 입력 (@이름 으로 AI 호출)";
+    renderFlowBox(); renderDeliv(); renderModeCards();
     renderBudget(s.budget); renderFree(); renderStatus(); renderEmpty();
     if (joined) saveRoom(s.id, title);
+  }
+  function renderFlowBox() {
+    var old = $("flowbox"); if (old) old.remove();
+    if (!meta || !meta.mode) return;
+    var box = mk("section"); box.id = "flowbox";
+    box.appendChild(mk("h3", "", MODEINFO[meta.mode.id].label + " 진행 순서"));
+    var f = mk("div", "flow"); f.style.marginTop = "0";
+    meta.mode.pipeline.forEach(function (n, i) { if (i) f.appendChild(document.createTextNode("→")); f.appendChild(mk("i", "", n)); });
+    box.appendChild(f);
+    box.appendChild(mk("p", "hint", "사람이 요청을 보낼 때마다 이 순서로 AI가 이어 받고, 결과가 산출물 탭에 쌓입니다. 한 번에 AI 호출 " + meta.mode.pipeline.length + "회를 씁니다."));
+    var host = document.querySelector('[data-panel="ai"]'), first = host.querySelector("section");
+    host.insertBefore(box, first);
+  }
+  var EXT = { html: "html", python: "py", py: "py", javascript: "js", js: "js", markdown: "md", md: "md", json: "json", css: "css", text: "txt", typescript: "ts", ts: "ts", bash: "sh", sh: "sh" };
+  function renderDeliv() {
+    var box = $("delivbox"); box.textContent = "";
+    if (!deliv) {
+      box.appendChild(mk("p", "hint", meta && meta.mode ? "AI들이 요청을 처리하면 최종 결과가 여기에 쌓입니다. 코드는 파일로, 웹페이지는 미리보기로 볼 수 있어요." : "AI가 ``` 코드블록으로 결과를 내면 이곳에 표시됩니다. 모드를 적용하면 AI들이 순서대로 산출물을 만듭니다."));
+      return;
+    }
+    var m = mk("div", "dmeta"), isHtml = deliv.lang === "html";
+    m.appendChild(mk("span", "pill", "v" + deliv.v)); m.appendChild(mk("span", "", deliv.by + " · " + deliv.lang + " · " + deliv.text.length + "자"));
+    if (isHtml) {
+      var tg = mk("button", "btn sm", dview === "preview" ? "코드 보기" : "미리보기"); tg.type = "button"; tg.id = "dtoggle";
+      tg.addEventListener("click", function () { dview = dview === "preview" ? "code" : "preview"; renderDeliv(); });
+      m.appendChild(tg);
+    }
+    box.appendChild(m);
+    if (isHtml && dview === "preview") {
+      var fr = document.createElement("iframe"); fr.id = "dframe"; fr.setAttribute("sandbox", ""); fr.setAttribute("title", "산출물 미리보기"); fr.srcdoc = deliv.text; box.appendChild(fr);
+    } else { var pre = mk("pre", "code mono dpre", deliv.text); pre.id = "dcode"; box.appendChild(pre); }
+    var act = mk("div", "dact");
+    var cp = mk("button", "btn sm", "복사"); cp.type = "button"; cp.id = "dcopy";
+    cp.addEventListener("click", function () { try { navigator.clipboard.writeText(deliv.text).then(function () { toast("복사했습니다."); }, function () { toast("복사하지 못했습니다."); }); } catch (e) { toast("복사하지 못했습니다."); } });
+    var dl = mk("button", "btn sm primary", "파일로 저장"); dl.type = "button"; dl.id = "ddown";
+    dl.addEventListener("click", function () {
+      try {
+        var a = document.createElement("a"), u = URL.createObjectURL(new Blob([deliv.text], { type: "text/plain;charset=utf-8" }));
+        a.href = u; a.download = "result-v" + deliv.v + "." + (EXT[deliv.lang] || "txt"); document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
+      } catch (e) { toast("저장하지 못했습니다. 복사해서 쓰세요."); }
+    });
+    act.appendChild(cp); act.appendChild(dl); box.appendChild(act);
+  }
+  var modeCand = null;
+  function renderModeCards() {
+    var box = $("modecards"); box.textContent = ""; $("modeconfirm").textContent = "";
+    Object.keys(MODEINFO).forEach(function (id) {
+      var i = MODEINFO[id], c = mk("div", "mcard"), t = mk("div");
+      t.appendChild(mk("b", "", i.label + (meta && meta.mode && meta.mode.id === id ? " (적용 중)" : ""))); t.appendChild(mk("small", "", i.desc));
+      var b = mk("button", "btn sm", "적용"); b.type = "button"; b.setAttribute("data-mode", id);
+      b.addEventListener("click", function () {
+        var cf = $("modeconfirm"); cf.textContent = "";
+        var l = mk("div", "inl"); l.appendChild(mk("div", "", i.label + " 모드를 적용하면 AI 구성과 산출물이 교체됩니다."));
+        var ok = mk("button", "btn sm primary", "적용"); ok.type = "button"; ok.id = "modeok";
+        var no = mk("button", "btn sm", "취소"); no.type = "button";
+        ok.addEventListener("click", function () { cf.textContent = ""; send({ t: "mode", id: id }); });
+        no.addEventListener("click", function () { cf.textContent = ""; });
+        l.appendChild(ok); l.appendChild(no); cf.appendChild(l);
+      });
+      c.appendChild(t); c.appendChild(b); box.appendChild(c);
+    });
   }
   function insertMention(n) { var t = $("text"); t.value += (t.value && !/\s$/.test(t.value) ? " " : "") + "@" + n + " "; t.focus(); autosize(); }
 
@@ -772,6 +914,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
   function closeInfo() { $("shell").dataset.info = "0"; }
   function setTab(tab) {
     $("info").dataset.tab = tab;
+    if (tab === "deliv") document.querySelector('#seg [data-go="deliv"]').classList.remove("new");
     document.querySelectorAll("#seg button").forEach(function (b) { if (b.dataset.go === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current"); });
   }
   $("infobtn").addEventListener("click", function () { if ($("shell").dataset.info === "1") closeInfo(); else openInfo(); });
@@ -785,7 +928,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
       me = m.you; joined = true;
       $("entrypane").hidden = true; $("room").hidden = false; setView("main");
       $("log").textContent = ""; last = null; lastDay = ""; m.messages.forEach(addMessage);
-      $("doc").value = m.doc || "";
+      $("doc").value = m.doc || ""; deliv = m.deliv || null;
       if (wide()) $("shell").dataset.info = "1";
       renderMeta(m); renderRooms(); if (!matchMedia("(pointer:coarse)").matches) $("text").focus();
     } else if (m.t === "meta") { renderMeta(m); }
@@ -804,6 +947,13 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
         var col = mk("div", "col"), b = mk("div", "bubble"); b.setAttribute("aria-label", m.who + " 입력 중"); b.appendChild(mk("i")); b.appendChild(mk("i")); b.appendChild(mk("i")); col.appendChild(b);
         row.appendChild(av); row.appendChild(col); $("log").appendChild(row); $("log").scrollTop = $("log").scrollHeight; typRow = row;
         typTimer = setTimeout(dropTyping, 65000);
+      }
+    }
+    else if (m.t === "deliv") {
+      deliv = m.deliv; renderDeliv();
+      if (deliv) {
+        var visible = $("shell").dataset.info === "1" && $("info").dataset.tab === "deliv";
+        if (!visible) { document.querySelector('#seg [data-go="deliv"]').classList.add("new"); toast("산출물이 갱신됐습니다 (v" + deliv.v + ")"); }
       }
     }
     else if (m.t === "doc") { if (document.activeElement !== $("doc")) $("doc").value = m.text; }
