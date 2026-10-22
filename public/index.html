@@ -468,7 +468,10 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
         </section>
       </div>
       <div class="pn" data-panel="assets">
-        <section><h3>현재 에셋</h3><div class="curasset" id="curasset"></div></section>
+        <section><h3>현재 에셋</h3><div class="curasset" id="curasset"></div>
+          <div style="margin-top:10px"><button type="button" class="btn sm" id="expcur">현재 방 구성을 파일로 저장</button></div>
+          <p class="hint">AI 구성, 발언 방식, 규칙, 시작 문서가 .json 파일로 저장됩니다. 다른 방에서 그대로 불러올 수 있어요.</p></section>
+        <section><h3>이 방의 에셋 보관함</h3><p class="hint" style="margin:0 0 6px">이 방에서 올리거나 적용한 에셋이 모입니다. 방이 정리되면 함께 사라지니 필요한 건 파일로 저장하세요.</p><div id="liblist"></div></section>
         <section>
           <h3>모드 적용</h3>
           <p class="hint" style="margin:0 0 6px">모드를 적용하면 지금의 AI 구성과 산출물이 모드의 구성으로 교체됩니다.</p>
@@ -842,7 +845,7 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     if (active !== $("stplus") && active !== $("stminus")) $("stval").textContent = s.maxStreak;
     if (errAI && !s.ais.some(function (a) { return a.id === errAI.id; })) errAI = null;
     $("text").placeholder = s.mode ? "요청을 입력하세요" : "메시지 입력 (@이름 으로 AI 호출)";
-    renderFlowBox(); renderDeliv(); renderModeCards();
+    renderFlowBox(); renderDeliv(); renderModeCards(); renderLib();
     renderBudget(s.budget); renderFree(); renderStatus(); renderEmpty();
     if (joined) saveRoom(s.id, title);
   }
@@ -888,6 +891,28 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
     });
     act.appendChild(cp); act.appendChild(dl); box.appendChild(act);
   }
+  function saveJson(obj, fname) {
+    try {
+      var a = document.createElement("a"), u = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" }));
+      a.href = u; a.download = fname; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
+    } catch (e) { toast("저장하지 못했습니다."); }
+  }
+  function renderLib() {
+    var box = $("liblist"); box.textContent = "";
+    if (!meta || !meta.library.length) { box.appendChild(mk("p", "hint", "아직 없습니다. 에셋을 올리면 여기에 보관됩니다.")); return; }
+    meta.library.forEach(function (l) {
+      var c = mk("div", "mcard"), t = mk("div");
+      t.appendChild(mk("b", "", l.name)); t.appendChild(mk("small", "", "AI " + l.ais + "명 · 올린 사람 " + l.by));
+      var ap = mk("button", "btn sm", "적용"); ap.type = "button"; ap.setAttribute("data-lib-apply", l.id);
+      ap.addEventListener("click", function () { send({ t: "applyLib", id: l.id }); });
+      var dl = mk("button", "btn sm", "저장"); dl.type = "button"; dl.setAttribute("data-lib-dl", l.id); dl.setAttribute("aria-label", l.name + " 파일로 저장");
+      dl.addEventListener("click", function () { send({ t: "getAsset", id: l.id }); });
+      var rm = mk("button", "btn sm", "삭제"); rm.type = "button"; rm.setAttribute("aria-label", l.name + " 보관함에서 삭제");
+      rm.addEventListener("click", function () { send({ t: "delLib", id: l.id }); });
+      c.appendChild(t); c.appendChild(ap); c.appendChild(dl); c.appendChild(rm); box.appendChild(c);
+    });
+  }
+  $("expcur").addEventListener("click", function () { send({ t: "getAsset", id: "current" }); });
   var modeCand = null;
   function renderModeCards() {
     var box = $("modecards"); box.textContent = ""; $("modeconfirm").textContent = "";
@@ -948,6 +973,10 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
         row.appendChild(av); row.appendChild(col); $("log").appendChild(row); $("log").scrollTop = $("log").scrollHeight; typRow = row;
         typTimer = setTimeout(dropTyping, 65000);
       }
+    }
+    else if (m.t === "assetfile") {
+      var nm = String(m.asset.name || "asset").replace(/[^\w가-힣-]+/g, "_").slice(0, 30) || "asset";
+      saveJson(m.asset, nm + ".aichat.json"); toast("에셋 파일을 저장했습니다.");
     }
     else if (m.t === "deliv") {
       deliv = m.deliv; renderDeliv();

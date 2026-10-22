@@ -117,7 +117,7 @@ function newRoom(id) {
   return {
     id, asset: null, rules: '', clients: new Set(), ais: [], messages: [], seq: 0,
     policy: 'mention', maxStreak: 4, streak: 0, lastAI: null, gen: 0,
-    mode: null, pipeline: null, deliv: null, plan: 'free', budget: { used: 0, limit: PLANS.free.budgetDefault }, doc: '', cleanup: null
+    mode: null, pipeline: null, deliv: null, library: [], plan: 'free', budget: { used: 0, limit: PLANS.free.budgetDefault }, doc: '', cleanup: null
   };
 }
 
@@ -171,6 +171,21 @@ function modeAsset(id, room) {
   return {
     mode: id, name: md.label, description: md.desc, policy: 'round', maxStreak: pipeline.length, rules: md.rules,
     ais: md.roles.filter(r => names.includes(r[0])).map(r => ({ name: r[0], persona: r[1] })), pipeline, doc: ''
+  };
+}
+const LIB_MAX = 10;
+function libAdd(room, asset, by) {
+  const i = room.library.findIndex(x => x.asset.name === asset.name);
+  const it = { id: 'l' + (++aiCounter), by, ts: Date.now(), asset };
+  if (i >= 0) room.library[i] = it;
+  else { if (room.library.length >= LIB_MAX) room.library.shift(); room.library.push(it); }
+}
+function currentAsset(room) {
+  return {
+    format: 'aichat-asset/1', name: room.asset ? room.asset.name : '내 방 구성',
+    description: room.asset ? room.asset.description || '' : '',
+    policy: room.policy, maxStreak: room.maxStreak, rules: cleanText(room.rules, ASSET_RULES_MAX),
+    ais: room.ais.map(a => ({ name: a.name, persona: a.persona })), doc: cleanText(room.doc, 2000)
   };
 }
 function applyMode(room, id) {
@@ -229,6 +244,7 @@ function meta(room) {
     plan: { id: room.plan, label: planOf(room).label, ais: planOf(room).ais, premium: planOf(room).premium, ads: planOf(room).ads, dev: ALLOW_DEV_PLAN },
     adList: planOf(room).ads ? HOUSE_ADS : [],
     free: { available: freeAvailable(), left: freeLeft(), roomUsed: room.freeUsed || 0, roomCap: FREE_ROOM_CAP },
+    library: room.library.map(l => ({ id: l.id, name: l.asset.name, description: l.asset.description, by: l.by, ais: l.asset.ais.length })),
     humans: [...room.clients].map(c => c.meta.name),
     ais: room.ais.map(a => ({ id: a.id, name: a.name, persona: a.persona, provider: a.provider, model: a.model, ownKey: !!a.apiKey }))
   };
@@ -456,7 +472,7 @@ function join(ws, m) {
       const r = validateAsset(m.asset);
       if (r.error) assetErr = r.error;
       else if (r.asset.ais.length > planOf(room).ais) assetErr = planOf(room).label + ' 플랜은 AI를 최대 ' + planOf(room).ais + '명까지 쓸 수 있습니다.';
-      else applyAsset(room, r.asset);
+      else { applyAsset(room, r.asset); libAdd(room, r.asset, name); }
     }
   }
   if (room.clients.size >= LIMITS.humans) return send(ws, { t: 'err', text: '방이 가득 찼습니다.' });
@@ -522,10 +538,29 @@ function handle(ws, m) {
       const r = validateAsset(m.asset);
       if (r.error) return send(ws, { t: 'err', text: '에셋 오류: ' + r.error });
       if (r.asset.ais.length > planOf(room).ais) return send(ws, { t: 'err', text: '에셋 오류: ' + planOf(room).label + ' 플랜은 AI를 최대 ' + planOf(room).ais + '명까지 쓸 수 있습니다.' });
-      applyAsset(room, r.asset);
+      applyAsset(room, r.asset); libAdd(room, r.asset, name);
       system(room, name + ' 님이 에셋 "' + r.asset.name + '"을(를) 적용했습니다.', 'ASSET_APPLIED');
       broadcast(room, { t: 'doc', text: room.doc, by: name });
       return broadcast(room, meta(room));
+    }
+    case 'applyLib': {
+      const l = room.library.find(x => x.id === m.id);
+      if (!l) return send(ws, { t: 'err', text: '보관함에 없는 에셋입니다.' });
+      if (l.asset.ais.length > planOf(room).ais) return send(ws, { t: 'err', text: '에셋 오류: ' + planOf(room).label + ' 플랜은 AI를 최대 ' + planOf(room).ais + '명까지 쓸 수 있습니다.' });
+      applyAsset(room, l.asset);
+      system(room, name + ' 님이 에셋 "' + l.asset.name + '"을(를) 적용했습니다.', 'ASSET_APPLIED');
+      broadcast(room, { t: 'doc', text: room.doc, by: name });
+      return broadcast(room, meta(room));
+    }
+    case 'delLib': {
+      room.library = room.library.filter(x => x.id !== m.id);
+      return broadcast(room, meta(room));
+    }
+    case 'getAsset': {
+      if (m.id === 'current') return send(ws, { t: 'assetfile', asset: currentAsset(room), current: true });
+      const l = room.library.find(x => x.id === m.id);
+      if (!l) return send(ws, { t: 'err', text: '보관함에 없는 에셋입니다.' });
+      return send(ws, { t: 'assetfile', asset: Object.assign({ format: 'aichat-asset/1' }, l.asset) });
     }
     case 'mode': {
       if (!applyMode(room, String(m.id))) return send(ws, { t: 'err', text: '알 수 없는 모드입니다.' });
