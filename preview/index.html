@@ -285,13 +285,15 @@ legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-
               <fieldset style="margin-top:14px">
                 <legend>AI 제공사</legend>
                 <div class="provs">
-                  <label><input type="radio" name="prov" value="demo" checked>데모</label>
+                  <label><input type="radio" name="prov" value="demo" checked>무료 모델 (키 필요 없음)</label>
                   <label><input type="radio" name="prov" value="error">오류 시뮬레이션</label>
+                  <label><input type="radio" name="prov" value="groq" disabled>Groq</label>
+                  <label><input type="radio" name="prov" value="openrouter" disabled>OpenRouter</label>
+                  <label><input type="radio" name="prov" value="nvidia" disabled>NVIDIA NIM (본인 키)</label>
                   <label><input type="radio" name="prov" value="anthropic" disabled>Anthropic</label>
                   <label><input type="radio" name="prov" value="openai" disabled>OpenAI</label>
-                  <label><input type="radio" name="prov" value="openrouter" disabled>OpenRouter</label>
                 </div>
-                <p class="hint">프리뷰에서는 실제 AI를 호출하지 않습니다.</p>
+                <p class="hint">프리뷰에서는 실제 AI를 호출하지 않고 "무료 모델"도 고정 문구로 응답합니다. 실제 서버에서는 무료 풀(Groq, OpenRouter 무료 모델)로 연결되고, 개인 키 제공사는 본인 키를 넣어야 합니다.</p>
               </fieldset>
               <div style="margin-top:12px"><button class="btn sm" id="addai" type="submit">AI 초대</button></div>
             </form>
