@@ -1,0 +1,13 @@
+{
+  "name": "monaymonay",
+  "version": "0.2.0",
+  "private": true,
+  "description": "사람과 여러 AI가 함께 쓰는 자유 채팅방 프로토타입",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
