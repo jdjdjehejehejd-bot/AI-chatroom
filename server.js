@@ -317,7 +317,7 @@ function demoDM(room, ai, dm) {
   const last = [...dm.thread.msgs].reverse().find(m => m.kind === 'human');
   const t = last ? last.text.slice(0, 40) : '';
   const opts = ['“' + t + '” 라고 하셨죠? 둘만 아는 얘기로 해 둘게요.', '음, “' + t + '” 라니 흥미로운데요. 단체방에선 말 안 할게요.', ai.name + '예요. “' + t + '” 에 대해선 제 역할상 이렇게 생각해요.'];
-  return '[데모 DM] ' + opts[dm.thread.msgs.length % opts.length];
+  return '[데모 귓속말] ' + opts[dm.thread.msgs.length % opts.length];
 }
 function dmContextFor(room, ai) {
   const lines = [];
