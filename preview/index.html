@@ -2,216 +2,253 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-/* 레이아웃: 데스크톱은 대화 | 사이드 패널 2열, 모바일은 하단 탭으로 한 번에 한 패널.
-   색: 사람은 중립/인디고, AI는 참가자마다 다른 색 + 이니셜 + "AI" 표시 (색만으로 구분하지 않음) */
 :root {
-  --bg:#F5F6FA; --surface:#FFFFFF; --ink:#16181D; --muted:#5B6070; --line:#E3E5EC; --line2:#CBCFDA;
-  --accent:#3B3FD9; --accent-ink:#FFFFFF; --accent-soft:#ECECFD; --accent-text:#2A2DA8;
-  --h-av:#5B6070; --h-sf:#EEF0F6;
+  --bg:#F3F4F8; --surface:#FFFFFF; --surface2:#F8F9FC; --ink:#14161B; --muted:#5A5F6E; --line:#E2E4EB; --line2:#C9CDD8;
+  --accent:#3438D1; --accent-ink:#FFFFFF; --accent-soft:#ECEDFD; --accent-text:#2529A6;
+  --h-av:#5A5F6E; --h-sf:#EEF0F5;
   --c0-av:#0F7B6C; --c0-tx:#0A5C50; --c0-sf:#E4F3F0;
   --c1-av:#1F6FB5; --c1-tx:#174F85; --c1-sf:#E5F0FA;
   --c2-av:#8A3FA0; --c2-tx:#6B2E7E; --c2-sf:#F3E9F7;
   --c3-av:#B25A00; --c3-tx:#7A3E00; --c3-sf:#FFF1DC;
-  --warn-tx:#6B3A00; --warn-sf:#FFF1DC; --err-tx:#8C1D18; --err-sf:#FCE9E7; --dark-bar:#16181D; --dark-bar-ink:#FFFFFF;
+  --c4-av:#C2185B; --c4-tx:#8E1142; --c4-sf:#FCE8F0;
+  --c5-av:#4E6A12; --c5-tx:#3A500C; --c5-sf:#EEF4DC;
+  --ok:#1B7A3E; --warn-tx:#6B3A00; --warn-sf:#FFF1DC; --err-tx:#8C1D18; --err-sf:#FCE9E7;
+  --bar:#14161B; --bar-ink:#FFFFFF; --code-bg:#14161B; --code-ink:#E6E8F0;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg:#121316; --surface:#1B1D22; --ink:#ECEDF1; --muted:#A2A7B5; --line:#2C2F37; --line2:#3E424D;
+    --bg:#101114; --surface:#181A1F; --surface2:#1E2026; --ink:#ECEDF1; --muted:#A2A7B5; --line:#2A2D35; --line2:#3E424D;
     --accent:#8F93FF; --accent-ink:#0F1022; --accent-soft:#23254A; --accent-text:#BBBEFF;
-    --h-av:#6B7080; --h-sf:#262932;
-    --c0-av:#0F7B6C; --c0-tx:#7FD6C6; --c0-sf:#17302B;
-    --c1-av:#1F6FB5; --c1-tx:#8CC3F2; --c1-sf:#172A3D;
-    --c2-av:#8A3FA0; --c2-tx:#D9A9E8; --c2-sf:#2E1D36;
-    --c3-av:#B25A00; --c3-tx:#F0B36A; --c3-sf:#3A2A14;
-    --warn-tx:#F2C27B; --warn-sf:#382B14; --err-tx:#FFB4AB; --err-sf:#3E1B18; --dark-bar:#2C2F37; --dark-bar-ink:#ECEDF1;
+    --h-av:#6B7080; --h-sf:#252830;
+    --c0-tx:#7FD6C6; --c0-sf:#17302B; --c1-tx:#8CC3F2; --c1-sf:#172A3D; --c2-tx:#D9A9E8; --c2-sf:#2E1D36;
+    --c3-tx:#F0B36A; --c3-sf:#3A2A14; --c4-tx:#F5A3C4; --c4-sf:#3B1827; --c5-tx:#BFD97A; --c5-sf:#252E10;
+    --ok:#5FD08B; --warn-tx:#F2C27B; --warn-sf:#382B14; --err-tx:#FFB4AB; --err-sf:#3E1B18;
+    --bar:#2A2D35; --bar-ink:#ECEDF1; --code-bg:#0C0D10; --code-ink:#D8DBE6;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg:#121316; --surface:#1B1D22; --ink:#ECEDF1; --muted:#A2A7B5; --line:#2C2F37; --line2:#3E424D;
+  --bg:#101114; --surface:#181A1F; --surface2:#1E2026; --ink:#ECEDF1; --muted:#A2A7B5; --line:#2A2D35; --line2:#3E424D;
   --accent:#8F93FF; --accent-ink:#0F1022; --accent-soft:#23254A; --accent-text:#BBBEFF;
-  --h-av:#6B7080; --h-sf:#262932;
-  --c0-av:#0F7B6C; --c0-tx:#7FD6C6; --c0-sf:#17302B;
-  --c1-av:#1F6FB5; --c1-tx:#8CC3F2; --c1-sf:#172A3D;
-  --c2-av:#8A3FA0; --c2-tx:#D9A9E8; --c2-sf:#2E1D36;
-  --c3-av:#B25A00; --c3-tx:#F0B36A; --c3-sf:#3A2A14;
-  --warn-tx:#F2C27B; --warn-sf:#382B14; --err-tx:#FFB4AB; --err-sf:#3E1B18; --dark-bar:#2C2F37; --dark-bar-ink:#ECEDF1;
+  --h-av:#6B7080; --h-sf:#252830;
+  --c0-tx:#7FD6C6; --c0-sf:#17302B; --c1-tx:#8CC3F2; --c1-sf:#172A3D; --c2-tx:#D9A9E8; --c2-sf:#2E1D36;
+  --c3-tx:#F0B36A; --c3-sf:#3A2A14; --c4-tx:#F5A3C4; --c4-sf:#3B1827; --c5-tx:#BFD97A; --c5-sf:#252E10;
+  --ok:#5FD08B; --warn-tx:#F2C27B; --warn-sf:#382B14; --err-tx:#FFB4AB; --err-sf:#3E1B18;
+  --bar:#2A2D35; --bar-ink:#ECEDF1; --code-bg:#0C0D10; --code-ink:#D8DBE6;
   color-scheme: dark;
 }
 [hidden] { display:none !important; }
 html, body { height:100%; }
 body {
   box-sizing:border-box; background:var(--bg); color:var(--ink);
-  font-family:"Noto Sans KR", system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; font-size:15px; line-height:1.55;
+  font-family:"Noto Sans KR", system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; font-size:14px; line-height:1.55;
   padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px));
+  -webkit-font-smoothing:antialiased;
 }
 button, input, textarea, select { font:inherit; color:inherit; }
 button { cursor:pointer; }
 :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.mono { font-family:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
 
-.btn { min-height:40px; padding:0 16px; border-radius:12px; border:1px solid var(--line2); background:var(--surface); font-size:14px; }
+.btn { min-height:36px; padding:0 14px; border-radius:8px; border:1px solid var(--line2); background:var(--surface); font-size:13px; font-weight:500; }
+.btn:hover:not(:disabled) { background:var(--surface2); }
 .btn.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:700; }
-.btn.outline { border-color:var(--accent); color:var(--accent-text); background:var(--surface); }
-.btn.small { min-height:32px; padding:0 10px; border-radius:8px; font-size:13px; }
+.btn.primary:hover:not(:disabled) { background:var(--accent); filter:brightness(1.08); }
+.btn.sm { min-height:30px; padding:0 10px; font-size:12px; border-radius:7px; }
 .btn:disabled { opacity:.5; cursor:not-allowed; }
-.field { width:100%; box-sizing:border-box; padding:11px 14px; border-radius:12px; border:1px solid var(--line2); background:var(--surface); font-size:15px; }
-label.lb { display:block; font-size:13px; font-weight:500; margin:12px 0 6px; }
+.field { width:100%; box-sizing:border-box; padding:9px 12px; border-radius:8px; border:1px solid var(--line2); background:var(--surface); font-size:14px; }
+.field:focus { border-color:var(--accent); }
+label.lb { display:block; font-size:12px; font-weight:700; letter-spacing:.01em; margin:14px 0 6px; color:var(--muted); }
 .hint { font-size:12px; color:var(--muted); margin:6px 0 0; }
-.chip { display:inline-block; font-size:13px; padding:2px 10px; border-radius:999px; background:var(--h-sf); }
-.chip.me { background:var(--accent-soft); color:var(--accent-text); }
-.card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
-.card h2 { margin:0 0 8px; font-size:14px; }
-.mark { width:34px; height:34px; border-radius:10px; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex:none; }
+.eyebrow { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.mark { width:30px; height:30px; border-radius:8px; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex:none; letter-spacing:.02em; }
+.pill { display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:2px 10px; border-radius:999px; background:var(--h-sf); }
+.pill.me { background:var(--accent-soft); color:var(--accent-text); font-weight:500; }
+.dot { width:7px; height:7px; border-radius:50%; background:var(--ok); }
 
-/* 입장 */
-#join { min-height:100%; display:flex; flex-direction:column; max-width:1140px; margin:0 auto; }
-#join header { display:flex; align-items:center; gap:12px; padding-block:16px; }
-#join .wrap { flex:1; display:flex; flex-wrap:wrap; gap:40px; align-items:flex-start; padding-block:16px 40px; }
-#join .intro { flex:1 1 340px; min-width:0; padding-top:20px; }
-#join h1 { margin:0 0 12px; font-size:clamp(28px, 5vw, 40px); line-height:1.2; text-wrap:balance; }
-#join .intro p { margin:0 0 20px; font-size:17px; color:var(--muted); max-width:440px; }
-#join .pv { font-size:13px; padding:10px 14px; border-radius:12px; background:var(--warn-sf); color:var(--warn-tx); max-width:440px; }
-#join .panel { flex:1 1 500px; min-width:0; background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:26px; }
-#join .panel h2 { margin:0 0 16px; font-size:20px; }
-fieldset { margin:0; padding:0; border:none; min-width:0; }
-legend { padding:0; font-size:13px; font-weight:500; margin-bottom:8px; }
-.tpls { display:flex; flex-wrap:wrap; gap:12px; }
-.tpl { flex:1 1 210px; display:flex; gap:10px; align-items:flex-start; padding:13px; border-radius:14px; border:1px solid var(--line); background:var(--surface); cursor:pointer; }
-.tpl:has(input:checked) { border:2px solid var(--accent); background:var(--accent-soft); padding:12px; }
-.tpl input { margin-top:5px; }
-.tpl b { display:block; }
-.tpl span span { display:block; font-size:13px; color:var(--muted); }
-.cast { margin-top:16px; padding:12px 14px; border-radius:12px; background:var(--bg); display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; font-size:13px; }
-.cast .m { display:flex; align-items:center; gap:6px; }
+#join { min-height:100%; display:flex; flex-direction:column; max-width:1080px; margin:0 auto; }
+#join header { display:flex; align-items:center; gap:10px; padding-block:18px; }
+#join header b { font-size:15px; }
+#join .wrap { flex:1; display:flex; flex-wrap:wrap; gap:48px; align-items:flex-start; padding-block:20px 48px; }
+#join .intro { flex:1 1 320px; min-width:0; padding-top:24px; }
+#join h1 { margin:0 0 14px; font-size:clamp(28px, 4.6vw, 40px); line-height:1.2; letter-spacing:-.02em; text-wrap:balance; }
+#join .intro p { margin:0 0 22px; font-size:16px; color:var(--muted); max-width:420px; }
+.feat { list-style:none; margin:0 0 22px; padding:0; display:flex; flex-direction:column; gap:10px; max-width:420px; }
+.feat li { display:flex; gap:10px; font-size:13px; color:var(--muted); }
+.feat b { color:var(--ink); font-weight:700; display:block; }
+.feat i { flex:none; width:6px; height:6px; margin-top:8px; border-radius:50%; background:var(--accent); }
+.note { font-size:12px; padding:9px 12px; border-radius:8px; background:var(--warn-sf); color:var(--warn-tx); max-width:420px; }
+#join .panel { flex:1 1 460px; min-width:0; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:26px; }
+#join .panel h2 { margin:0 0 4px; font-size:18px; }
+.assetbox { margin-top:18px; border:1px dashed var(--line2); border-radius:10px; padding:14px; background:var(--surface2); }
+.assetbox .row2 { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.loaded { display:flex; gap:12px; align-items:flex-start; padding:12px; border-radius:10px; border:1px solid var(--accent); background:var(--accent-soft); }
+.loaded b { display:block; }
+.loaded small { display:block; color:var(--muted); font-size:12px; }
+.cast { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.cm { display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:2px 10px 2px 3px; border-radius:999px; background:var(--sf, var(--h-sf)); color:var(--tx, var(--ink)); }
+.cm .av { width:20px; height:20px; font-size:10px; }
+.err { margin-top:10px; padding:9px 12px; border-radius:8px; background:var(--err-sf); color:var(--err-tx); font-size:13px; }
 
-/* 방 */
-#app { height:100%; max-width:1180px; margin:0 auto; display:flex; flex-direction:column; }
-#top { flex:none; display:flex; flex-wrap:wrap; align-items:center; gap:10px 18px; padding-block:12px; }
-#top .ttl { display:flex; align-items:center; gap:12px; flex:1 1 220px; min-width:0; }
-#top .ttl b { font-size:16px; display:block; }
-#top .ttl small { font-size:12px; color:var(--muted); }
-#top .bud { min-width:140px; }
-.meter { height:6px; border-radius:3px; background:var(--line); overflow:hidden; }
-.meter > div { height:100%; background:var(--accent); width:0; }
+#app { height:100%; max-width:1280px; margin:0 auto; display:flex; flex-direction:column; }
+#top { flex:none; display:flex; flex-wrap:wrap; align-items:center; gap:10px 20px; padding-block:12px; }
+#top .ttl { display:flex; align-items:center; gap:12px; flex:1 1 240px; min-width:0; }
+#top .ttl b { font-size:15px; display:block; line-height:1.3; }
+#top .ttl small { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+#top .bud { min-width:150px; }
+.meter { height:5px; border-radius:3px; background:var(--line); overflow:hidden; }
+.meter > div { height:100%; background:var(--accent); width:0; transition:width .3s; }
 .meter.full > div { background:var(--c3-av); }
-.row { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--muted); margin-bottom:4px; }
-#top select { padding:7px 10px; border-radius:10px; border:1px solid var(--line2); background:var(--surface); font-size:14px; }
-#cols { flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:16px; padding-bottom:16px; }
-#chat { min-height:0; min-width:0; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--line); border-radius:16px; overflow:hidden; }
-#log { flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:14px; padding:18px 20px; }
-#side { min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:12px; }
-#tabs { display:none; }
+.row { display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--muted); margin-bottom:4px; }
+.row .mono { color:var(--ink); }
+#top select { padding:6px 10px; border-radius:8px; border:1px solid var(--line2); background:var(--surface); font-size:13px; }
+#cols { flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:14px; padding-bottom:14px; }
+#chat { min-height:0; min-width:0; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+#log { flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:14px; padding:18px 22px; }
+#sidewrap { min-height:0; min-width:0; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+#sidetabs { flex:none; display:flex; border-bottom:1px solid var(--line); padding:0 6px; background:var(--surface2); }
+#sidetabs button { flex:1 1 0; min-height:42px; border:none; background:transparent; font-size:13px; color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-1px; font-weight:500; }
+#sidetabs button[aria-current="page"] { color:var(--accent-text); border-bottom-color:var(--accent); font-weight:700; }
+#side { flex:1 1 auto; min-height:0; overflow-y:auto; padding:16px; }
+#bottomtabs { display:none; }
+.pn { display:none; }
+#app[data-tab="chat"] .pn[data-panel="ai"], #app[data-tab="ai"] .pn[data-panel="ai"],
+#app[data-tab="settings"] .pn[data-panel="settings"], #app[data-tab="doc"] .pn[data-panel="doc"],
+#app[data-tab="assets"] .pn[data-panel="assets"] { display:block; }
+.pn h3 { margin:0 0 10px; font-size:13px; }
+.pn section + section { margin-top:20px; padding-top:18px; border-top:1px solid var(--line); }
 
-.m { display:flex; gap:10px; align-items:flex-start; max-width:84%; }
+.m { display:flex; gap:10px; align-items:flex-start; max-width:80%; }
 .m.mine { align-self:flex-end; justify-content:flex-end; }
 .av { flex:none; width:32px; height:32px; border-radius:50%; background:var(--av, var(--h-av)); color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; }
 .m .body { min-width:0; }
-.m .who { display:flex; align-items:center; gap:6px; font-size:13px; font-weight:700; margin-bottom:2px; color:var(--tx, var(--ink)); }
-.m .tag { font-size:11px; font-weight:700; border-radius:6px; padding:0 6px; background:var(--sf); color:var(--tx); }
-.bub { background:var(--sf, var(--h-sf)); border-radius:4px 14px 14px 14px; padding:9px 13px; white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; }
-.m.mine .bub { background:var(--accent); color:var(--accent-ink); border-radius:14px 4px 14px 14px; }
+.m .who { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; margin-bottom:3px; color:var(--tx, var(--ink)); }
+.m .tag { font-size:10px; font-weight:700; letter-spacing:.04em; border-radius:4px; padding:0 5px; background:var(--sf); color:var(--tx); }
+.bub { background:var(--sf, var(--h-sf)); border-radius:3px 12px 12px 12px; padding:9px 13px; white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; }
+.m.mine .bub { background:var(--accent); color:var(--accent-ink); border-radius:12px 3px 12px 12px; }
 .m.mine .who { justify-content:flex-end; color:var(--muted); }
 .c0 { --av:var(--c0-av); --tx:var(--c0-tx); --sf:var(--c0-sf); }
 .c1 { --av:var(--c1-av); --tx:var(--c1-tx); --sf:var(--c1-sf); }
 .c2 { --av:var(--c2-av); --tx:var(--c2-tx); --sf:var(--c2-sf); }
 .c3 { --av:var(--c3-av); --tx:var(--c3-tx); --sf:var(--c3-sf); }
-.sys { align-self:center; text-align:center; font-size:12px; color:var(--muted); background:var(--bg); border:1px solid var(--line); border-radius:999px; padding:2px 12px; max-width:92%; }
-#typing { flex:none; min-height:22px; padding:0 20px; font-size:13px; color:var(--muted); }
+.c4 { --av:var(--c4-av); --tx:var(--c4-tx); --sf:var(--c4-sf); }
+.c5 { --av:var(--c5-av); --tx:var(--c5-tx); --sf:var(--c5-sf); }
+.sys { align-self:center; text-align:center; font-size:12px; color:var(--muted); background:var(--surface2); border:1px solid var(--line); border-radius:999px; padding:2px 12px; max-width:92%; }
+.empty { margin:auto; text-align:center; max-width:340px; color:var(--muted); }
+.empty h2 { margin:0 0 6px; font-size:16px; color:var(--ink); }
+.empty p { margin:0 0 14px; }
+#typing { flex:none; min-height:22px; padding:0 22px; font-size:12px; color:var(--muted); }
 #status { flex:none; display:flex; flex-direction:column; gap:8px; padding:0 16px; }
-.banner { border-radius:12px; padding:10px 14px; font-size:14px; display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+.banner { border-radius:8px; padding:9px 12px; font-size:13px; display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-bottom:2px; }
 .banner.warn { background:var(--warn-sf); color:var(--warn-tx); }
-.banner.err { background:var(--err-sf); color:var(--err-tx); }
+.banner.err2 { background:var(--err-sf); color:var(--err-tx); }
 .banner .t { flex:1 1 220px; }
 .banner .btn { background:transparent; border-color:currentColor; color:inherit; }
-#composer { flex:none; border-top:1px solid var(--line); padding:12px 16px; display:flex; flex-direction:column; gap:10px; }
-#chips { display:flex; flex-wrap:wrap; gap:8px; }
-#chips button { min-height:32px; padding:0 12px; border-radius:999px; border:1px solid var(--line); background:var(--surface); font-size:13px; color:var(--tx, var(--muted)); }
-#send-row { display:flex; gap:10px; }
+#composer { flex:none; border-top:1px solid var(--line); padding:12px 16px; display:flex; flex-direction:column; gap:10px; background:var(--surface2); }
+#chips { display:flex; flex-wrap:wrap; gap:6px; }
+#chips:empty { display:none; }
+#chips button { min-height:28px; padding:0 10px; border-radius:999px; border:1px solid var(--line); background:var(--surface); font-size:12px; font-weight:500; color:var(--tx, var(--muted)); }
+#send-row { display:flex; gap:8px; }
 #text { flex:1 1 auto; min-width:0; }
-#send { flex:none; width:48px; border-radius:12px; border:none; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; }
+#send { flex:none; width:44px; border-radius:8px; border:none; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; }
 
-.ais { display:flex; flex-direction:column; gap:10px; margin-bottom:6px; }
-.ai-item { display:flex; align-items:center; gap:10px; }
-.ai-item .av { width:28px; height:28px; font-size:12px; }
+.ai-item { display:flex; align-items:center; gap:10px; padding:8px 0; }
+.ai-item + .ai-item { border-top:1px solid var(--line); }
+.ai-item .av { width:28px; height:28px; font-size:11px; }
 .ai-item .nm { flex:1 1 auto; min-width:0; }
-.ai-item .nm b { font-size:14px; font-weight:500; display:block; }
+.ai-item .nm b { font-size:13px; font-weight:700; display:block; }
 .ai-item .nm small { font-size:12px; color:var(--muted); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.pol { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border-radius:12px; border:1px solid var(--line); margin-bottom:8px; cursor:pointer; }
-.pol:has(input:checked) { border:2px solid var(--accent); background:var(--accent-soft); padding:9px 11px; }
+.pol { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border-radius:10px; border:1px solid var(--line); margin-bottom:8px; cursor:pointer; }
+.pol:has(input:checked) { border-color:var(--accent); background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent); }
 .pol input { margin-top:4px; }
-.pol b { display:block; font-size:14px; }
+.pol b { display:block; font-size:13px; }
 .pol span span { display:block; font-size:12px; color:var(--muted); }
-.stepper { display:inline-flex; align-items:center; border:1px solid var(--line2); border-radius:12px; overflow:hidden; background:var(--surface); }
-.stepper button { width:40px; height:40px; border:none; background:transparent; font-size:20px; }
-.stepper output { min-width:36px; text-align:center; font-weight:700; }
+.stepper { display:inline-flex; align-items:center; border:1px solid var(--line2); border-radius:8px; overflow:hidden; background:var(--surface); }
+.stepper button { width:34px; height:34px; border:none; background:transparent; font-size:18px; }
+.stepper output { min-width:32px; text-align:center; font-weight:700; }
 .provs { display:flex; flex-wrap:wrap; gap:6px; }
-.provs label { display:flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid var(--line); border-radius:10px; font-size:13px; cursor:pointer; }
+.provs label { display:flex; align-items:center; gap:6px; padding:5px 10px; border:1px solid var(--line); border-radius:8px; font-size:12px; cursor:pointer; }
 .provs label:has(input:checked) { border-color:var(--accent); background:var(--accent-soft); }
 .provs label:has(input:disabled) { opacity:.5; cursor:not-allowed; }
-#doc { width:100%; box-sizing:border-box; min-height:130px; resize:vertical; padding:10px; border-radius:10px; border:1px solid var(--line2); background:var(--surface); font-size:13px; line-height:1.6; }
-#confirm { margin-top:8px; padding:10px 12px; border-radius:10px; background:var(--warn-sf); color:var(--warn-tx); font-size:13px; }
-#confirm .btn { margin-top:8px; margin-right:6px; }
-#toast { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(16px + env(safe-area-inset-bottom, 0px)); background:var(--dark-bar); color:var(--dark-bar-ink); padding:9px 16px; border-radius:10px; font-size:14px; max-width:90vw; z-index:20; }
-#toast[hidden] { display:none; }
-.dots { display:inline-flex; gap:4px; margin-right:6px; vertical-align:middle; }
-.dots i { width:6px; height:6px; border-radius:50%; background:var(--av, var(--muted)); display:block; }
-.dots i:nth-child(2) { opacity:.6; } .dots i:nth-child(3) { opacity:.3; }
+fieldset { margin:0; padding:0; border:none; min-width:0; }
+legend { padding:0; font-size:12px; font-weight:700; color:var(--muted); margin-bottom:8px; }
+#doc { width:100%; box-sizing:border-box; min-height:260px; resize:vertical; padding:10px; border-radius:8px; border:1px solid var(--line2); background:var(--surface); font-size:13px; line-height:1.65; }
+.code { margin:8px 0 0; padding:12px; border-radius:8px; background:var(--code-bg); color:var(--code-ink); font-size:11.5px; line-height:1.6; overflow-x:auto; max-width:100%; box-sizing:border-box; white-space:pre; }
+.spec { margin:8px 0 0; padding-left:18px; font-size:12px; color:var(--muted); }
+.spec li { margin-bottom:3px; }
+.inl { margin-top:10px; padding:10px 12px; border-radius:8px; background:var(--warn-sf); color:var(--warn-tx); font-size:13px; }
+.inl .btn { margin-top:8px; margin-right:6px; background:transparent; border-color:currentColor; color:inherit; }
+.inl .btn.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+.curasset { padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--surface2); }
+.curasset b { display:block; }
+.curasset small { color:var(--muted); font-size:12px; }
+#toast { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(16px + env(safe-area-inset-bottom, 0px)); background:var(--bar); color:var(--bar-ink); padding:9px 16px; border-radius:8px; font-size:13px; max-width:90vw; z-index:20; }
+.dots { display:inline-flex; gap:3px; margin-right:6px; vertical-align:middle; }
+.dots i { width:5px; height:5px; border-radius:50%; background:var(--av, var(--muted)); display:block; animation:bl 1s infinite; }
+.dots i:nth-child(2) { animation-delay:.15s; } .dots i:nth-child(3) { animation-delay:.3s; }
+@keyframes bl { 0%,60%,100% { opacity:.3 } 30% { opacity:1 } }
 
 @media (max-width: 859px) {
-  #cols { grid-template-columns:minmax(0,1fr); padding-bottom:0; }
-  #side { overflow-y:auto; }
-  #app[data-tab="chat"] #side { display:none; }
+  #cols { grid-template-columns:minmax(0,1fr); padding-bottom:0; gap:0; }
+  #sidetabs { display:none; }
+  #app[data-tab="chat"] #sidewrap { display:none; }
   #app:not([data-tab="chat"]) #chat { display:none; }
-  #app[data-tab="ai"] [data-panel]:not([data-panel="ai"]),
-  #app[data-tab="doc"] [data-panel]:not([data-panel="doc"]),
-  #app[data-tab="settings"] [data-panel]:not([data-panel="settings"]) { display:none; }
-  #tabs { display:flex; flex:none; border-top:1px solid var(--line); background:var(--surface); margin-inline:calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding-inline:max(16px, env(safe-area-inset-left, 0px)); }
-  #tabs button { flex:1 1 0; min-height:52px; border:none; background:transparent; color:var(--muted); font-size:12px; }
-  #tabs button[aria-current="page"] { color:var(--accent-text); font-weight:700; }
+  #bottomtabs { display:flex; flex:none; border-top:1px solid var(--line); background:var(--surface); margin-inline:calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding-inline:max(16px, env(safe-area-inset-left, 0px)); padding-bottom:env(safe-area-inset-bottom, 0px); }
+  #bottomtabs button { flex:1 1 0; min-height:52px; border:none; background:transparent; color:var(--muted); font-size:12px; }
+  #bottomtabs button[aria-current="page"] { color:var(--accent-text); font-weight:700; }
   .m { max-width:94%; }
   #log { padding:14px 12px; }
+  #top .bud { flex:1 1 140px; }
 }
-@media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto !important; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior:auto !important; animation:none !important; transition:none !important; } }
 </style>
 
 <section id="join">
   <header><div class="mark" aria-hidden="true">AI</div><b>AI 채팅방</b></header>
   <div class="wrap">
     <div class="intro">
-      <h1>사람과 AI가<br>한 방에서 함께</h1>
-      <p>게임을 하고, 토론을 열고, 프로젝트를 같이 만들어 보세요. AI가 말하는 순서와 횟수, 호출 예산은 방마다 정합니다.</p>
-      <div class="pv">테스트용 프리뷰입니다. AI 응답은 고정 문구이고 대화는 저장되지 않습니다. 방 안의 "말하는 사람"을 바꿔서 여러 사람이 있는 상황을 시험할 수 있습니다.</div>
+      <div class="eyebrow" style="margin-bottom:10px">사람 + 여러 AI</div>
+      <h1>어떤 AI든 초대해서<br>한 방에서 함께</h1>
+      <p>방의 규칙과 AI 구성은 에셋으로 불러옵니다. 게임, 토론, 협업 등 어떤 방이든 에셋 하나로 만들 수 있습니다.</p>
+      <ul class="feat">
+        <li><i></i><span><b>에셋으로 방 구성</b>AI 역할, 발언 방식, 시작 문서를 JSON 파일에 담아 업로드합니다.</span></li>
+        <li><i></i><span><b>발언 방식 제어</b>멘션 호출, 순서대로, 자유 대화 중에서 방마다 고릅니다.</span></li>
+        <li><i></i><span><b>호출 예산 한도</b>방별 한도와 AI 연속 발언 한도로 비용을 통제합니다.</span></li>
+      </ul>
+      <div class="note">테스트용 프리뷰입니다. AI 응답은 고정 문구이고 대화는 저장되지 않습니다.</div>
     </div>
     <form class="panel" id="joinform">
       <h2>방 만들기</h2>
-      <label class="lb" for="jname" style="margin-top:0">이름</label>
+      <p class="hint" style="margin:0 0 4px">이름만 정하면 빈 방으로 시작할 수 있습니다.</p>
+      <label class="lb" for="jname">이름</label>
       <input class="field" id="jname" maxlength="16" placeholder="채팅방에 표시할 이름" autocomplete="off">
-      <fieldset style="margin-top:20px">
-        <legend>방 유형</legend>
-        <div class="tpls">
-          <label class="tpl"><input type="radio" name="tpl" value="free"><span><b>자유 방</b><span>AI 없이 시작해서 필요한 AI를 직접 초대합니다.</span></span></label>
-          <label class="tpl"><input type="radio" name="tpl" value="game" checked><span><b>게임: 추리 게임</b><span>진행자·탐정·손님 AI와 함께 사건을 추리합니다.</span></span></label>
-          <label class="tpl"><input type="radio" name="tpl" value="debate"><span><b>토론회</b><span>사회자와 찬성·반대 토론자 AI가 안건을 논쟁합니다.</span></span></label>
-          <label class="tpl"><input type="radio" name="tpl" value="project"><span><b>프로젝트 협업</b><span>기획자·개발자·리뷰어 AI와 공유 문서를 함께 씁니다.</span></span></label>
+      <div class="assetbox">
+        <div class="eyebrow">에셋 (선택)</div>
+        <div id="jasset" style="margin-top:8px"></div>
+        <div class="row2">
+          <label class="btn sm" style="display:inline-flex; align-items:center" for="jfile">파일 선택</label>
+          <input id="jfile" class="sr" type="file" accept=".json,application/json">
+          <button type="button" class="btn sm" id="jsample">샘플 에셋 사용</button>
+          <button type="button" class="btn sm" id="jclear" hidden>선택 해제</button>
         </div>
-      </fieldset>
-      <div class="cast" id="cast" aria-live="polite"></div>
-      <button class="btn primary" id="jgo" type="submit" style="width:100%; min-height:48px; margin-top:20px; font-size:16px">방 만들고 입장</button>
+        <div class="err" id="jerr" role="alert" hidden></div>
+      </div>
+      <button class="btn primary" id="jgo" type="submit" style="width:100%; min-height:44px; margin-top:20px; font-size:15px">방 만들고 입장</button>
     </form>
   </div>
 </section>
 
 <div id="app" hidden data-tab="chat">
   <header id="top">
-    <div class="ttl"><div class="mark" aria-hidden="true">AI</div><div><b id="rtitle">방</b><small id="rsub"></small></div></div>
-    <div class="bud"><div class="row"><span>AI 호출 예산</span><span id="budtxt"></span></div><div class="meter" id="meter"><div></div></div></div>
+    <div class="ttl"><div class="mark" aria-hidden="true">AI</div><div><b id="rtitle">방</b><small><span class="dot" aria-hidden="true"></span><span id="rsub"></span></small></div></div>
+    <div class="bud"><div class="row"><span>AI 호출 예산</span><span class="mono" id="budtxt"></span></div><div class="meter" id="meter"><div></div></div></div>
     <div><label for="speaker" class="sr">말하는 사람</label><select id="speaker" aria-label="말하는 사람 (테스트용)"></select></div>
   </header>
   <div id="cols">
-    <main id="chat" data-panel="chat">
+    <main id="chat">
       <div id="log" role="log" aria-live="polite"></div>
       <div id="typing" aria-live="polite"></div>
       <div id="status"></div>
@@ -220,73 +257,111 @@ legend { padding:0; font-size:13px; font-weight:500; margin-bottom:8px; }
         <div id="send-row">
           <label for="text" class="sr">메시지 입력</label>
           <input class="field" id="text" maxlength="1000" placeholder="메시지 입력 (@이름 으로 AI 호출)" autocomplete="off">
-          <button id="send" type="button" aria-label="보내기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          <button id="send" type="button" aria-label="보내기"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
         </div>
       </div>
     </main>
-    <aside id="side">
-      <section class="card" data-panel="ai">
-        <h2 id="humtitle">참가자</h2>
-        <div id="humans" style="display:flex; flex-wrap:wrap; gap:6px"></div>
-      </section>
-      <section class="card" data-panel="ai">
-        <h2 id="aititle">AI 참가자</h2>
-        <div class="ais" id="ais"></div>
-        <form id="aiform">
-          <label class="lb" for="ainame">AI 초대: 이름</label>
-          <input class="field" id="ainame" maxlength="12" placeholder="예: 번역가" autocomplete="off">
-          <label class="lb" for="aipersona">역할 / 성격</label>
-          <input class="field" id="aipersona" maxlength="200" placeholder="예: 모든 말을 영어로 옮겨주는 AI" autocomplete="off">
-          <fieldset style="margin-top:12px">
-            <legend>AI 제공사</legend>
-            <div class="provs">
-              <label><input type="radio" name="prov" value="demo" checked>데모</label>
-              <label><input type="radio" name="prov" value="error">오류 시뮬레이션</label>
-              <label><input type="radio" name="prov" value="anthropic" disabled>Anthropic</label>
-              <label><input type="radio" name="prov" value="openai" disabled>OpenAI</label>
-              <label><input type="radio" name="prov" value="openrouter" disabled>OpenRouter</label>
-            </div>
-            <p class="hint">프리뷰에서는 실제 AI를 호출하지 않습니다. "오류 시뮬레이션"은 호출 실패 화면을 시험하는 용도입니다.</p>
-          </fieldset>
-          <div style="margin-top:12px"><button class="btn outline small" id="addai" type="submit">AI 초대</button></div>
-        </form>
-      </section>
-      <section class="card" data-panel="settings">
-        <h2>방 설정</h2>
-        <label class="lb" for="tpl" style="margin-top:0">방 유형</label>
-        <select class="field" id="tpl">
-          <option value="free">자유 방</option><option value="game">게임: 추리 게임</option>
-          <option value="debate">토론회</option><option value="project">프로젝트 협업</option>
-        </select>
-        <div id="confirm" hidden><span>방 유형을 바꾸면 지금의 AI 구성이 기본 구성으로 교체됩니다.</span><br><button class="btn small primary" type="button" id="cok">교체</button><button class="btn small" type="button" id="ccancel">취소</button></div>
-        <fieldset style="margin-top:14px">
-          <legend>AI 발언 방식</legend>
-          <label class="pol"><input type="radio" name="policy" value="mention" checked><span><b>@멘션했을 때만</b><span>부른 AI만 답합니다. AI가 다른 AI를 @멘션하면 대화가 이어집니다.</span></span></label>
-          <label class="pol"><input type="radio" name="policy" value="round"><span><b>사람이 말할 때마다 순서대로</b><span>모든 AI가 한 번씩 정해진 순서로 답합니다.</span></span></label>
-          <label class="pol"><input type="radio" name="policy" value="free"><span><b>AI끼리 자유롭게 이어서</b><span>사람이 말하면 AI들이 서로 이어 말하고, 연속 발언 한도에서 멈춥니다.</span></span></label>
-        </fieldset>
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:8px">
-          <div><div id="stlabel" style="font-size:13px; font-weight:500">AI 연속 발언 한도</div><div class="hint" style="margin:0">1~10회. 사람이 말하면 다시 셉니다.</div></div>
-          <div class="stepper" role="group" aria-labelledby="stlabel"><button type="button" id="stminus" aria-label="줄이기">−</button><output id="stval">4</output><button type="button" id="stplus" aria-label="늘리기">+</button></div>
+    <div id="sidewrap">
+      <nav id="sidetabs" aria-label="패널">
+        <button type="button" data-go="ai" aria-current="page">참가자</button>
+        <button type="button" data-go="settings">설정</button>
+        <button type="button" data-go="doc">문서</button>
+        <button type="button" data-go="assets">에셋</button>
+      </nav>
+      <aside id="side">
+        <div class="pn" data-panel="ai">
+          <section>
+            <h3 id="humtitle">사람</h3>
+            <div id="humans" style="display:flex; flex-wrap:wrap; gap:6px"></div>
+          </section>
+          <section>
+            <h3 id="aititle">AI</h3>
+            <div id="ais"></div>
+            <form id="aiform" style="margin-top:6px">
+              <label class="lb" for="ainame">AI 초대 · 이름</label>
+              <input class="field" id="ainame" maxlength="12" placeholder="예: 번역가" autocomplete="off">
+              <label class="lb" for="aipersona">역할 / 성격</label>
+              <input class="field" id="aipersona" maxlength="200" placeholder="예: 모든 말을 영어로 옮겨주는 AI" autocomplete="off">
+              <fieldset style="margin-top:14px">
+                <legend>AI 제공사</legend>
+                <div class="provs">
+                  <label><input type="radio" name="prov" value="demo" checked>데모</label>
+                  <label><input type="radio" name="prov" value="error">오류 시뮬레이션</label>
+                  <label><input type="radio" name="prov" value="anthropic" disabled>Anthropic</label>
+                  <label><input type="radio" name="prov" value="openai" disabled>OpenAI</label>
+                  <label><input type="radio" name="prov" value="openrouter" disabled>OpenRouter</label>
+                </div>
+                <p class="hint">프리뷰에서는 실제 AI를 호출하지 않습니다.</p>
+              </fieldset>
+              <div style="margin-top:12px"><button class="btn sm" id="addai" type="submit">AI 초대</button></div>
+            </form>
+          </section>
         </div>
-        <label class="lb" for="budget">AI 호출 예산 한도 (최대 100회)</label>
-        <input class="field" id="budget" type="number" min="1" max="100" style="width:120px">
-        <p class="hint">사용량보다 낮게 설정할 수 없습니다. 예산을 다 쓰면 AI가 멈추고 사람끼리만 대화합니다.</p>
-        <div style="margin-top:12px"><button class="btn outline small" id="apply" type="button">설정 적용</button></div>
-      </section>
-      <section class="card" data-panel="doc" style="flex:1 1 auto; display:flex; flex-direction:column">
-        <h2>공유 문서</h2>
-        <label for="doc" class="sr">공유 문서</label>
-        <textarea id="doc" placeholder="함께 쓰는 메모. 프로젝트 방에서는 AI가 '[문서]'로 시작하는 줄을 자동으로 추가합니다."></textarea>
-        <div style="margin-top:8px"><button class="btn outline small" id="savedoc" type="button">저장</button></div>
-      </section>
-    </aside>
+        <div class="pn" data-panel="settings">
+          <section>
+            <fieldset>
+              <legend>AI 발언 방식</legend>
+              <label class="pol"><input type="radio" name="policy" value="mention" checked><span><b>@멘션했을 때만</b><span>부른 AI만 답합니다. AI가 다른 AI를 @멘션하면 대화가 이어집니다.</span></span></label>
+              <label class="pol"><input type="radio" name="policy" value="round"><span><b>사람이 말할 때마다 순서대로</b><span>모든 AI가 한 번씩 정해진 순서로 답합니다.</span></span></label>
+              <label class="pol"><input type="radio" name="policy" value="free"><span><b>AI끼리 자유롭게 이어서</b><span>AI들이 서로 이어 말하고, 연속 발언 한도에서 멈춥니다.</span></span></label>
+            </fieldset>
+          </section>
+          <section>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px">
+              <div><div id="stlabel" style="font-size:13px; font-weight:700">AI 연속 발언 한도</div><div class="hint" style="margin:0">1~10회. 사람이 말하면 다시 셉니다.</div></div>
+              <div class="stepper" role="group" aria-labelledby="stlabel"><button type="button" id="stminus" aria-label="줄이기">−</button><output id="stval">4</output><button type="button" id="stplus" aria-label="늘리기">+</button></div>
+            </div>
+            <label class="lb" for="budget">AI 호출 예산 한도 (최대 100회)</label>
+            <input class="field mono" id="budget" type="number" min="1" max="100" style="width:120px">
+            <p class="hint">사용량보다 낮게 설정할 수 없습니다. 예산을 다 쓰면 AI가 멈추고 사람끼리만 대화합니다.</p>
+            <div style="margin-top:14px"><button class="btn primary sm" id="apply" type="button">설정 적용</button></div>
+          </section>
+        </div>
+        <div class="pn" data-panel="doc">
+          <section>
+            <h3>공유 문서</h3>
+            <label for="doc" class="sr">공유 문서</label>
+            <textarea id="doc" placeholder="함께 쓰는 메모. AI가 '[문서]'로 시작하는 줄을 쓰면 자동으로 추가됩니다."></textarea>
+            <div style="margin-top:10px"><button class="btn sm" id="savedoc" type="button">저장</button></div>
+          </section>
+        </div>
+        <div class="pn" data-panel="assets">
+          <section>
+            <h3>현재 에셋</h3>
+            <div class="curasset" id="curasset"></div>
+          </section>
+          <section>
+            <h3>에셋 불러오기</h3>
+            <p class="hint" style="margin:0 0 10px">에셋을 적용하면 지금의 AI 구성이 에셋의 구성으로 교체됩니다.</p>
+            <div style="display:flex; flex-wrap:wrap; gap:8px">
+              <label class="btn sm" style="display:inline-flex; align-items:center" for="afile">파일 선택</label>
+              <input id="afile" class="sr" type="file" accept=".json,application/json">
+              <button type="button" class="btn sm" id="asample">샘플 에셋</button>
+            </div>
+            <div class="err" id="aerr" role="alert" hidden></div>
+            <div id="apreview"></div>
+          </section>
+          <section>
+            <h3>에셋 형식</h3>
+            <p class="hint" style="margin:0">JSON 파일 하나로 방을 정의합니다.</p>
+            <pre class="code mono" id="fmt"></pre>
+            <ul class="spec">
+              <li><span class="mono">name</span>, <span class="mono">ais</span> 필수. 나머지는 선택입니다.</li>
+              <li>AI는 최대 6명, 이름은 공백·@ 없이 12자 이내, 역할은 200자 이내.</li>
+              <li>파일 크기는 20KB까지.</li>
+            </ul>
+            <div style="margin-top:10px"><button type="button" class="btn sm" id="copyfmt">형식 복사</button></div>
+          </section>
+        </div>
+      </aside>
+    </div>
   </div>
-  <nav id="tabs" aria-label="방 메뉴">
+  <nav id="bottomtabs" aria-label="방 메뉴">
     <button type="button" data-go="chat" aria-current="page">대화</button>
-    <button type="button" data-go="ai">AI</button>
-    <button type="button" data-go="doc">문서</button>
+    <button type="button" data-go="ai">참가자</button>
     <button type="button" data-go="settings">설정</button>
+    <button type="button" data-go="doc">문서</button>
+    <button type="button" data-go="assets">에셋</button>
   </nav>
 </div>
 <div id="toast" role="status" hidden></div>
@@ -296,96 +371,138 @@ legend { padding:0; font-size:13px; font-weight:500; margin-bottom:8px; }
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
   var DELAY = typeof window.__PREVIEW_DELAY === "number" ? window.__PREVIEW_DELAY : 750;
-  var BUDGET_MAX = 100, BUDGET_DEFAULT = 30, MAX_AI = 6;
+  var BUDGET_MAX = 100, BUDGET_DEFAULT = 30, MAX_AI = 6, MAX_FILE = 20 * 1024;
   var TESTERS = ["하은", "민수"];
-
-  var TEMPLATES = {
-    free: { label: "자유 방", ais: [] },
-    game: { label: "게임: 추리 게임", ais: [
+  var SAMPLE = {
+    format: "aichat-asset/1",
+    name: "추리 게임 (샘플)",
+    description: "진행자와 두 명의 플레이어 AI가 사건을 추리합니다.",
+    policy: "free",
+    maxStreak: 4,
+    ais: [
       { name: "진행자", persona: "게임 진행자. 규칙과 단계를 정리한다." },
       { name: "탐정", persona: "논리적으로 단서를 모으는 플레이어." },
-      { name: "손님", persona: "비밀이 있는 듯 말하는 플레이어." } ] },
-    debate: { label: "토론회", ais: [
-      { name: "사회자", persona: "토론 사회자. 안건과 순서를 정리한다." },
-      { name: "찬성측", persona: "안건에 찬성하는 토론자." },
-      { name: "반대측", persona: "안건에 반대하는 토론자." } ] },
-    project: { label: "프로젝트 협업", ais: [
-      { name: "기획자", persona: "요구사항과 우선순위를 정리하는 기획자." },
-      { name: "개발자", persona: "구현 방법과 비용을 따지는 개발자." },
-      { name: "리뷰어", persona: "빈틈과 리스크를 찾는 리뷰어." } ] }
+      { name: "손님", persona: "비밀이 있는 듯 말하는 플레이어." }
+    ],
+    doc: "규칙: 진행자가 사건을 설명하고, 참가자는 돌아가며 질문한다."
   };
+  var SAMPLE_TEXT = JSON.stringify(SAMPLE, null, 2);
+  $("fmt").textContent = SAMPLE_TEXT;
 
-  /* 데모 AI가 쓰는 문구. {t}는 직전 사람 발언의 요약 */
-  var LINES = {
-    "진행자": ["좋습니다. {t} 에 대한 단서가 하나 더 있습니다. 서재 책장 뒤에 작은 열쇠 구멍이 보입니다.", "현재 단계: 1막 조사. 용의자는 아직 셋입니다. 다음 질문을 받겠습니다.", "시간이 흐르고 있습니다. 누군가는 거짓말을 하고 있어요. @탐정 의견은?"],
-    "탐정": ["제 추리로는 {t} 와(과) 식은 찻잔이 연결됩니다. 한 시간쯤 전입니다. @손님 그 시간에 어디 계셨죠?", "알리바이를 확인해야 합니다. @손님 정원 쪽 길은 누가 지나갔죠?", "아직 결론은 이릅니다. 단서가 하나 부족합니다."],
-    "손님": ["{t} 라니, 저를 의심하시는군요. 저는 정원에 있었다고 말씀드렸습니다.", "…기억나는 건 비명 소리뿐입니다. 정말입니다.", "@탐정 제게만 묻지 말고 비서에게도 물어보시죠."],
-    "사회자": ["안건을 정리하겠습니다: {t}. 찬성 측부터 의견 부탁드립니다. @찬성측", "반대 측 반론을 들어보겠습니다. @반대측", "지금까지의 쟁점은 비용과 실현 가능성입니다. 사람 참가자의 의견도 받겠습니다."],
-    "찬성측": ["{t} 은(는) 장기적으로 이익이 큽니다. 첫째 비용이 줄고, 둘째 확장할 수 있습니다.", "반대 측 우려는 작은 시범으로 확인할 수 있습니다. @반대측 시범 운영에도 반대하십니까?", "수요가 이미 보입니다. 지금 시작하지 않을 이유가 약합니다."],
-    "반대측": ["{t} 의 가장 큰 위험은 검증되지 않은 수요입니다. 실패 비용은 누가 부담합니까?", "시범 운영도 인력과 시간이 듭니다. 숨은 비용을 계산해야 합니다.", "찬성 측 근거는 가정에 기댑니다. 숫자로 보여주세요."],
-    "기획자": ["{t} 의 핵심 사용자와 첫 화면부터 정하죠.\n[문서] 목표: {t}", "우선순위는 입장, 대화, 공유 문서입니다. @개발자 일정을 추정해 주세요.\n[문서] 우선순위: 입장, 대화, 공유 문서", "범위를 줄입시다. 처음에는 방 하나만 제대로 동작하면 됩니다.\n[문서] 범위: 방 1개 완성도 우선"],
-    "개발자": ["작은 버전은 이틀이면 만들 수 있습니다. 저장은 다음 단계로 미루죠.\n[문서] 구현: 실시간 대화 먼저, 저장은 이후", "호출 비용은 방 예산으로 막겠습니다. @리뷰어 빠진 부분 있나요?\n[문서] 비용: 방별 호출 예산", "배포는 HTTPS가 먼저입니다. 키가 오가기 때문입니다.\n[문서] 배포: HTTPS 필수"],
-    "리뷰어": ["비용 상한이 요구사항에 빠져 있습니다. 호출 예산을 넣어야 해요.\n[문서] 리스크: 호출 비용 상한 필요", "AI끼리 무한히 말하지 않는지 확인하세요. 연속 한도가 필요합니다.\n[문서] 리스크: AI 연속 발언 한도", "신고와 차단이 없으면 공개할 수 없습니다.\n[문서] 공개 전 필수: 신고·차단"]
-  };
-  var GENERIC = ["[데모] {t} 에 대한 {n}의 의견입니다. (역할: {p})", "[데모] {n}: 앞선 발언을 보면 따져볼 부분이 있습니다.", "[데모] {n}: 정리하면 {t} 은(는) 작게 시험해 볼 만합니다."];
+  var counter = 0, colorCounter = 0, me = "나", room = null, pendingAsset = null, applyAsset = null;
 
-  var counter = 0, colorCounter = 0;
-  var me = "나";
-  var room = null;
-
-  function newAI(spec, provider) {
-    return { id: "a" + (++counter), name: spec.name, persona: spec.persona, provider: provider || "demo", color: (colorCounter++) % 4 };
-  }
-  function newRoom(tpl) {
-    var r = {
-      code: Math.random().toString(36).slice(2, 8), template: tpl, policy: "mention", maxStreak: 4, streak: 0,
-      lastAI: null, gen: 0, budget: { used: 0, limit: BUDGET_DEFAULT }, ais: [], messages: [], seq: 0, doc: "",
-      alerts: { budget: false, error: null }
-    };
-    TEMPLATES[tpl].ais.forEach(function (s) { r.ais.push(newAI(s)); });
-    return r;
-  }
-
-  /* ---------- 화면 헬퍼 ---------- */
-  var toastTimer = null;
-  function toast(t) {
-    var el = $("toast"); el.textContent = t; el.hidden = false;
-    clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.hidden = true; }, 3500);
-  }
   function mk(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  var toastTimer = null;
+  function toast(t) { var el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.hidden = true; }, 3500); }
+
+  function validateAsset(raw) {
+    var d;
+    try { d = JSON.parse(raw); } catch (e) { return { error: "JSON 형식이 올바르지 않습니다." }; }
+    if (!d || typeof d !== "object" || Array.isArray(d)) return { error: "에셋은 JSON 객체여야 합니다." };
+    if (typeof d.name !== "string" || !d.name.trim() || d.name.length > 40) return { error: "name(40자 이내 문자열)이 필요합니다." };
+    if (!Array.isArray(d.ais)) return { error: "ais(AI 목록)가 필요합니다." };
+    if (d.ais.length > MAX_AI) return { error: "AI는 최대 " + MAX_AI + "명입니다." };
+    var seen = {}, ais = [];
+    for (var i = 0; i < d.ais.length; i++) {
+      var a = d.ais[i] || {};
+      if (typeof a.name !== "string" || !/^[^\s@]{1,12}$/.test(a.name)) return { error: (i + 1) + "번째 AI 이름은 공백·@ 없이 12자 이내여야 합니다." };
+      if (typeof a.persona !== "string" || !a.persona.trim() || a.persona.length > 200) return { error: a.name + "의 persona(200자 이내)가 필요합니다." };
+      if (seen[a.name]) return { error: "AI 이름이 중복됩니다: " + a.name };
+      seen[a.name] = 1; ais.push({ name: a.name, persona: a.persona.trim() });
+    }
+    var policy = d.policy;
+    if (policy != null && ["mention", "round", "free"].indexOf(policy) < 0) return { error: "policy는 mention, round, free 중 하나여야 합니다." };
+    var ms = d.maxStreak;
+    if (ms != null && !(Number.isInteger(ms) && ms >= 1 && ms <= 10)) return { error: "maxStreak는 1~10 정수여야 합니다." };
+    var doc = typeof d.doc === "string" ? d.doc.slice(0, 8000) : "";
+    return { asset: { name: d.name.trim(), description: typeof d.description === "string" ? d.description.slice(0, 200) : "", policy: policy || "mention", maxStreak: ms || 4, ais: ais, doc: doc } };
+  }
+  function readFile(file, onOk, onErr) {
+    if (!file) return;
+    if (file.size > MAX_FILE) { onErr("파일이 너무 큽니다. 20KB 이하만 올릴 수 있습니다."); return; }
+    var fr = new FileReader();
+    fr.onload = function () { var r = validateAsset(String(fr.result)); if (r.error) onErr(r.error); else onOk(r.asset); };
+    fr.onerror = function () { onErr("파일을 읽지 못했습니다."); };
+    fr.readAsText(file);
+  }
+  var POLNAME = { mention: "@멘션했을 때만", round: "순서대로", free: "AI끼리 자유롭게" };
+  function castChips(box, ais) {
+    box.textContent = "";
+    ais.forEach(function (a, i) {
+      var c = mk("span", "cm c" + (i % 6)), av = mk("span", "av", a.name.charAt(0)); av.setAttribute("aria-hidden", "true");
+      c.appendChild(av); c.appendChild(document.createTextNode(a.name)); box.appendChild(c);
+    });
+  }
+
+  function showJoinAsset() {
+    var box = $("jasset"); box.textContent = "";
+    $("jclear").hidden = !pendingAsset;
+    if (!pendingAsset) { var h = mk("p", "hint", "에셋 파일(.json)을 올리면 AI 구성과 규칙이 한 번에 적용됩니다."); h.style.margin = "0"; box.appendChild(h); return; }
+    var l = mk("div", "loaded"), t = mk("div");
+    t.appendChild(mk("b", "", pendingAsset.name));
+    t.appendChild(mk("small", "", (pendingAsset.description ? pendingAsset.description + " · " : "") + "AI " + pendingAsset.ais.length + "명 · " + POLNAME[pendingAsset.policy]));
+    var cast = mk("div", "cast"); castChips(cast, pendingAsset.ais); t.appendChild(cast);
+    l.appendChild(t); box.appendChild(l);
+  }
+  function joinErr(t) { var e = $("jerr"); e.textContent = t || ""; e.hidden = !t; }
+  $("jfile").addEventListener("change", function () {
+    var f = this.files[0]; joinErr("");
+    readFile(f, function (a) { pendingAsset = a; showJoinAsset(); }, function (m) { pendingAsset = null; showJoinAsset(); joinErr(m); });
+    this.value = "";
+  });
+  $("jsample").addEventListener("click", function () { joinErr(""); pendingAsset = validateAsset(SAMPLE_TEXT).asset; showJoinAsset(); });
+  $("jclear").addEventListener("click", function () { pendingAsset = null; joinErr(""); showJoinAsset(); });
+  showJoinAsset();
+
+  function newAI(spec, provider) { return { id: "a" + (++counter), name: spec.name, persona: spec.persona, provider: provider || "demo", color: (colorCounter++) % 6 }; }
+  function newRoom() {
+    return { code: Math.random().toString(36).slice(2, 8), asset: null, policy: "mention", maxStreak: 4, streak: 0, lastAI: null, gen: 0,
+      budget: { used: 0, limit: BUDGET_DEFAULT }, ais: [], messages: [], seq: 0, doc: "", alerts: { budget: false, error: null } };
+  }
   function aiByName(n) { for (var i = 0; i < room.ais.length; i++) if (room.ais[i].name === n) return room.ais[i]; return null; }
 
   function addMessage(kind, who, text, code) {
     var m = { id: ++room.seq, kind: kind, who: who, text: text, code: code || null };
     room.messages.push(m);
     var log = $("log"), row;
-    if (kind === "system") {
-      row = mk("div", "sys", text);
-    } else {
-      var ai = kind === "ai" ? aiByName(who) : null;
-      var mine = kind === "human" && who === me;
+    var emp = log.querySelector(".empty"); if (emp) emp.remove();
+    if (kind === "system") row = mk("div", "sys", text);
+    else {
+      var ai = kind === "ai" ? aiByName(who) : null, mine = kind === "human" && who === me;
       row = mk("div", "m" + (mine ? " mine" : "") + (ai ? " c" + ai.color : ""));
       var av = mk("div", "av", who.charAt(0)); av.setAttribute("aria-hidden", "true");
-      var body = mk("div", "body");
-      var wh = mk("div", "who"); wh.appendChild(mk("span", "", mine ? "나" : who));
+      var body = mk("div", "body"), wh = mk("div", "who");
+      wh.appendChild(mk("span", "", mine ? "나" : who));
       if (kind === "ai") wh.appendChild(mk("span", "tag", "AI"));
       body.appendChild(wh); body.appendChild(mk("div", "bub", text));
       if (!mine) row.appendChild(av);
       row.appendChild(body);
     }
-    log.appendChild(row);
-    log.scrollTop = log.scrollHeight;
+    log.appendChild(row); log.scrollTop = log.scrollHeight;
     return m;
   }
   function system(code, text) { return addMessage("system", "시스템", text, code); }
 
+  function renderEmpty() {
+    var log = $("log");
+    if (room.messages.some(function (m) { return m.kind !== "system"; }) || log.querySelector(".empty")) return;
+    var e = mk("div", "empty");
+    e.appendChild(mk("h2", "", room.ais.length ? "대화를 시작해 보세요" : "아직 AI가 없습니다"));
+    e.appendChild(mk("p", "", room.ais.length ? "@이름 으로 AI를 부르거나, 발언 방식을 바꿔 보세요." : "에셋을 불러오거나 AI를 직접 초대하면 @이름 으로 불러서 대화할 수 있어요."));
+    if (!room.ais.length) {
+      var b1 = mk("button", "btn primary sm", "에셋 불러오기"); b1.type = "button"; b1.addEventListener("click", function () { goTab("assets"); });
+      var b2 = mk("button", "btn sm", "AI 초대"); b2.type = "button"; b2.style.marginLeft = "8px"; b2.addEventListener("click", function () { goTab("ai"); $("ainame").focus(); });
+      e.appendChild(b1); e.appendChild(b2);
+    }
+    log.appendChild(e);
+  }
+
   function renderBudget() {
     var b = room.budget;
-    $("budtxt").textContent = b.used + " / " + b.limit + "회";
+    $("budtxt").textContent = b.used + " / " + b.limit;
     $("meter").firstElementChild.style.width = Math.min(100, Math.round(b.used / b.limit * 100)) + "%";
     $("meter").classList.toggle("full", b.used >= b.limit);
     $("budget").value = b.limit;
-    room.alerts.budget = b.used >= b.limit && room.alerts.budget;
     renderStatus();
   }
   function renderStatus() {
@@ -393,98 +510,90 @@ legend { padding:0; font-size:13px; font-weight:500; margin-bottom:8px; }
     if (room.alerts.budget && room.budget.used >= room.budget.limit) {
       var b = mk("div", "banner warn");
       b.appendChild(mk("span", "t", "이 방의 AI 호출 예산(" + room.budget.limit + "회)을 모두 사용했습니다. AI는 멈추고 사람끼리만 대화할 수 있습니다."));
-      var add = mk("button", "btn small", room.budget.limit >= BUDGET_MAX ? "최대 한도입니다" : "예산 10회 추가");
+      var add = mk("button", "btn sm", room.budget.limit >= BUDGET_MAX ? "최대 한도입니다" : "예산 10회 추가");
       add.type = "button"; add.id = "addbudget"; add.disabled = room.budget.limit >= BUDGET_MAX;
-      add.addEventListener("click", function () {
-        room.budget.limit = Math.min(BUDGET_MAX, room.budget.limit + 10);
-        room.alerts.budget = false; renderBudget(); toast("예산을 늘렸습니다. 다시 말을 걸어 보세요.");
-      });
+      add.addEventListener("click", function () { room.budget.limit = Math.min(BUDGET_MAX, room.budget.limit + 10); room.alerts.budget = false; renderBudget(); toast("예산을 늘렸습니다. 다시 말을 걸어 보세요."); });
       b.appendChild(add); box.appendChild(b);
     }
     if (room.alerts.error) {
-      var e = mk("div", "banner err"), er = room.alerts.error;
-      var t = mk("span", "t"); var s = mk("strong", "", er.name); t.appendChild(s); t.appendChild(document.createTextNode(" 응답 오류: " + er.text)); e.appendChild(t);
-      var open = mk("button", "btn small", "AI 설정 열기"); open.type = "button"; open.id = "openai";
-      open.addEventListener("click", function () { goTab("ai"); var f = $("ainame"); f.scrollIntoView({ block: "nearest" }); f.focus(); });
-      var rm = mk("button", "btn small", "이 AI 내보내기"); rm.type = "button"; rm.id = "rmerr";
+      var er = room.alerts.error, e = mk("div", "banner err2"), t = mk("span", "t");
+      t.appendChild(mk("strong", "", er.name)); t.appendChild(document.createTextNode(" 응답 오류: " + er.text)); e.appendChild(t);
+      var open = mk("button", "btn sm", "AI 설정 열기"); open.type = "button"; open.id = "openai";
+      open.addEventListener("click", function () { goTab("ai"); $("ainame").focus(); });
+      var rm = mk("button", "btn sm", "이 AI 내보내기"); rm.type = "button"; rm.id = "rmerr";
       rm.addEventListener("click", function () { removeAI(er.id); });
       e.appendChild(open); e.appendChild(rm); box.appendChild(e);
     }
   }
+  function renderAsset() {
+    var c = $("curasset"); c.textContent = "";
+    if (room.asset) { c.appendChild(mk("b", "", room.asset.name)); c.appendChild(mk("small", "", (room.asset.description || "설명 없음") + " · AI " + room.asset.ais.length + "명")); }
+    else { c.appendChild(mk("b", "", "적용된 에셋 없음")); c.appendChild(mk("small", "", "빈 방이거나 AI를 직접 초대한 상태입니다.")); }
+  }
   function renderSide() {
     var h = $("humans"); h.textContent = "";
     var all = [me].concat(TESTERS);
-    $("humtitle").textContent = "참가자 " + all.length + "명";
-    all.forEach(function (n, i) { h.appendChild(mk("span", "chip" + (i === 0 ? " me" : ""), i === 0 ? n + " (나)" : n + " (테스트)")); });
-    $("aititle").textContent = "AI 참가자 " + room.ais.length + "명";
+    $("humtitle").textContent = "사람 " + all.length + "명";
+    all.forEach(function (n, i) { var p = mk("span", "pill" + (i === 0 ? " me" : "")); p.appendChild(mk("span", "dot")); p.appendChild(document.createTextNode(i === 0 ? n + " (나)" : n + " (테스트)")); h.appendChild(p); });
+    $("aititle").textContent = "AI " + room.ais.length + "명";
     var box = $("ais"); box.textContent = "";
-    if (!room.ais.length) box.appendChild(mk("div", "hint", "아직 AI가 없습니다. 아래에서 초대하세요."));
+    if (!room.ais.length) box.appendChild(mk("div", "hint", "아직 AI가 없습니다. 아래에서 초대하거나 에셋을 불러오세요."));
     room.ais.forEach(function (ai) {
-      var row = mk("div", "ai-item c" + ai.color);
-      var av = mk("div", "av", ai.name.charAt(0)); av.setAttribute("aria-hidden", "true");
+      var row = mk("div", "ai-item c" + ai.color), av = mk("div", "av", ai.name.charAt(0)); av.setAttribute("aria-hidden", "true");
       var nm = mk("div", "nm"); nm.appendChild(mk("b", "", ai.name));
       nm.appendChild(mk("small", "", (ai.provider === "error" ? "오류 시뮬레이션 · " : "") + ai.persona));
-      var rm = mk("button", "btn small", "내보내기"); rm.type = "button";
-      rm.setAttribute("aria-label", ai.name + " 내보내기");
+      var rm = mk("button", "btn sm", "내보내기"); rm.type = "button"; rm.setAttribute("aria-label", ai.name + " 내보내기");
       rm.addEventListener("click", function () { removeAI(ai.id); });
       row.appendChild(av); row.appendChild(nm); row.appendChild(rm); box.appendChild(row);
     });
     var chips = $("chips"); chips.textContent = "";
     room.ais.forEach(function (ai) {
-      var c = mk("button", "c" + ai.color, "@" + ai.name); c.type = "button";
-      c.addEventListener("click", function () { insertMention(ai.name); });
-      chips.appendChild(c);
+      var c = mk("button", "c" + ai.color, "@" + ai.name); c.type = "button"; c.addEventListener("click", function () { insertMention(ai.name); }); chips.appendChild(c);
     });
-    if (room.ais.length) { var all2 = mk("button", "", "@모두"); all2.type = "button"; all2.addEventListener("click", function () { insertMention("모두"); }); chips.appendChild(all2); }
-    $("rtitle").textContent = "방 " + room.code;
-    $("rsub").textContent = TEMPLATES[room.template].label;
-    $("tpl").value = room.template;
+    if (room.ais.length) { var a2 = mk("button", "", "@모두"); a2.type = "button"; a2.addEventListener("click", function () { insertMention("모두"); }); chips.appendChild(a2); }
+    $("rtitle").textContent = room.asset ? room.asset.name : "방 " + room.code;
+    $("rsub").textContent = "방 " + room.code + " · " + POLNAME[room.policy];
     document.querySelectorAll('input[name="policy"]').forEach(function (r) { r.checked = r.value === room.policy; });
     $("stval").textContent = room.maxStreak;
     $("doc").value = room.doc;
-    renderBudget();
+    renderAsset(); renderBudget(); renderEmpty();
   }
-  function insertMention(n) {
-    var t = $("text");
-    t.value += (t.value && !/\s$/.test(t.value) ? " " : "") + "@" + n + " ";
-    t.focus();
-  }
+  function insertMention(n) { var t = $("text"); t.value += (t.value && !/\s$/.test(t.value) ? " " : "") + "@" + n + " "; t.focus(); }
   function goTab(tab) {
     $("app").dataset.tab = tab;
-    document.querySelectorAll("#tabs button").forEach(function (b) {
-      if (b.dataset.go === tab) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+    document.querySelectorAll("[data-go]").forEach(function (b) {
+      var on = b.dataset.go === tab || (tab === "chat" && b.dataset.go === "ai" && b.closest("#sidetabs"));
+      if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
   }
 
-  /* ---------- 방 규칙 (서버와 같은 동작) ---------- */
   function mentioned(text, exclude) {
     var all = /@(all|모두|전체)/i.test(text);
     return room.ais.filter(function (a) { return a !== exclude && (all || text.indexOf("@" + a.name) >= 0); });
   }
-  function nextAI() {
-    var i = room.lastAI ? room.ais.indexOf(room.lastAI) : -1;
-    return room.ais[(i + 1) % room.ais.length];
-  }
+  function nextAI() { var i = room.lastAI ? room.ais.indexOf(room.lastAI) : -1; return room.ais[(i + 1) % room.ais.length]; }
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function topic() {
     for (var i = room.messages.length - 1; i >= 0; i--) {
       var m = room.messages[i];
-      if (m.kind === "human") { var t = m.text.replace(/@\S+/g, "").trim(); return t.slice(0, 24) || "이 주제"; }
+      if (m.kind === "human") return m.text.replace(/@\S+/g, "").trim().slice(0, 24) || "이 주제";
     }
     return "이 주제";
   }
   async function generate(ai) {
     await sleep(DELAY);
     if (ai.provider === "error") throw new Error("openai API 키가 없습니다. 서버 환경변수나 AI 초대 때 넣은 개인 키가 필요합니다.");
-    var n = room.messages.filter(function (m) { return m.kind === "ai" && m.who === ai.name; }).length;
-    var pool = LINES[ai.name] || GENERIC;
-    return pool[n % pool.length].replace(/\{t\}/g, topic()).replace(/\{n\}/g, ai.name).replace(/\{p\}/g, ai.persona);
+    var k = room.messages.filter(function (m) { return m.kind === "ai" && m.who === ai.name; }).length, t = topic();
+    var others = room.ais.filter(function (a) { return a !== ai; }), o = others.length ? others[k % others.length].name : null;
+    var step = k % 3;
+    if (step === 0) return "'" + t + "' 에 대해 " + ai.name + "의 입장에서 말씀드리면, 제 역할(" + ai.persona + ")상 이렇게 보입니다.";
+    if (step === 1) return o ? "@" + o + " 방금 흐름에 대해 어떻게 생각하세요?" : "조금 더 구체적인 정보가 있으면 판단하기 쉽겠습니다.";
+    return "지금까지의 쟁점은 '" + t + "' 입니다.\n[문서] " + ai.name + " 메모: " + t;
   }
   function harvestDoc(text) {
-    var lines = text.split("\n").filter(function (l) { return l.indexOf("[문서]") === 0; })
-      .map(function (l) { return l.replace("[문서]", "").trim(); }).filter(Boolean);
+    var lines = text.split("\n").filter(function (l) { return l.indexOf("[문서]") === 0; }).map(function (l) { return l.replace("[문서]", "").trim(); }).filter(Boolean);
     if (!lines.length) return;
-    room.doc = (room.doc ? room.doc + "\n" : "") + lines.map(function (l) { return "- " + l; }).join("\n");
+    room.doc = ((room.doc ? room.doc + "\n" : "") + lines.map(function (l) { return "- " + l; }).join("\n")).slice(0, 8000);
     if (document.activeElement !== $("doc")) $("doc").value = room.doc;
   }
   async function orchestrate(first) {
@@ -492,15 +601,11 @@ legend { padding:0; font-size:13px; font-weight:500; margin-bottom:8px; }
     room.streak = 0;
     while (gen === room.gen) {
       var ai = null;
-      if (order.length) ai = order.shift();
-      else if (room.policy === "free" && room.ais.length) ai = nextAI();
+      if (order.length) ai = order.shift(); else if (room.policy === "free" && room.ais.length) ai = nextAI();
       if (!ai) break;
       if (room.ais.indexOf(ai) < 0) continue;
       if (room.streak >= room.maxStreak) { system("STREAK_LIMIT", "AI 연속 발언 한도(" + room.maxStreak + "회)에 도달했습니다. 사람이 말하면 이어집니다."); break; }
-      if (room.budget.used >= room.budget.limit) {
-        system("BUDGET_EXHAUSTED", "이 방의 AI 호출 예산(" + room.budget.limit + "회)을 모두 사용했습니다.");
-        room.alerts.budget = true; renderBudget(); break;
-      }
+      if (room.budget.used >= room.budget.limit) { system("BUDGET_EXHAUSTED", "이 방의 AI 호출 예산(" + room.budget.limit + "회)을 모두 사용했습니다."); room.alerts.budget = true; renderBudget(); break; }
       room.budget.used++; renderBudget();
       var tp = $("typing"); tp.textContent = "";
       var dots = mk("span", "dots c" + ai.color); dots.setAttribute("aria-hidden", "true"); dots.appendChild(mk("i")); dots.appendChild(mk("i")); dots.appendChild(mk("i"));
@@ -509,8 +614,7 @@ legend { padding:0; font-size:13px; font-weight:500; margin-bottom:8px; }
       try { text = await generate(ai); }
       catch (e) {
         system("AI_ERROR", ai.name + " 응답 오류: " + e.message);
-        room.alerts.error = { id: ai.id, name: ai.name, text: e.message }; renderStatus();
-        $("typing").textContent = ""; return;
+        room.alerts.error = { id: ai.id, name: ai.name, text: e.message }; renderStatus(); $("typing").textContent = ""; return;
       }
       if (gen !== room.gen) return;
       if (room.ais.indexOf(ai) < 0) continue;
@@ -523,7 +627,6 @@ legend { padding:0; font-size:13px; font-weight:500; margin-bottom:8px; }
     if (gen === room.gen) $("typing").textContent = "";
   }
 
-  /* ---------- 동작 ---------- */
   function sendMessage() {
     var inp = $("text"), text = inp.value.trim();
     if (!text) return;
@@ -542,41 +645,27 @@ legend { padding:0; font-size:13px; font-weight:500; margin-bottom:8px; }
     system("AI_REMOVED", me + " 님이 AI \"" + ai.name + "\"을(를) 내보냈습니다.");
     renderSide();
   }
-  function applyTemplate(id) {
-    room.gen++; room.template = id; room.lastAI = null; room.ais = []; colorCounter = 0;
-    TEMPLATES[id].ais.forEach(function (s) { room.ais.push(newAI(s)); });
-    room.alerts.error = null;
+  function applyAssetToRoom(a, silent) {
+    room.gen++; room.lastAI = null; room.ais = []; colorCounter = 0; room.alerts.error = null;
+    a.ais.forEach(function (s) { room.ais.push(newAI(s)); });
+    room.asset = a; room.policy = a.policy; room.maxStreak = a.maxStreak;
+    if (a.doc) room.doc = a.doc;
     $("typing").textContent = "";
-    system("TEMPLATE_CHANGED", me + " 님이 방 유형을 \"" + TEMPLATES[id].label + "\"(으)로 바꿨습니다.");
+    system("ASSET_APPLIED", me + " 님이 에셋 \"" + a.name + "\"을(를) 적용했습니다.");
     renderSide();
+    if (!silent) toast("에셋을 적용했습니다.");
   }
-
-  function castPreview() {
-    var sel = document.querySelector('input[name="tpl"]:checked').value;
-    var box = $("cast"); box.textContent = "";
-    var list = TEMPLATES[sel].ais;
-    box.appendChild(mk("span", "", list.length ? "함께 들어올 AI" : "AI 없이 시작합니다"));
-    list.forEach(function (s, i) {
-      var m = mk("span", "m c" + i); var av = mk("span", "av", s.name.charAt(0)); av.style.width = "22px"; av.style.height = "22px"; av.style.fontSize = "11px"; av.setAttribute("aria-hidden", "true");
-      m.appendChild(av); m.appendChild(document.createTextNode(s.name)); box.appendChild(m);
-    });
-  }
-  document.querySelectorAll('input[name="tpl"]').forEach(function (r) { r.addEventListener("change", castPreview); });
-  castPreview();
 
   $("joinform").addEventListener("submit", function (e) {
     e.preventDefault();
     me = $("jname").value.trim() || "나";
-    colorCounter = 0;
-    room = newRoom(document.querySelector('input[name="tpl"]:checked').value);
+    colorCounter = 0; room = newRoom();
     $("join").hidden = true; $("app").hidden = false;
     var sp = $("speaker"); sp.textContent = "";
     [me].concat(TESTERS).forEach(function (n, i) { var o = mk("option", "", i === 0 ? n + " (나)" : n + " (테스트)"); o.value = n; sp.appendChild(o); });
     $("log").textContent = "";
     system("MEMBER_JOIN", me + " 님이 입장했습니다.");
-    if (!room.ais.length) system("HINT", "AI 없이 시작했어요. AI 탭(데스크톱은 오른쪽)에서 AI를 초대해 보세요.");
-    else system("HINT", "@이름 으로 AI를 불러 보세요. 위의 \"말하는 사람\"을 바꾸면 다른 참가자로 말할 수 있습니다.");
-    renderSide();
+    if (pendingAsset) applyAssetToRoom(pendingAsset, true); else renderSide();
     $("text").focus();
   });
   $("send").addEventListener("click", sendMessage);
@@ -595,28 +684,41 @@ legend { padding:0; font-size:13px; font-weight:500; margin-bottom:8px; }
     renderSide();
   });
 
-  var pendingTpl = null;
-  $("tpl").addEventListener("change", function () {
-    pendingTpl = $("tpl").value;
-    if (pendingTpl === room.template) { $("confirm").hidden = true; return; }
-    $("confirm").hidden = false;
-  });
-  $("cok").addEventListener("click", function () { $("confirm").hidden = true; applyTemplate(pendingTpl); });
-  $("ccancel").addEventListener("click", function () { $("confirm").hidden = true; $("tpl").value = room.template; });
-
-  var streakDraft = 4;
-  function setStreak(v) { streakDraft = Math.max(1, Math.min(10, v)); $("stval").textContent = streakDraft; }
-  $("stminus").addEventListener("click", function () { setStreak(Number($("stval").textContent) - 1); });
-  $("stplus").addEventListener("click", function () { setStreak(Number($("stval").textContent) + 1); });
+  $("stminus").addEventListener("click", function () { $("stval").textContent = Math.max(1, Number($("stval").textContent) - 1); });
+  $("stplus").addEventListener("click", function () { $("stval").textContent = Math.min(10, Number($("stval").textContent) + 1); });
   $("apply").addEventListener("click", function () {
-    var pol = document.querySelector('input[name="policy"]:checked').value;
-    room.policy = pol; room.maxStreak = Math.max(1, Math.min(10, Number($("stval").textContent)));
+    room.policy = document.querySelector('input[name="policy"]:checked').value;
+    room.maxStreak = Math.max(1, Math.min(10, Number($("stval").textContent)));
     var bl = Math.floor(Number($("budget").value));
     if (bl >= room.budget.used && bl <= BUDGET_MAX) room.budget.limit = bl;
     else { toast("예산은 사용량 이상, 최대 " + BUDGET_MAX + "회까지 설정할 수 있습니다."); $("budget").value = room.budget.limit; }
-    renderBudget(); toast("설정을 적용했습니다.");
+    renderSide(); toast("설정을 적용했습니다.");
   });
   $("savedoc").addEventListener("click", function () { room.doc = $("doc").value.slice(0, 8000); toast("문서를 저장했습니다."); });
-  document.querySelectorAll("#tabs button").forEach(function (b) { b.addEventListener("click", function () { goTab(b.dataset.go); }); });
+
+  function assetErr(t) { var e = $("aerr"); e.textContent = t || ""; e.hidden = !t; }
+  function showPreview(a) {
+    var box = $("apreview"); box.textContent = ""; applyAsset = a;
+    if (!a) return;
+    var l = mk("div", "inl"), t = mk("div");
+    t.appendChild(mk("strong", "", a.name));
+    t.appendChild(document.createTextNode(" · AI " + a.ais.length + "명 · " + POLNAME[a.policy] + ". 적용하면 지금의 AI 구성이 교체됩니다."));
+    var ok = mk("button", "btn sm primary", "적용"); ok.type = "button"; ok.id = "aok";
+    var no = mk("button", "btn sm", "취소"); no.type = "button"; no.id = "ano";
+    ok.addEventListener("click", function () { var x = applyAsset; showPreview(null); applyAssetToRoom(x); });
+    no.addEventListener("click", function () { showPreview(null); });
+    l.appendChild(t); l.appendChild(ok); l.appendChild(no); box.appendChild(l);
+  }
+  $("afile").addEventListener("change", function () {
+    assetErr(""); showPreview(null);
+    readFile(this.files[0], showPreview, assetErr); this.value = "";
+  });
+  $("asample").addEventListener("click", function () { assetErr(""); showPreview(validateAsset(SAMPLE_TEXT).asset); });
+  $("copyfmt").addEventListener("click", function () {
+    var done = function () { toast("형식을 복사했습니다."); }, fail = function () { toast("복사하지 못했습니다. 직접 선택해서 복사하세요."); };
+    try { navigator.clipboard.writeText(SAMPLE_TEXT).then(done, fail); } catch (e) { fail(); }
+  });
+
+  document.querySelectorAll("[data-go]").forEach(function (b) { b.addEventListener("click", function () { goTab(b.dataset.go); }); });
 })();
 </script>
