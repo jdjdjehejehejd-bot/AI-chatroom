@@ -431,6 +431,23 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
 a.btn{display:inline-flex;align-items:center;text-decoration:none}
 #joinform.gated #jgo{opacity:.45}
 #joinform.gated #jmodes,#joinform.gated label.lb,#joinform.gated #jname{opacity:.5;pointer-events:none}
+#market{position:fixed;inset:0;z-index:70;background:var(--bg);display:flex;flex-direction:column}
+.mkhead{flex:none;display:flex;align-items:center;gap:10px;padding:calc(8px + env(safe-area-inset-top,0px)) 12px 8px 8px;background:var(--surface);border-bottom:1px solid var(--line)}
+.mkhead b{flex:1;font:600 18px/1.3 var(--display)}
+.seg2{display:flex;gap:2px;background:var(--h-sf);border-radius:10px;padding:3px}
+.seg2 button{border:0;background:transparent;padding:5px 12px;border-radius:8px;font-size:12.5px;color:var(--muted);font-weight:500}
+.seg2 button[aria-current="true"]{background:var(--ink);color:var(--surface);font-weight:700}
+.mkbody{flex:1;min-height:0;overflow-y:auto;padding:16px max(16px,env(safe-area-inset-left,0px)) 28px;max-width:960px;width:100%;margin:0 auto}
+#mklist{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px;margin-top:12px}
+.mk{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow)}
+.mk.feat{border-color:var(--accent);background:linear-gradient(180deg,var(--accent-soft),var(--surface))}
+.mk h4{margin:0;font:600 15px/1.3 var(--display)}
+.mk p{margin:0;font-size:13px;color:var(--muted)}
+.mk .tags{display:flex;flex-wrap:wrap;gap:4px}
+.mk .tags span{font-size:11.5px;padding:2px 8px;border-radius:999px;background:var(--h-sf)}
+.mk .meta{font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+.mk .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+.badge-prem{font-size:11px;font-weight:700;color:var(--accent-text);background:var(--accent-soft);border-radius:999px;padding:2px 8px;align-self:flex-start}
 </style>
 </head>
 <body>
@@ -441,8 +458,10 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       <b>AI 채팅방</b>
     </header>
     <div class="new"><button class="btn primary lg" id="newroom" type="button">+ 새 방 만들기</button></div>
+    <div class="new" style="padding-top:0"><button class="btn lg" id="marketbtn" type="button" style="width:100%">에셋 마켓 둘러보기</button></div>
     <div class="sect eyebrow">최근 방</div>
     <div id="roomlist"></div>
+    <div id="acctroomswrap" hidden><div class="sect eyebrow">내 계정의 방 <span id="keephint" style="text-transform:none;letter-spacing:0;font-weight:400"></span></div><div id="acctrooms"></div></div>
   </aside>
 
   <main id="main">
@@ -501,6 +520,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
         <button class="icon" id="back" type="button" aria-label="방 목록"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
         <div id="stack" aria-hidden="true"></div>
         <div class="ttl"><b id="rtitle">방</b><small><span class="dot" aria-hidden="true"></span><span id="rsub"></span></small></div>
+        <span class="chip" id="crchip" hidden title="오늘 내 AI 호출 크레딧(한국 시간 자정 초기화)"><span class="mono" id="crtxt"></span></span>
         <span class="chip" id="chipbud" title="AI 호출 예산"><span class="bar"><i id="barfill"></i></span><span class="mono" id="budtxt"></span></span>
         <button class="icon dotbadge" id="dmbtn" type="button" aria-label="귓속말"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-9l-4 3.5V17H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M8 10.5h8"/></svg></button>
         <button class="icon" id="infobtn" type="button" aria-label="방 정보와 설정"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button>
@@ -659,6 +679,12 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
         </section>
       </div>
       <div class="pn" data-panel="doc">
+        <section id="memsec">
+          <h3>방 기억</h3>
+          <p class="hint" style="margin:0 0 8px" id="memhint"></p>
+          <textarea id="memtext" maxlength="900" placeholder="오래된 대화의 요약이 여기에 쌓이고, 모든 AI가 참고합니다. 직접 고칠 수도 있어요." style="min-height:90px"></textarea>
+          <div style="margin-top:8px;display:flex;gap:8px"><button class="btn sm" id="memsave" type="button">저장</button><button class="btn sm" id="memclear" type="button">지우기</button></div>
+        </section>
         <section>
           <h3>공유 문서</h3>
           <label for="doc" class="sr">공유 문서</label>
@@ -690,6 +716,14 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
         </section>
       </div>
       <div class="pn" data-panel="assets">
+        <section id="pubsec">
+          <h3>에셋 마켓에 게시</h3>
+          <p class="hint" style="margin:0 0 8px" id="pubhint">내 방 구성(AI, 규칙, 시작 문서)을 마켓에 올려 다른 사람이 쓰게 할 수 있어요. 대화 내용과 API 키는 올라가지 않아요.</p>
+          <input class="field" id="pubdesc" maxlength="200" placeholder="한 줄 설명 (필수)" aria-label="마켓 설명">
+          <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px" id="pubprem"><input type="checkbox" id="pubpremium"> 플러스 전용으로 게시</label>
+          <div style="margin-top:8px"><button class="btn sm primary" id="pubgo" type="button">게시하기</button></div>
+          <div class="hint" id="pubmsg" style="margin-top:8px"></div>
+        </section>
         <section><h3>현재 에셋</h3><div class="curasset" id="curasset"></div>
           <div style="margin-top:10px"><button type="button" class="btn sm" id="expcur">현재 방 구성을 파일로 저장</button></div>
           <p class="hint">AI 구성, 발언 방식, 규칙, 시작 문서가 .json 파일로 저장됩니다. 다른 방에서 그대로 불러올 수 있어요.</p></section>
@@ -731,6 +765,15 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 </div>
 <div id="toast" role="status" hidden></div>
 
+<section id="market" hidden aria-label="에셋 마켓">
+  <header class="mkhead">
+    <button class="icon" id="mkback" type="button" aria-label="닫기"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <b>에셋 마켓</b>
+    <input class="field" id="mkq" placeholder="검색" aria-label="마켓 검색" style="max-width:220px">
+    <div class="seg2" role="tablist"><button type="button" data-sort="popular" aria-current="true">인기</button><button type="button" data-sort="new">최신</button></div>
+  </header>
+  <div class="mkbody"><div id="mkmsg" class="hint"></div><div id="mkfeat"></div><div id="mklist"></div></div>
+</section>
 <script>
 (function () {
   "use strict";
@@ -959,7 +1002,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     fetch("/auth/config").then(function (r) { return r.json(); }).then(function (c) {
       authCfg = c; renderAuth();
       return fetch("/auth/me").then(function (r) { return r.json(); }).then(function (me) {
-        authUser = me.user; ghLink = me.github; renderAuth();
+        authUser = me.user; ghLink = me.github; credits = me.credits; renderAuth(); loadMyRooms(); renderCredits();
         if (!c.clientId) return;
         var sc = document.createElement("script"); sc.src = "https://accounts.google.com/gsi/client"; sc.async = true;
         sc.onload = function () {
@@ -1512,6 +1555,84 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeInfo(); });
   document.querySelectorAll("#seg button").forEach(function (b) { b.addEventListener("click", function () { setTab(b.dataset.go); }); });
 
+  /* ---- 크레딧 · 내 방 · 마켓 · 방 기억 ---- */
+  var credits = null;
+  function fmtCredits(c) { return "오늘 " + (c.limit - c.used) + "/" + c.limit + (c.plan === "plus" ? " ✦" : ""); }
+  function renderCredits() {
+    var on = !!(credits && joined); $("crchip").hidden = !on;
+    if (on) { $("crtxt").textContent = fmtCredits(credits); $("crchip").style.color = credits.used >= credits.limit ? "var(--err-tx)" : ""; }
+    var sec = $("acct"); if (sec && authUser && credits) { var old = sec.querySelector(".crline"); if (!old) { old = mk("div", "hint crline"); old.style.marginTop = "8px"; sec.appendChild(old); }
+      old.textContent = "플랜 " + (credits.plan === "plus" ? "플러스" : "무료") + " · 오늘 남은 AI 호출 " + (credits.limit - credits.used) + "회 (한국 시간 자정에 초기화)"; }
+  }
+  function loadMyRooms() {
+    if (!authUser) { $("acctroomswrap").hidden = true; return; }
+    fetch("/api/myrooms").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      if (!j) return; var local = {}; try { JSON.parse(store("rooms") || "[]").forEach(function (r) { local[r.id] = 1; }); } catch (e) {}
+      var list = j.rooms.filter(function (r) { return !local[r.id]; }); var box = $("acctrooms"); box.textContent = "";
+      $("acctroomswrap").hidden = !list.length; $("keephint").textContent = "· " + j.keepDays + "일 보관";
+      list.forEach(function (r) {
+        var row = mk("div", "room"); row.setAttribute("role", "button"); row.tabIndex = 0;
+        var av = mk("div", "av", (r.title || "방").charAt(0)); humanStyle(av, r.title || "방");
+        var nm = mk("div", "nm"); nm.appendChild(mk("b", "", r.title)); nm.appendChild(mk("small", "", "AI " + r.ais + "명 · " + ago(r.ts) + (r.owner ? " · 내가 만든 방" : "")));
+        var open = function () { enterRoom(r.id); }; row.addEventListener("click", open); row.addEventListener("keydown", function (ev) { if (ev.key === "Enter") open(); });
+        row.appendChild(av); row.appendChild(nm); box.appendChild(row);
+      });
+    }).catch(function () {});
+  }
+  function mkAct(label, fn, cls) { var b = mk("button", "btn sm" + (cls ? " " + cls : ""), label); b.type = "button"; b.addEventListener("click", fn); return b; }
+  var mkSort = "popular";
+  function mkApi(path, body) { return fetch(path, body === undefined ? undefined : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(function (r) { return r.json().then(function (j) { j._ok = r.ok; j._st = r.status; return j; }); }); }
+  function mkCard(it, feat) {
+    var c = mk("div", "mk" + (feat ? " feat" : "")); c.dataset.id = it.id;
+    if (feat) c.appendChild(mk("span", "badge-prem", "오늘의 에셋"));
+    if (it.premium) c.appendChild(mk("span", "badge-prem", "플러스 전용"));
+    c.appendChild(mk("h4", "", it.name)); c.appendChild(mk("p", "", it.desc));
+    var tags = mk("div", "tags"); it.ais.forEach(function (a) { var t = mk("span", "", a.name); t.title = a.persona; tags.appendChild(t); }); c.appendChild(tags);
+    var m = mk("div", "meta"); m.appendChild(mk("span", "", "by " + it.author)); m.appendChild(mk("span", "", "설치 " + it.installs)); m.appendChild(mk("span", "likes", "♥ " + it.likes)); c.appendChild(m);
+    var acts = mk("div", "acts");
+    acts.appendChild(mkAct("이 구성으로 방 만들기", function () {
+      mkApi("/api/gallery/" + it.id + "/install", {}).then(function (j) { if (!j._ok) { $("mkmsg").textContent = j.error || "설치하지 못했습니다."; return; } $("market").hidden = true; startFromAsset(j.asset); });
+    }, "primary"));
+    acts.appendChild(mkAct((it.liked ? "♥ 취소" : "♡ 좋아요"), function () { mkApi("/api/gallery/" + it.id + "/like", {}).then(function () { loadMarket(); }); }));
+    if (it.mine) acts.appendChild(mkAct("삭제", function () { mkApi("/api/gallery/" + it.id + "/delete", {}).then(function () { loadMarket(); }); }));
+    else acts.appendChild(mkAct("신고", function () { mkApi("/api/gallery/" + it.id + "/report", { reason: "user" }).then(function () { toast("신고했어요. 검토 전까지 다른 사용자에게 숨김 처리될 수 있어요."); }); }));
+    c.appendChild(acts); return c;
+  }
+  function loadMarket() {
+    var q = encodeURIComponent($("mkq").value || "");
+    mkApi("/api/gallery?sort=" + mkSort + "&q=" + q).then(function (j) {
+      var list = $("mklist"), feat = $("mkfeat"); list.textContent = ""; feat.textContent = ""; $("mkmsg").textContent = "";
+      if (!j._ok) { $("mkmsg").textContent = j._st === 401 ? "로그인한 뒤에 이용할 수 있어요." : (j.error || "불러오지 못했습니다."); return; }
+      var f = j.items.filter(function (i) { return i.id === j.featured; })[0]; if (f && !$("mkq").value) feat.appendChild(mkCard(f, true));
+      j.items.forEach(function (i) { list.appendChild(mkCard(i, false)); });
+      if (!j.items.length) $("mkmsg").textContent = "아직 게시된 에셋이 없어요. 방을 만들고 정보 패널 → 에셋 탭에서 첫 에셋을 올려 보세요.";
+    });
+  }
+  function startFromAsset(a) {
+    if (joined || ws || inRoomUrl) goHome(); setView("main");
+    pendingAsset = a; var r = document.querySelector('input[name="jmode"][value="asset"]'); r.checked = true; r.dispatchEvent(new Event("change")); showJoinAsset(); toast("에셋을 불러왔어요. 이름을 입력하고 입장하세요.");
+  }
+  $("marketbtn").addEventListener("click", function () { $("market").hidden = false; loadMarket(); });
+  $("mkback").addEventListener("click", function () { $("market").hidden = true; });
+  $("mkq").addEventListener("input", function () { clearTimeout(loadMarket.t); loadMarket.t = setTimeout(loadMarket, 250); });
+  document.querySelectorAll(".seg2 button").forEach(function (b) { b.addEventListener("click", function () { mkSort = b.dataset.sort; document.querySelectorAll(".seg2 button").forEach(function (x) { x.setAttribute("aria-current", x === b ? "true" : "false"); }); loadMarket(); }); });
+  $("pubgo").addEventListener("click", function () {
+    $("pubmsg").textContent = "";
+    mkApi("/api/gallery", { room: roomId, desc: $("pubdesc").value, premium: $("pubpremium").checked }).then(function (j) { $("pubmsg").textContent = j._ok ? (j.updated ? "마켓의 내 에셋을 갱신했어요." : "마켓에 게시했어요!") : (j.error || "게시하지 못했습니다."); if (j._ok) $("pubdesc").value = ""; });
+  });
+  function renderPub() {
+    var isOwner = !!(authUser && youOwner), plus = !!(credits && credits.plan === "plus");
+    $("pubgo").disabled = !isOwner; $("pubdesc").disabled = !isOwner; $("pubprem").hidden = !plus;
+    $("pubhint").textContent = !authUser ? "로그인하면 내 방 구성을 마켓에 올릴 수 있어요." : !isOwner ? "내가 만든 방에서만 게시할 수 있어요." : "내 방 구성(AI, 규칙, 시작 문서)을 마켓에 올려 다른 사람이 쓰게 할 수 있어요. 대화 내용과 API 키는 올라가지 않아요. 무료는 1개, 플러스는 10개까지.";
+  }
+  var youOwner = true;
+  function renderMemory(text) {
+    $("memtext").value = text || "";
+    $("memhint").textContent = meta && meta.autoMemory ? "대화가 길어지면 AI가 자동으로 요약해 기억해요. (플러스)" : "자동 요약은 플러스에서 켜져요. 여기에 직접 적어 두면 모든 AI가 참고해요.";
+  }
+  $("memsave").addEventListener("click", function () { send({ t: "memory", text: $("memtext").value }); toast("방 기억을 저장했어요"); });
+  $("memclear").addEventListener("click", function () { $("memtext").value = ""; send({ t: "memory", text: "" }); });
+
   /* ---- 내장 도구 (전부 브라우저 안에서만 실행) ---- */
   var TOOLS = {
     json: function (box) {
@@ -1601,9 +1722,9 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       me = m.you; joined = true;
       $("entrypane").hidden = true; $("room").hidden = false; setView("main");
       $("log").textContent = ""; last = null; lastDay = ""; m.messages.forEach(addMessage);
-      $("doc").value = m.doc || ""; deliv = m.deliv || null; dmThreads = m.dms || {}; aidms = m.aidms || [];
+      $("doc").value = m.doc || ""; deliv = m.deliv || null; dmThreads = m.dms || {}; aidms = m.aidms || []; credits = m.credits || credits; youOwner = m.youOwner !== false; renderCredits(); renderPub(); loadMyRooms();
       if (wide()) $("shell").dataset.info = "1";
-      renderMeta(m); renderRooms(); if (!matchMedia("(pointer:coarse)").matches) $("text").focus();
+      renderMeta(m); renderMemory(m.memory); renderRooms(); if (!matchMedia("(pointer:coarse)").matches) $("text").focus();
     } else if (m.t === "meta") { renderMeta(m); }
     else if (m.t === "msg") {
       dropTyping(); addMessage(m.msg);
@@ -1619,6 +1740,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       if (m.msg.kind === "ai") { if (dmOpen !== m.aiId) { dmUnread[m.aiId] = true; toast((dai ? dai.name : "AI") + "님이 귓속말을 보냈어요"); } }
       if (dmOpen === m.aiId) renderDM(); renderInbox();
     }
+    else if (m.t === "credits") { credits = m.credits; renderCredits(); renderPub(); }
+    else if (m.t === "memory") { renderMemory(m.text); if (m.auto) toast("방 기억이 갱신됐어요"); }
     else if (m.t === "aidms") {
       var grew = JSON.stringify(m.list).length > JSON.stringify(aidms).length; aidms = m.list || [];
       if (grew && peekOpen < 0) { dmUnread.peek = true; toast("AI끼리 몰래 쪽지를 주고받았어요 · 엿보기"); }

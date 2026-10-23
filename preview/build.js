@@ -11,6 +11,7 @@ const shim=`<script>
   function fakeRequire(n){
     if(n==='http')return{createServer:function(){return{listen:function(){},on:function(){}}}};
     if(n==='fs')return{readFile:function(){},readFileSync:function(){return''},existsSync:function(){return false}};
+    if(n==='./store')return{createStore:function(){return{enabled:false,read:function(){return null},write:function(){},remove:function(){},list:function(){return[]}}}};
     if(n==='path')return{join:function(){return[].slice.call(arguments).join('/')},resolve:function(){return''},extname:function(){return''}};
     if(n==='crypto')return{randomBytes:function(k){var h='';for(var i=0;i<k*2;i++)h+='0123456789abcdef'[Math.floor(Math.random()*16)];return{toString:function(){return h}}}};
     if(n==='ws')return{WebSocketServer:function(){return{on:function(ev,fn){if(ev==='connection')handlers=fn}}}};
