@@ -1,0 +1,36 @@
+# main에 푸시할 때마다 데모 사이트를 다시 빌드해 GitHub Pages에 배포한다.
+# 사용 전 1회: 저장소 Settings → Pages → Source 를 "GitHub Actions"로 설정.
+name: Deploy demo site
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build demo (server.js runs inside the page, demo AI replies only)
+        run: |
+          mkdir -p _site
+          node preview/build.js _site/index.html
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
