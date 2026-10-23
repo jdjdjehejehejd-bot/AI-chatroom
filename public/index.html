@@ -130,7 +130,7 @@ label.lb { display:block; font-size:12px; font-weight:700; margin:14px 0 6px; co
 .loaded { padding:12px; border-radius:12px; border:1px solid var(--accent); background:var(--accent-soft); }
 .loaded b { display:block; }
 .loaded small { display:block; color:var(--muted); font-size:12px; }
-.cast { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.ainotes{margin:-4px 0 10px 44px;padding:8px 10px;border-radius:10px;background:var(--panel2,rgba(127,127,127,.1));font-size:12.5px}.ainotes ul{margin:6px 0;padding-left:18px}.cast { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .cm { display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:2px 10px 2px 3px; border-radius:999px; background:var(--sf, var(--h-sf)); color:var(--tx, var(--ink)); }
 .cm .av { width:20px; height:20px; font-size:10px; }
 .err { margin-top:10px; padding:9px 12px; border-radius:10px; background:var(--err-sf); color:var(--err-tx); font-size:13px; }
@@ -846,7 +846,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     ROLE_KO.forEach(function (k) { var d = _t(k); if (d === k) return; var from = toLocal ? k : d, to = toLocal ? d : k; text = text.replace(new RegExp("@" + escRe(from) + "(?![\\p{L}\\p{N}_])", "gu"), "@" + to); });
     return text;
   }
-  var jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
+  var notesOpen = {}, jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
   var aidms = [], peekOpen = -1, dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typingWho = "", msgIndex = {}, lastTap = { id: 0, t: 0 };
   var POLNAME = { mention: _t("@멘션했을 때만"), round: _t("순서대로"), free: _t("AI가 알아서 판단") };
   var LIVE = ["anthropic", "openai", "openrouter", "groq", "google", "mistral", "nvidia"];
@@ -1512,7 +1512,20 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       var mt = mk("button", "btn sm", ai.muted ? _t("뮤트 해제") : _t("뮤트")); mt.type = "button"; mt.dataset.mute = ai.id; mt.setAttribute("aria-pressed", ai.muted ? "true" : "false");
       mt.addEventListener("click", function () { send({ t: "mute", aiId: ai.id, muted: !ai.muted }); });
       if (ai.muted) row.style.opacity = ".6";
-      row.appendChild(av); row.appendChild(nm); row.appendChild(mt); row.appendChild(rm); box.appendChild(row);
+      row.appendChild(av); row.appendChild(nm);
+      if (ai.notes && ai.notes.length) {
+        var nb = mk("button", "btn sm", _t("기억 {n}", { n: ai.notes.length })); nb.type = "button"; nb.dataset.notes = ai.id; nb.setAttribute("aria-expanded", notesOpen[ai.id] ? "true" : "false");
+        nb.addEventListener("click", function () { notesOpen[ai.id] = !notesOpen[ai.id]; renderMeta(meta); });
+        row.appendChild(nb);
+      }
+      row.appendChild(mt); row.appendChild(rm); box.appendChild(row);
+      if (ai.notes && ai.notes.length && notesOpen[ai.id]) {
+        var nl = mk("div", "ainotes"); nl.appendChild(mk("small", "", _t("이 AI가 스스로 적어 둔 기억입니다. 다음 발언에 참고 자료로만 쓰입니다.")));
+        var ul = mk("ul", ""); ai.notes.forEach(function (t) { ul.appendChild(mk("li", "", t)); }); nl.appendChild(ul);
+        var cl = mk("button", "btn sm", _t("기억 지우기")); cl.type = "button"; cl.dataset.clearnotes = ai.id;
+        cl.addEventListener("click", function () { send({ t: "clearNotes", id: ai.id }); });
+        nl.appendChild(cl); box.appendChild(nl);
+      }
     });
     var chips = $("chips"); chips.textContent = "";
     if (!s.mode) s.ais.forEach(function (ai) {

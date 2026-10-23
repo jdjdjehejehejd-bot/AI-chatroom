@@ -665,3 +665,8 @@ API 키는 공백 없이, 제공사를 직접 골랐을 때만 입력할 수 있
 새 앱 이름으로 둘 중 무엇이 나을까? || Which of two names is better for a new app? || 新アプリの名前、どちらがいい？ || 新应用的名字，两个里选哪个好？ || ¿Cuál de dos nombres es mejor para una app nueva?
 갈리는 쟁점 하나를 더 깊이 따져줘 || Dig deeper into one of the disputed issues. || 分かれる争点を1つもっと深く検討して。 || 请更深入地分析一个有分歧的争点。 || Profundiza en uno de los temas en disputa.
 내 상황 기준으로 다시 판정해줘 || Judge again based on my situation. || 私の状況を基準にもう一度判定して。 || 请按我的情况重新裁决。 || Vuelve a juzgar según mi situación.
+
+# ── AI 개인 메모 ──
+기억 {n} || Memory {n} || 記憶 {n} || 记忆 {n} || Memoria {n}
+기억 지우기 || Clear memory || 記憶を消す || 清除记忆 || Borrar memoria
+이 AI가 스스로 적어 둔 기억입니다. 다음 발언에 참고 자료로만 쓰입니다. || Notes this AI wrote for itself. They are used only as reference for its next replies. || このAIが自分で書き留めた記憶です。次の発言の参考資料としてのみ使われます。 || 这是该 AI 自己记下的内容，仅在下次发言时作为参考资料。 || Notas que esta IA escribió para sí misma. Solo se usan como referencia en sus próximas respuestas.
