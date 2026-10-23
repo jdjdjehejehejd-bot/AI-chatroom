@@ -154,3 +154,11 @@ npm start          # http://localhost:3000
 - **내 데이터 내려받기**: `GET /api/export` (설정 → 계정).
 - **영구 저장**: `DATA_DIR`(원자적 쓰기, 손상된 JSON은 `.corrupt-<시각>`으로 격리 후 계속 기동), 종료 신호 때 즉시 flush, 3초 디바운스. `Dockerfile`+`render.yaml`은 `/data` 영구 디스크를 마운트한다. `scripts/backup.sh`를 cron으로 돌리고 `KEEP`(기본 14일)을 방침에 적은 보관 주기와 맞춘다. `/healthz`는 헬스체크용.
 - **Play 정책 체크**: ① 앱 안 신고·차단(UGC) ✔ ② 개인정보처리방침 URL `/privacy` ✔ ③ 계정 삭제 URL `/delete-account` ✔ ④ AI 생성물 신고 ✔ — 데이터 보안 양식(Data safety)은 방침 내용과 일치하게 직접 작성해야 한다.
+
+## 완성도 기능 (앱처럼 쓰기)
+- **PWA·설치**: 매니페스트·서비스워커(앱 셸만 캐시, 대화·API는 캐시 안 함)·아이콘. 출시 절차는 `docs/PLAY.md`.
+- **자동 재접속**: 네트워크가 끊기거나 서버가 재시작되면 "다시 연결하는 중…" 표시 후 지수 백오프로 재접속, 방 상태를 복원한다.
+- **내 메시지 삭제**: ⋯ → 삭제(방장은 모든 사람 메시지 삭제 가능). 모든 참가자 화면과 저장본에서 사라진다.
+- **보안 헤더**: CSP(프레임 금지 포함), nosniff, Referrer-Policy, Permissions-Policy, HTTPS에서 HSTS. IP당 동시 접속 제한(`MAX_WS_PER_IP`).
+- **운영자 화면** `/admin`: 신고 확인·처리.
+- 탭이 백그라운드일 때 제목에 새 메시지 수 `(n)` 표시.

@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#D63F27">
+<meta name="theme-color" content="#4F46E5">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
 <title>AI 채팅방</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -432,6 +436,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 #joinform.gated #jgo{opacity:.45}
 .consent{display:flex;gap:8px;align-items:flex-start;margin-top:18px;font-size:13px;color:var(--muted);line-height:1.5}
 .consent input{margin-top:3px;flex:none}.consent a,.legalfoot a{color:var(--accent-text);text-decoration:underline}
+.netbar{position:fixed;left:0;right:0;top:0;z-index:70;background:var(--warn-sf);color:var(--warn-tx);text-align:center;font-size:13px;padding:calc(6px + env(safe-area-inset-top,0px)) 12px 6px;border-bottom:1px solid var(--edge)}
 .legalfoot{margin-top:16px;font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
 .mm{position:absolute;opacity:0;border:0;background:transparent;color:var(--muted);font-size:16px;line-height:1;padding:4px 6px;border-radius:8px;cursor:pointer}
 .row:hover .mm,.mm:focus,.row.mmon .mm{opacity:1}
@@ -830,9 +835,12 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 
   function mk(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function rand(n) { var s = "", c = "abcdefghjkmnpqrstuvwxyz23456789"; for (var i = 0; i < n; i++) s += c[Math.floor(Math.random() * c.length)]; return s; }
+  var unread = 0;
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { unread = 0; document.title = "AI 채팅방"; } });
+  if ("serviceWorker" in navigator && /^(https:|http:\/\/(localhost|127\.0\.0\.1))/.test(location.protocol + "//" + location.host)) { try { navigator.serviceWorker.register("/sw.js").catch(function () {}); } catch (e) {} }
   function alert_(t) { toast(t); }
   function toast(t) { var el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.hidden = true; }, 3500); }
-  function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+  function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); else if (joined && o.t !== "typing") toast("연결이 끊겨 보내지 못했어요. 다시 연결되면 보내 주세요."); }
   function colorOf(name) { if (!(name in colors)) colors[name] = colorCount++ % 6; return colors[name]; }
   function hue(name) { var h = 0; for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360; return h; }
   function humanStyle(el, name) { var h = hue(name); el.style.setProperty("--av", "hsl(" + h + " 38% 46%)"); el.style.setProperty("--av2", "hsl(" + ((h + 30) % 360) + " 45% 56%)"); }
@@ -931,7 +939,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     $("log").textContent = ""; $("status").textContent = ""; $("text").value = ""; $("doc").value = ""; autosize(); closeInfo(); setTab("ai");
   }
   function goHome() {
-    if (ws) { ws.onclose = null; ws.onerror = null; try { ws.close(); } catch (e) {} ws = null; }
+    clearTimeout(retryTimer); netbar(""); if (ws) { ws.onclose = null; ws.onerror = null; try { ws.close(); } catch (e) {} ws = null; }
     resetRoomState(); roomId = ""; inRoomUrl = false; pendingAsset = null; showJoinAsset(); jmode = ""; document.querySelector('input[name="jmode"][value=""]').checked = true;
     try { history.replaceState(null, "", location.pathname); } catch (e) {}
     $("room").hidden = true; $("entrypane").hidden = false; document.title = "AI 채팅방";
@@ -1071,12 +1079,27 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     store("consent", "1"); store("nick", name);
     if (!inRoomUrl) { roomId = rand(6); try { history.replaceState(null, "", "?room=" + roomId); } catch (e) {} }
     $("jgo").disabled = true; joinErr("");
-    ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
-    ws.onopen = function () { var j = { t: "join", room: roomId, name: name, key: dmKey(), consent: true }; if (!inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; } send(j); };
-    ws.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (x) { return; } onMsg(m); };
-    ws.onclose = function () { if (joined) toast("연결이 끊어졌습니다. 새로고침하세요."); else $("jgo").disabled = false; };
-    ws.onerror = function () { joinErr("서버에 연결하지 못했습니다."); $("jgo").disabled = false; };
+    connect(name, true);
   }
+  var lastName = "", retry = 0, retryTimer = null, firstJoin = null;
+  function netbar(t) { var b = $("netbar"); if (!t) { if (b) b.remove(); return; } if (!b) { b = mk("div", "netbar"); b.id = "netbar"; b.setAttribute("role", "status"); document.body.appendChild(b); } b.textContent = t; }
+  function connect(name, fresh) {
+    lastName = name; clearTimeout(retryTimer);
+    var sock = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws"); ws = sock;
+    sock.onopen = function () {
+      var j = { t: "join", room: roomId, name: name, key: dmKey(), consent: true };
+      if (fresh && !inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; }
+      send(j);
+    };
+    sock.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (x) { return; } if (m.t === "state") { retry = 0; netbar(""); } onMsg(m); };
+    sock.onclose = function () {
+      if (ws !== sock) return;
+      if (joined) { netbar("연결이 끊어졌어요. 다시 연결하는 중…"); retry++; retryTimer = setTimeout(function () { if (joined) connect(lastName, false); }, Math.min(15000, 800 * Math.pow(1.7, retry))); }
+      else $("jgo").disabled = false;
+    };
+    sock.onerror = function () { if (!joined) { joinErr("서버에 연결하지 못했습니다."); $("jgo").disabled = false; } };
+  }
+  window.addEventListener("online", function () { if (joined && ws && ws.readyState !== 1 && ws.readyState !== 0) { clearTimeout(retryTimer); connect(lastName, false); } });
   $("joinform").addEventListener("submit", function (e) { e.preventDefault(); if (authCfg.required && !authUser) { joinErr("로그인한 뒤에 시작할 수 있어요."); return; } go(); });
 
   /* 메시지 렌더 (같은 사람이 연속으로 보낸 말은 묶는다) */
@@ -1295,7 +1318,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       col.appendChild(heartChip(m));
       col.appendChild(mk("div", "time", fmtTime(ts)));
       b.addEventListener("click", function () { tapHeart(m, b); });
-      if (!mine && m.id) { var mmb = mk("button", "mm", "⋯"); mmb.type = "button"; mmb.setAttribute("aria-label", "신고·차단 메뉴"); mmb.addEventListener("click", function (e) { e.stopPropagation(); openMsgMenu(m, row); }); col.appendChild(mmb); }
+      if (m.id) { var mmb = mk("button", "mm", "⋯"); mmb.type = "button"; mmb.setAttribute("aria-label", "신고·차단 메뉴"); mmb.addEventListener("click", function (e) { e.stopPropagation(); openMsgMenu(m, row); }); col.appendChild(mmb); }
       if (ai) {
         av.style.cursor = "pointer"; av.addEventListener("click", function () { var a = aiByName(m.who); if (a) openProfile(a.id); });
         var nmEl = col.querySelector(".name span"); if (nmEl) { nmEl.style.cursor = "pointer"; nmEl.addEventListener("click", function () { var a = aiByName(m.who); if (a) openProfile(a.id); }); }
@@ -1323,7 +1346,10 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   }
   function openMsgMenu(m, row) {
     row.classList.add("mmon");
-    var human = m.kind === "human", opts = [];
+    var human = m.kind === "human", mineMsg = human && m.who === me, opts = [];
+    var canDel = mineMsg || (youOwner && authUser && joined);
+    if (canDel) opts.push({ label: "메시지 삭제", danger: true, run: function () { send({ t: "delmsg", id: m.id }); } });
+    if (mineMsg) { openSheet("내 메시지", "", opts); return; }
     opts.push({ label: "이 메시지 신고", run: function () {
       openSheet("신고 사유", "운영자가 확인합니다. 신고한 메시지는 내 화면에서 숨겨져요.", REASONS.map(function (r) { return { label: r[1], run: function () { send({ t: "report", id: m.id, reason: r[0] }); } }; }));
     } });
@@ -1788,6 +1814,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     } else if (m.t === "meta") { renderMeta(m); }
     else if (m.t === "msg") {
       dropTyping(); addMessage(m.msg);
+      if (document.hidden && m.msg.kind !== "system" && m.msg.who !== me) { unread++; document.title = "(" + unread + ") AI 채팅방"; }
       if (m.msg.kind === "ai" && meta && meta.plan.ads && meta.adList.length && ++aiShown % 4 === 0) insertAd(meta.adList[(aiShown / 4 - 1) % meta.adList.length]);
       if (m.msg.kind === "ai" && errAI && errAI.name === m.msg.who) { errAI = null; renderStatus(); }
       if (m.msg.code === "BUDGET_EXHAUSTED") { budgetAlert = true; renderStatus(); }
@@ -1833,10 +1860,11 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       }
     }
     else if (m.t === "doc") { if (document.activeElement !== $("doc")) $("doc").value = m.text; }
+    else if (m.t === "msgdel") { hideMsgLocal(m.id); }
     else if (m.t === "reported") { hideMsgLocal(m.id); toast("신고했어요. 검토 후 조치합니다."); }
     else if (m.t === "blocked") { renderBlocked(m.list); if (m.name) { dropFromLog(m.name); toast(m.name + " 님을 차단했어요"); } else toast("차단을 해제했어요. 다시 입장하면 이전 메시지가 보여요."); }
     else if (m.t === "err") {
-      if (m.code === "KICKED" || m.code === "ROOM_DELETED") { joined = false; try { history.replaceState(null, "", location.pathname); } catch (e) {} alert_(m.text); setTimeout(function () { location.href = location.pathname; }, 1200); return; }
+      if (m.code === "KICKED" || m.code === "ROOM_DELETED" || m.code === "TOO_MANY") { joined = false; try { history.replaceState(null, "", location.pathname); } catch (e) {} alert_(m.text); setTimeout(function () { location.href = location.pathname; }, 1200); return; }
       if (m.code === "CONSENT_REQUIRED") { $("jconsent").checked = false; }
       if (!joined) { joinErr(m.text); $("jgo").disabled = false; } else toast(m.text);
     }

@@ -9,6 +9,7 @@ const http = require('http');
 const crypto = require('crypto');
 const { createStore } = require('./store');
 const legal = require('./legal');
+const adminPage = require('./admin');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
@@ -76,6 +77,8 @@ async function verifyGoogleIdToken(token) {
   if (typeof pay.sub !== 'string' || !pay.sub) throw new Error('계정 정보가 없습니다.');
   return { sub: pay.sub, name: String(pay.name || pay.given_name || '사용자'), pic: /^https:\/\//.test(pay.picture || '') ? pay.picture : '' };
 }
+const TRUST_PROXY = process.env.TRUST_PROXY === '1';
+const clientIp = req => !req || !req.headers ? 'local' : (TRUST_PROXY && String(req.headers['x-forwarded-for'] || '').split(',').pop().trim()) || (req.socket && req.socket.remoteAddress) || '';
 const authHits = new Map();
 function authLimited(ip) {
   const now = Date.now(), h = (authHits.get(ip) || []).filter(t => now - t < 60000);
@@ -1251,6 +1254,18 @@ function handle(ws, m) {
       system(room, name + ' 님이 ' + ai.name + '을(를) ' + (ai.muted ? '뮤트했습니다. 단체방에서 말하지 않습니다(귓속말은 가능).' : '뮤트 해제했습니다.'), 'AI_MUTE');
       return broadcast(room, meta(room));
     }
+    case 'delmsg': {
+      const i = room.messages.findIndex(x => x.id === Number(m.id));
+      const msg = room.messages[i];
+      if (!msg || msg.kind === 'system') return send(ws, { t: 'err', text: '삭제할 메시지를 찾지 못했습니다.' });
+      const owner = !!(room.ownerSub && ws.user && ws.user.sub === room.ownerSub);
+      const mine = msg.kind === 'human' && (msg._sub ? !!(ws.user && ws.user.sub === msg._sub) : (!ws.user && msg.who === name));
+      if (!owner && !mine) return send(ws, { t: 'err', text: '내가 보낸 메시지(또는 방장)만 삭제할 수 있습니다.' });
+      room.messages.splice(i, 1);
+      for (const c of room.clients) send(c, { t: 'msgdel', id: msg.id });
+      room.lastActive = Date.now(); dirty.add(room.id);
+      return;
+    }
     case 'report': {
       const msg = room.messages.find(x => x.id === Number(m.id));
       if (!msg || msg.kind === 'system') return send(ws, { t: 'err', text: '신고할 메시지를 찾지 못했습니다.' });
@@ -1316,8 +1331,25 @@ function sharePage(r) {
     'iframe{flex:1;border:0;width:100%;background:#fff}pre{flex:1;margin:0;padding:16px;overflow:auto;white-space:pre-wrap;background:#fff}.chat{flex:1;overflow:auto;padding:16px;max-width:720px;width:100%;margin:0 auto;box-sizing:border-box}' +
     '.m{background:#fff;border-radius:14px;padding:10px 14px;margin-bottom:10px}.m.ai{background:#eeedfd}.m p{margin:4px 0 0;white-space:pre-wrap;word-break:break-word}</style></head><body>' + bar + body + '</body></html>';
 }
+const PAGE_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' ws: wss: https://accounts.google.com; frame-src https://accounts.google.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; worker-src 'self'; manifest-src 'self'";
+const STATIC = { '/manifest.webmanifest': ['application/manifest+json', 3600], '/sw.js': ['text/javascript; charset=utf-8', 0], '/icon.svg': ['image/svg+xml', 86400], '/icon-192.png': ['image/png', 86400], '/icon-512.png': ['image/png', 86400], '/icon-maskable-512.png': ['image/png', 86400] };
 const server = http.createServer((req, res) => {
   const u = req.url.split('?')[0];
+  res.setHeader('x-content-type-options', 'nosniff'); res.setHeader('referrer-policy', 'same-origin'); res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  if (COOKIE_SECURE || req.headers['x-forwarded-proto'] === 'https') res.setHeader('strict-transport-security', 'max-age=15552000');
+  if (STATIC[u] && req.method === 'GET') {
+    return fs.readFile(path.join(__dirname, 'public', u.slice(1)), (e, b) => {
+      if (e) { res.writeHead(404); return res.end('not found'); }
+      res.writeHead(200, { 'content-type': STATIC[u][0], 'cache-control': STATIC[u][1] ? 'public, max-age=' + STATIC[u][1] : 'no-cache', 'service-worker-allowed': '/' }); res.end(b);
+    });
+  }
+  if (u === '/.well-known/assetlinks.json' && req.method === 'GET') {
+    const pkg = process.env.ANDROID_PACKAGE || '', fp = (process.env.ANDROID_SHA256 || '').split(',').map(x => x.trim()).filter(Boolean);
+    if (!pkg || !fp.length) { res.writeHead(404); return res.end('not configured'); }
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'public, max-age=3600' });
+    return res.end(JSON.stringify([{ relation: ['delegate_permission/common.handle_all_urls'], target: { namespace: 'android_app', package_name: pkg, sha256_cert_fingerprints: fp } }]));
+  }
+  if (u === '/admin' && req.method === 'GET') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" }); return res.end(adminPage); }
   const json = (code, o, hdr) => { res.writeHead(code, Object.assign({ 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, hdr || {})); res.end(JSON.stringify(o)); };
   const cookie = (v, age) => COOKIE_NAME + '=' + v + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + age + (COOKIE_SECURE || req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '');
   const secure = COOKIE_SECURE || req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
@@ -1428,7 +1460,7 @@ const server = http.createServer((req, res) => {
   if (u === '/auth/email/start' && req.method === 'POST') {
     if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' });
     if (!emailEnabled()) return json(404, { error: '이메일 로그인이 설정되지 않았습니다.' });
-    if (authLimited(req.socket.remoteAddress || '')) return json(429, { error: '잠시 뒤 다시 시도하세요.' });
+    if (authLimited(clientIp(req))) return json(429, { error: '잠시 뒤 다시 시도하세요.' });
     return readBody(req, 2048).then(async b => {
       let email = ''; try { email = normEmail(JSON.parse(b).email); } catch (e) {}
       if (!email) return json(400, { error: '이메일 주소를 확인하세요.' });
@@ -1443,7 +1475,7 @@ const server = http.createServer((req, res) => {
   }
   if (u === '/auth/email/verify' && req.method === 'POST') {
     if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' });
-    if (authLimited(req.socket.remoteAddress || '')) return json(429, { error: '잠시 뒤 다시 시도하세요.' });
+    if (authLimited(clientIp(req))) return json(429, { error: '잠시 뒤 다시 시도하세요.' });
     return readBody(req, 2048).then(b => {
       let email = '', code = ''; try { const j = JSON.parse(b); email = normEmail(j.email); code = String(j.code || '').trim(); } catch (e) {}
       const o = otps.get(email);
@@ -1487,7 +1519,7 @@ const server = http.createServer((req, res) => {
   }
   if (u === '/auth/google' && req.method === 'POST') {
     if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' });
-    if (authLimited(req.socket.remoteAddress || '')) return json(429, { error: '잠시 뒤 다시 시도하세요.' });
+    if (authLimited(clientIp(req))) return json(429, { error: '잠시 뒤 다시 시도하세요.' });
     return readBody(req, 8192).then(async b => {
       let cred = ''; try { cred = JSON.parse(b).credential; } catch (e) {}
       const g = await verifyGoogleIdToken(cred);
@@ -1507,14 +1539,18 @@ const server = http.createServer((req, res) => {
   if (u === '/') {
     return fs.readFile(PAGE, (e, b) => {
       if (e) { res.writeHead(500); return res.end('error'); }
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'content-security-policy': PAGE_CSP, 'x-frame-options': 'DENY' });
       res.end(b);
     });
   }
   res.writeHead(404); res.end('not found');
 });
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024, verifyClient: info => sameOrigin(info.req) });
+const wsPerIp = new Map(), WS_PER_IP = Number(process.env.MAX_WS_PER_IP) || 20;
 wss.on('connection', (ws, req) => {
+  const ip = clientIp(req), cnt = (wsPerIp.get(ip) || 0) + 1; wsPerIp.set(ip, cnt);
+  ws.on('close', () => { const c = (wsPerIp.get(ip) || 1) - 1; if (c <= 0) wsPerIp.delete(ip); else wsPerIp.set(ip, c); });
+  if (cnt > WS_PER_IP) { try { ws.send(JSON.stringify({ t: 'err', code: 'TOO_MANY', text: '이 네트워크에서 연결이 너무 많습니다. 잠시 뒤 다시 시도하세요.' })); } catch (e) {} return ws.close(); }
   ws.meta = null; ws.hits = []; ws.user = readSession(req && req.headers ? req.headers.cookie : "");
   ws.on('message', raw => { let m; try { m = JSON.parse(raw); } catch (e) { return; } handle(ws, m); });
   ws.on('close', () => leave(ws));
