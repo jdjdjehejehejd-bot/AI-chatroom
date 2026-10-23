@@ -7,7 +7,7 @@ with sync_playwright() as p:
     b=p.chromium.launch(args=["--no-sandbox"]); errs=[]
     A=b.new_page(locale="ko-KR", bypass_csp=True, viewport={"width":1280,"height":800}); A.on("pageerror",lambda e:errs.append(str(e)))
     A.goto(B1+"/")
-    check("mode cards present", A.locator("input[name=jmode]").count()==6 and not A.is_visible("#jassetbox"))
+    check("mode cards present", A.locator("input[name=jmode]").count()==7 and not A.is_visible("#jassetbox"))
     A.check("input[name=jmode][value=code]"); check("flow shown", "리뷰어" in A.inner_text("#jflow"))
     A.fill("#jname","Ben"); A.check("#jconsent",force=True); A.click("#jgo"); A.wait_for_selector("#room:not([hidden])")
     check("free: code room has 3 AIs", A.locator("#ais .ai-item").count()==3, A.locator("#ais .ai-item").count())

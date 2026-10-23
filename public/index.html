@@ -515,7 +515,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
         <div id="jmodes">
           <div class="eyebrow" style="margin-top:20px">모드</div>
           <div class="modes" role="radiogroup" aria-label="방 모드">
-            <label class="mode"><input type="radio" name="jmode" value="" checked><b>빈 방</b><span>AI를 직접 초대</span></label>
+            <label class="mode"><input type="radio" name="jmode" value="free" checked><b>자유 방</b><span>역할 없는 AI들과 자유롭게 대화하고 일도 맡겨요</span></label>
+            <label class="mode"><input type="radio" name="jmode" value=""><b>빈 방</b><span>AI를 직접 초대</span></label>
             <label class="mode"><input type="radio" name="jmode" value="code"><b>Code</b><span>설계·구현·리뷰로 코드 완성</span></label>
             <label class="mode"><input type="radio" name="jmode" value="brainstorm"><b>Brainstorm</b><span>발산·비판·정리로 아이디어</span></label>
             <label class="mode"><input type="radio" name="jmode" value="make"><b>Make</b><span>웹사이트·보고서·PPT 제작</span></label>
@@ -613,8 +614,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
             <form id="aiform">
               <label class="lb" for="ainame" style="margin-top:0">이름</label>
               <input class="field" id="ainame" maxlength="12" placeholder="예: 번역가" autocomplete="off">
-              <label class="lb" for="aipersona">역할 / 성격</label>
-              <input class="field" id="aipersona" maxlength="200" placeholder="예: 모든 말을 영어로 옮겨주는 AI" autocomplete="off">
+              <label class="lb" for="aipersona">역할 / 성격 (비우면 자유 AI)</label>
+              <input class="field" id="aipersona" maxlength="200" placeholder="비워 두면 정해진 역할 없이 스스로 말투를 만들어요. 예: 모든 말을 영어로 옮겨주는 AI" autocomplete="off">
               <label class="lb" for="aiprov">AI 제공사</label>
               <select class="field" id="aiprov">
                 <option value="free">무료 모델 (키 필요 없음)</option>
@@ -846,7 +847,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     ROLE_KO.forEach(function (k) { var d = _t(k); if (d === k) return; var from = toLocal ? k : d, to = toLocal ? d : k; text = text.replace(new RegExp("@" + escRe(from) + "(?![\\p{L}\\p{N}_])", "gu"), "@" + to); });
     return text;
   }
-  var notesOpen = {}, jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
+  var notesOpen = {}, jmode = "free", deliv = null, dview = "preview", dhist = [], viewVer = null;
   var aidms = [], peekOpen = -1, dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typingWho = "", msgIndex = {}, lastTap = { id: 0, t: 0 };
   var POLNAME = { mention: _t("@멘션했을 때만"), round: _t("순서대로"), free: _t("AI가 알아서 판단") };
   var LIVE = ["anthropic", "openai", "openrouter", "groq", "google", "mistral", "nvidia"];
@@ -918,7 +919,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     for (var i = 0; i < d.ais.length; i++) {
       var a = d.ais[i] || {};
       if (typeof a.name !== "string" || !/^[^\s@]{1,12}$/.test(a.name)) return { error: _t("{n}번째 AI 이름은 공백·@ 없이 12자 이내여야 합니다.", { n: i + 1 }) };
-      if (typeof a.persona !== "string" || !a.persona.trim() || a.persona.length > 200) return { error: _t("{name}의 persona({n}자 이내)가 필요합니다.", { name: a.name, n: 200 }) };
+      if (typeof a.persona !== "string" || a.persona.length > 200) return { error: _t("{name}의 persona({n}자 이내)가 필요합니다.", { name: a.name, n: 200 }) };
       if (seen[a.name]) return { error: _t("AI 이름이 중복됩니다: {name}", { name: a.name }) };
       seen[a.name] = 1;
     }
@@ -1135,7 +1136,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var sock = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws"); ws = sock;
     sock.onopen = function () {
       var j = { t: "join", room: roomId, name: name, key: dmKey(), consent: true };
-      if (fresh && !inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; }
+      if (fresh && !inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; else if (jmode === "free") j.free = { names: [_t("모아"), _t("나루")] }; }
       send(j);
     };
     sock.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (x) { return; } if (m.t === "state") { retry = 0; netbar(""); } onMsg(m); };
@@ -1232,7 +1233,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     por.appendChild(tools); body.appendChild(por);
     var nm = mk("div", "pfname"); nm.appendChild(document.createTextNode(dn(ai.name))); nm.appendChild(mk("span", "tag", "AI")); body.appendChild(nm);
     body.appendChild(mk("div", "pfhandle", "@" + dn(ai.name)));
-    var role = mk("div", "pfrole"); role.appendChild(mk("small", "", _t("배역"))); role.appendChild(mk("p", "", _tx(ai.persona))); body.appendChild(role);
+    var role = mk("div", "pfrole"); role.appendChild(mk("small", "", _t("배역"))); role.appendChild(mk("p", "", ai.persona ? _tx(ai.persona) : _t("자유 AI · 정해진 역할 없이 대화하며 스스로 말투와 관계를 만듭니다."))); body.appendChild(role);
     var stats = mk("div", "pfstats");
     [[st, _t("대사")], [sparks, _t("받은 ✦")], [th.filter(function (m) { return m.kind !== "system"; }).length, _t("귓속말")]].forEach(function (x) { var d = mk("div"); d.appendChild(mk("b", "", String(x[0]))); d.appendChild(mk("span", "", x[1])); stats.appendChild(d); });
     body.appendChild(stats);
@@ -1506,7 +1507,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       var row = mk("div", "ai-item c" + colorOf(ai.name)), av = mk("div", "av", dn(ai.name).charAt(0)); av.setAttribute("aria-hidden", "true");
       var nm = mk("div", "nm"); nm.appendChild(mk("b", "", dn(ai.name)));
       var via = ai.provider && ai.provider !== "default" ? ai.provider + (ai.model ? "/" + ai.model : "") + (ai.ownKey ? " · " + _t("개인 키") : "") + " · " : "";
-      nm.appendChild(mk("small", "", via + _tx(ai.persona)));
+      nm.appendChild(mk("small", "", via + (ai.persona ? _tx(ai.persona) : _t("자유 AI"))));
       var rm = mk("button", "btn sm", _t("내보내기")); rm.type = "button"; rm.setAttribute("aria-label", _t("{name} 내보내기", { name: dn(ai.name) }));
       rm.addEventListener("click", function () { send({ t: "removeAI", id: ai.id }); });
       var mt = mk("button", "btn sm", ai.muted ? _t("뮤트 해제") : _t("뮤트")); mt.type = "button"; mt.dataset.mute = ai.id; mt.setAttribute("aria-pressed", ai.muted ? "true" : "false");
@@ -1768,7 +1769,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     if (feat) c.appendChild(mk("span", "badge-prem", _t("오늘의 에셋")));
     if (it.premium) c.appendChild(mk("span", "badge-prem", _t("플러스 전용")));
     c.appendChild(mk("h4", "", it.name)); c.appendChild(mk("p", "", it.desc));
-    var tags = mk("div", "tags"); it.ais.forEach(function (a) { var t = mk("span", "", dn(a.name)); t.title = _tx(a.persona); tags.appendChild(t); }); c.appendChild(tags);
+    var tags = mk("div", "tags"); it.ais.forEach(function (a) { var t = mk("span", "", dn(a.name)); t.title = a.persona ? _tx(a.persona) : _t("자유 AI"); tags.appendChild(t); }); c.appendChild(tags);
     var m = mk("div", "meta"); m.appendChild(mk("span", "", "by " + it.author)); m.appendChild(mk("span", "", _t("설치 {n}", { n: it.installs }))); m.appendChild(mk("span", "likes", "♥ " + it.likes)); c.appendChild(m);
     var acts = mk("div", "acts");
     acts.appendChild(mkAct(_t("이 구성으로 방 만들기"), function () {
