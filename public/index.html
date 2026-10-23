@@ -835,6 +835,15 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     brainstorm: { label: "Brainstorm", desc: "발산 → 비판 → 정리", flow: ["발산자", "비평가", "(조합가)", "정리자"] },
     make: { label: "Make", desc: "기획 → 작성 → 편집", flow: ["기획자", "작성자", "(디자이너)", "편집자"] }
   };
+  /* 모드 역할 이름(설계자 등)은 서버가 정식 이름(한국어)으로 다루고, 화면에 보일 때만 현재 언어로 바꾼다. */
+  var ROLE_KO = ["설계자", "구현자", "리뷰어", "테스터", "발산자", "비평가", "조합가", "정리자", "기획자", "작성자", "디자이너", "편집자"];
+  function dn(n) { if (typeof n !== "string") return n; var p = /^\((.+)\)$/.exec(n); if (p) return "(" + dn(p[1]) + ")"; return ROLE_KO.indexOf(n) >= 0 ? _t(n) : n; }
+  function escRe(x) { return x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  function swapMentions(text, toLocal) {
+    if (window._lang === "ko" || typeof text !== "string" || text.indexOf("@") < 0) return text;
+    ROLE_KO.forEach(function (k) { var d = _t(k); if (d === k) return; var from = toLocal ? k : d, to = toLocal ? d : k; text = text.replace(new RegExp("@" + escRe(from) + "(?![\\p{L}\\p{N}_])", "gu"), "@" + to); });
+    return text;
+  }
   var jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
   var aidms = [], peekOpen = -1, dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typingWho = "", msgIndex = {}, lastTap = { id: 0, t: 0 };
   var POLNAME = { mention: _t("@멘션했을 때만"), round: _t("순서대로"), free: _t("AI가 알아서 판단") };
@@ -917,8 +926,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   function castChips(box, ais) {
     box.textContent = "";
     ais.forEach(function (a, i) {
-      var c = mk("span", "cm c" + (i % 6)), av = mk("span", "av", a.name.charAt(0)); av.setAttribute("aria-hidden", "true");
-      c.appendChild(av); c.appendChild(document.createTextNode(a.name)); box.appendChild(c);
+      var c = mk("span", "cm c" + (i % 6)), av = mk("span", "av", dn(a.name).charAt(0)); av.setAttribute("aria-hidden", "true");
+      c.appendChild(av); c.appendChild(document.createTextNode(dn(a.name))); box.appendChild(c);
     });
   }
 
@@ -935,7 +944,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var f = $("jflow"), info = MODEINFO[jmode];
     f.textContent = ""; f.hidden = !info;
     if (!info) return;
-    info.flow.forEach(function (n, i) { if (i) f.appendChild(document.createTextNode("→")); f.appendChild(mk("i", "", n)); });
+    info.flow.forEach(function (n, i) { if (i) f.appendChild(document.createTextNode("→")); f.appendChild(mk("i", "", dn(n))); });
     f.appendChild(mk("span", "", "  " + _t("괄호는 플러스 플랜에서 추가")));
   }
   document.querySelectorAll('input[name="jmode"]').forEach(function (r) {
@@ -1125,6 +1134,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   function fmtTime(ts) { var d = new Date(ts); return (d.getHours() < 10 ? "0" : "") + d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes(); }
   function dayLabel(ts) { var d = new Date(ts), n = new Date(); if (d.toDateString() === n.toDateString()) return _t("오늘"); try { return new Intl.DateTimeFormat(window._lang, { month: "long", day: "numeric" }).format(d); } catch (e) { return (d.getMonth() + 1) + "/" + d.getDate(); } }
   function withMentions(el, text) {
+    text = swapMentions(text, true);
     var re = /@[^\s@]{1,12}/g, i = 0, m;
     while ((m = re.exec(text))) {
       if (m.index > i) el.appendChild(document.createTextNode(text.slice(i, m.index)));
@@ -1163,7 +1173,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     } else lastTap = { id: m.id, t: now };
   }
   function avatarFor(ai, big) {
-    var av = mk("div", "av c" + colorOf(ai.name), ai.name.charAt(0)); av.setAttribute("aria-hidden", "true"); return av;
+    var av = mk("div", "av c" + colorOf(ai.name), dn(ai.name).charAt(0)); av.setAttribute("aria-hidden", "true"); return av;
   }
   function ccStatus(small, live) {
     small.textContent = "";
@@ -1173,8 +1183,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   function renderStories(s) {
     var box = $("stories"); box.textContent = "";
     s.ais.forEach(function (ai) {
-      var b = mk("button", "cc c" + colorOf(ai.name) + (typingWho === ai.name ? " live" : "")); b.type = "button"; b.setAttribute("aria-label", _t("{name} 캐스트 카드", { name: ai.name })); b.dataset.ai = ai.id;
-      b.appendChild(avatarFor(ai)); b.appendChild(mk("b", "", ai.name)); var sm = mk("small"); ccStatus(sm, typingWho === ai.name); if (ai.muted) { sm.textContent = _t("🔇 뮤트"); b.style.opacity = ".6"; } b.appendChild(sm);
+      var b = mk("button", "cc c" + colorOf(ai.name) + (typingWho === ai.name ? " live" : "")); b.type = "button"; b.setAttribute("aria-label", _t("{name} 캐스트 카드", { name: dn(ai.name) })); b.dataset.ai = ai.id;
+      b.appendChild(avatarFor(ai)); b.appendChild(mk("b", "", dn(ai.name))); var sm = mk("small"); ccStatus(sm, typingWho === ai.name); if (ai.muted) { sm.textContent = _t("🔇 뮤트"); b.style.opacity = ".6"; } b.appendChild(sm);
       b.addEventListener("click", function () { openProfile(ai.id); }); box.appendChild(b);
     });
     s.humans.forEach(function (n) {
@@ -1201,9 +1211,9 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var tools = mk("div"); tools.style.cssText = "display:flex;gap:6px";
     var xb = mk("button", "icon", "×"); xb.type = "button"; xb.setAttribute("aria-label", _t("닫기")); xb.style.cssText = "font-size:22px;border:1px solid var(--edge);background:var(--surface)"; xb.addEventListener("click", closeProfile); tools.appendChild(xb);
     por.appendChild(tools); body.appendChild(por);
-    var nm = mk("div", "pfname"); nm.appendChild(document.createTextNode(ai.name)); nm.appendChild(mk("span", "tag", "AI")); body.appendChild(nm);
-    body.appendChild(mk("div", "pfhandle", "@" + ai.name));
-    var role = mk("div", "pfrole"); role.appendChild(mk("small", "", _t("배역"))); role.appendChild(mk("p", "", ai.persona)); body.appendChild(role);
+    var nm = mk("div", "pfname"); nm.appendChild(document.createTextNode(dn(ai.name))); nm.appendChild(mk("span", "tag", "AI")); body.appendChild(nm);
+    body.appendChild(mk("div", "pfhandle", "@" + dn(ai.name)));
+    var role = mk("div", "pfrole"); role.appendChild(mk("small", "", _t("배역"))); role.appendChild(mk("p", "", _tx(ai.persona))); body.appendChild(role);
     var stats = mk("div", "pfstats");
     [[st, _t("대사")], [sparks, _t("받은 ✦")], [th.filter(function (m) { return m.kind !== "system"; }).length, _t("귓속말")]].forEach(function (x) { var d = mk("div"); d.appendChild(mk("b", "", String(x[0]))); d.appendChild(mk("span", "", x[1])); stats.appendChild(d); });
     body.appendChild(stats);
@@ -1230,7 +1240,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     ((meta && meta.ais) || []).forEach(function (ai) {
       any = true; var l = lastOf(ai.id);
       var r = mk("button", "inrow c" + colorOf(ai.name) + (dmUnread[ai.id] ? " unread" : "")); r.type = "button"; r.dataset.ai = ai.id;
-      var t = mk("div", "t"); t.appendChild(mk("b", "", ai.name)); t.appendChild(mk("small", "", l ? (l.kind === "human" ? _t("나") + ": " : "") + l.text : _t("눌러서 귓속말 시작")));
+      var t = mk("div", "t"); t.appendChild(mk("b", "", dn(ai.name))); t.appendChild(mk("small", "", l ? (l.kind === "human" ? _t("나") + ": " : "") + l.text : _t("눌러서 귓속말 시작")));
       r.appendChild(avatarFor(ai)); r.appendChild(t); r.appendChild(mk("span", "u")); r.addEventListener("click", function () { openDM(ai.id); }); box.appendChild(r);
     });
     if (!any) box.appendChild(mk("div", "dmnote", _t("방에 AI가 없습니다. AI를 초대하면 둘이서만 말할 수 있어요.")));
@@ -1269,7 +1279,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     dmOpen = id; peekOpen = -1; $("dmcomposer").hidden = false; delete dmUnread[id]; $("inbox").hidden = false; $("dm").hidden = false;
     var who = $("dmwho"); who.textContent = ""; who.className = "c" + colorOf(ai.name);
     var av = avatarFor(ai); av.style.width = "40px"; av.style.height = "40px"; av.style.fontSize = "17px";
-    var t = mk("div"); t.style.cssText = "min-width:0"; var b1 = mk("b", "", ai.name); b1.style.cssText = "display:block;font:600 17px/1.2 var(--display)"; var s1 = mk("span", "", _t("귓속말 · 둘만 보는 대화")); s1.style.cssText = "display:block;font-size:11.5px;color:var(--muted)";
+    var t = mk("div"); t.style.cssText = "min-width:0"; var b1 = mk("b", "", dn(ai.name)); b1.style.cssText = "display:block;font:600 17px/1.2 var(--display)"; var s1 = mk("span", "", _t("귓속말 · 둘만 보는 대화")); s1.style.cssText = "display:block;font-size:11.5px;color:var(--muted)";
     t.appendChild(b1); t.appendChild(s1); who.appendChild(av); who.appendChild(t);
     who.onclick = function () { openProfile(id); };
     renderDM(); renderInbox(); $("dmtext").focus();
@@ -1329,9 +1339,9 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       var ai = m.kind === "ai", mine = m.kind === "human" && m.who === me;
       var cont = last && last.who === m.who && last.kind === m.kind && ts - last.ts < 120000;
       var row = mk("div", "row" + (mine ? " mine" : "") + (ai ? " c" + colorOf(m.who) : "") + (cont ? " cont" : " first") + " last");
-      var av = mk("div", "av", m.who.charAt(0)); av.setAttribute("aria-hidden", "true"); if (!ai) humanStyle(av, m.who);
+      var av = mk("div", "av", (ai ? dn(m.who) : m.who).charAt(0)); av.setAttribute("aria-hidden", "true"); if (!ai) humanStyle(av, m.who);
       var col = mk("div", "col");
-      if (!cont && !mine) { var nm = mk("div", "name"); nm.appendChild(mk("span", "", m.who)); if (ai) nm.appendChild(mk("span", "tag", "AI")); col.appendChild(nm); }
+      if (!cont && !mine) { var nm = mk("div", "name"); nm.appendChild(mk("span", "", ai ? dn(m.who) : m.who)); if (ai) nm.appendChild(mk("span", "tag", "AI")); col.appendChild(nm); }
       var b = mk("div", "bubble"); renderBody(b, m.text); col.appendChild(b);
       row.dataset.id = m.id || ""; if (m.id) msgIndex[m.id] = m;
       col.appendChild(heartChip(m));
@@ -1376,7 +1386,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     if (human && youOwner && joined && authUser) opts.push({ label: _t("{name} 님 강퇴", { name: m.who }), danger: true, run: function () {
       openSheet(_t("{name} 님을 강퇴할까요?", { name: m.who }), _t("이 방에 다시 들어올 수 없게 됩니다."), [{ label: _t("강퇴하기"), danger: true, run: function () { send({ t: "kick", name: m.who }); } }]);
     } });
-    openSheet(m.who + (m.kind === "ai" ? " (AI)" : ""), "", opts);
+    openSheet((m.kind === "ai" ? dn(m.who) : m.who) + (m.kind === "ai" ? " (AI)" : ""), "", opts);
   }
   function hideMsgLocal(id) { var r = document.querySelector('#log .row[data-id="' + id + '"]'); if (r) r.remove(); delete msgIndex[id]; }
   function dropFromLog(name) { Object.keys(msgIndex).forEach(function (k) { var x = msgIndex[k]; if (x.kind === "human" && x.who === name) hideMsgLocal(k); }); }
@@ -1461,7 +1471,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     $("rsub").textContent = _t("사람 {h} · AI {a} · {pol}", { h: s.humans.length, a: s.ais.length, pol: POLNAME[s.policy] });
     renderStories(s); renderInbox();
     var st = $("stack"); st.textContent = "";
-    s.ais.slice(0, 3).forEach(function (ai) { var a = mk("div", "av c" + colorOf(ai.name), ai.name.charAt(0)); st.appendChild(a); });
+    s.ais.slice(0, 3).forEach(function (ai) { var a = mk("div", "av c" + colorOf(ai.name), dn(ai.name).charAt(0)); st.appendChild(a); });
     if (!s.ais.length) s.humans.slice(0, 3).forEach(function (n) { var a = mk("div", "av", n.charAt(0)); humanStyle(a, n); st.appendChild(a); });
     var h = $("humans"); h.textContent = "";
     $("humtitle").textContent = _t("사람 {n}명", { n: s.humans.length });
@@ -1474,11 +1484,11 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var box = $("ais"); box.textContent = "";
     if (!s.ais.length) box.appendChild(mk("div", "hint", _t("아직 AI가 없습니다. 아래에서 초대하거나 에셋을 불러오세요.")));
     s.ais.forEach(function (ai) {
-      var row = mk("div", "ai-item c" + colorOf(ai.name)), av = mk("div", "av", ai.name.charAt(0)); av.setAttribute("aria-hidden", "true");
-      var nm = mk("div", "nm"); nm.appendChild(mk("b", "", ai.name));
+      var row = mk("div", "ai-item c" + colorOf(ai.name)), av = mk("div", "av", dn(ai.name).charAt(0)); av.setAttribute("aria-hidden", "true");
+      var nm = mk("div", "nm"); nm.appendChild(mk("b", "", dn(ai.name)));
       var via = ai.provider && ai.provider !== "default" ? ai.provider + (ai.model ? "/" + ai.model : "") + (ai.ownKey ? " · " + _t("개인 키") : "") + " · " : "";
-      nm.appendChild(mk("small", "", via + ai.persona));
-      var rm = mk("button", "btn sm", _t("내보내기")); rm.type = "button"; rm.setAttribute("aria-label", _t("{name} 내보내기", { name: ai.name }));
+      nm.appendChild(mk("small", "", via + _tx(ai.persona)));
+      var rm = mk("button", "btn sm", _t("내보내기")); rm.type = "button"; rm.setAttribute("aria-label", _t("{name} 내보내기", { name: dn(ai.name) }));
       rm.addEventListener("click", function () { send({ t: "removeAI", id: ai.id }); });
       var mt = mk("button", "btn sm", ai.muted ? _t("뮤트 해제") : _t("뮤트")); mt.type = "button"; mt.dataset.mute = ai.id; mt.setAttribute("aria-pressed", ai.muted ? "true" : "false");
       mt.addEventListener("click", function () { send({ t: "mute", aiId: ai.id, muted: !ai.muted }); });
@@ -1487,7 +1497,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     });
     var chips = $("chips"); chips.textContent = "";
     if (!s.mode) s.ais.forEach(function (ai) {
-      var c = mk("button", "c" + colorOf(ai.name), "@" + ai.name); c.type = "button"; c.addEventListener("click", function () { insertMention(ai.name); }); chips.appendChild(c);
+      var c = mk("button", "c" + colorOf(ai.name), "@" + dn(ai.name)); c.type = "button"; c.addEventListener("click", function () { insertMention(ai.name); }); chips.appendChild(c);
     });
     if (s.ais.length && !s.mode) { var a2 = mk("button", "", _t("@모두")); a2.type = "button"; a2.addEventListener("click", function () { insertMention(_t("모두")); }); chips.appendChild(a2); }
     var cur = $("curasset"); cur.textContent = "";
@@ -1508,7 +1518,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var box = mk("section"); box.id = "flowbox";
     box.appendChild(mk("h3", "", _t("{label} 진행 순서", { label: MODEINFO[meta.mode.id].label })));
     var f = mk("div", "flow"); f.style.marginTop = "0";
-    (meta.pipeline || meta.mode.pipeline).forEach(function (n, i) { if (i) f.appendChild(document.createTextNode("→")); f.appendChild(mk("i", "", n)); });
+    (meta.pipeline || meta.mode.pipeline).forEach(function (n, i) { if (i) f.appendChild(document.createTextNode("→")); f.appendChild(mk("i", "", dn(n))); });
     box.appendChild(f);
     box.appendChild(mk("p", "hint", _t("사람이 요청을 보낼 때마다 이 순서로 AI가 이어 받고, 결과가 산출물 탭에 쌓입니다. 한 번에 AI 호출 {n}회를 씁니다.", { n: (meta.pipeline || meta.mode.pipeline).length })));
     var host = document.querySelector('[data-panel="ai"]'), first = host.querySelector("section");
@@ -1529,7 +1539,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       sel.addEventListener("change", function () { var v = Number(sel.value); if (v === deliv.v) { viewVer = null; renderDeliv(); } else send({ t: "delver", v: v }); });
       m.appendChild(sel);
     } else m.appendChild(mk("span", "pill", "v" + cur.v));
-    m.appendChild(mk("span", "", cur.by + " · " + cur.lang + " · " + _t("{n}자", { n: cur.text.length })));
+    m.appendChild(mk("span", "", dn(cur.by) + " · " + cur.lang + " · " + _t("{n}자", { n: cur.text.length })));
     if (isHtml) {
       var tg = mk("button", "btn sm", dview === "preview" ? _t("코드 보기") : _t("미리보기")); tg.type = "button"; tg.id = "dtoggle";
       tg.addEventListener("click", function () { dview = dview === "preview" ? "code" : "preview"; renderDeliv(); });
@@ -1599,13 +1609,13 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     if (!pipeDraft.length) box.appendChild(mk("span", "hint", _t("AI가 없습니다.")));
     pipeDraft.forEach(function (n, i) {
       if (i) box.appendChild(document.createTextNode("→"));
-      var c = mk("i", "", n + " "), x = mk("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", _t("{name} 단계 빼기", { name: n }));
+      var c = mk("i", "", dn(n) + " "), x = mk("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", _t("{name} 단계 빼기", { name: dn(n) }));
       x.style.cssText = "border:none;background:transparent;color:var(--muted);padding:0 2px;font-size:14px";
       x.addEventListener("click", function () { pipeDraft.splice(i, 1); pipeDirty = true; renderPipe(); });
       c.appendChild(x); box.appendChild(c);
     });
     var sel = $("pipeadd"), cur = sel.value; sel.textContent = "";
-    names.forEach(function (n) { var o = mk("option", "", n); o.value = n; sel.appendChild(o); });
+    names.forEach(function (n) { var o = mk("option", "", dn(n)); o.value = n; sel.appendChild(o); });
     if (cur && names.indexOf(cur) >= 0) sel.value = cur;
     ["pipeadd", "pipeplus", "pipeapply", "pipereset"].forEach(function (id) { $(id).disabled = !can; });
   }
@@ -1675,7 +1685,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       c.appendChild(t); c.appendChild(b); box.appendChild(c);
     });
   }
-  function insertMention(n) { var t = $("text"); t.value += (t.value && !/\s$/.test(t.value) ? " " : "") + "@" + n + " "; t.focus(); autosize(); }
+  function insertMention(n) { var t = $("text"); t.value += (t.value && !/\s$/.test(t.value) ? " " : "") + "@" + dn(n) + " "; t.focus(); autosize(); }
 
   /* 정보 패널 */
   function openInfo(tab) { if (tab) setTab(tab); $("shell").dataset.info = "1"; }
@@ -1723,7 +1733,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     if (feat) c.appendChild(mk("span", "badge-prem", _t("오늘의 에셋")));
     if (it.premium) c.appendChild(mk("span", "badge-prem", _t("플러스 전용")));
     c.appendChild(mk("h4", "", it.name)); c.appendChild(mk("p", "", it.desc));
-    var tags = mk("div", "tags"); it.ais.forEach(function (a) { var t = mk("span", "", a.name); t.title = a.persona; tags.appendChild(t); }); c.appendChild(tags);
+    var tags = mk("div", "tags"); it.ais.forEach(function (a) { var t = mk("span", "", dn(a.name)); t.title = _tx(a.persona); tags.appendChild(t); }); c.appendChild(tags);
     var m = mk("div", "meta"); m.appendChild(mk("span", "", "by " + it.author)); m.appendChild(mk("span", "", _t("설치 {n}", { n: it.installs }))); m.appendChild(mk("span", "likes", "♥ " + it.likes)); c.appendChild(m);
     var acts = mk("div", "acts");
     acts.appendChild(mkAct(_t("이 구성으로 방 만들기"), function () {
@@ -1891,8 +1901,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     else if (m.t === "typing") {
       dropTyping(); setLive(m.who);
       if (m.who) {
-        var row = mk("div", "row typing first last c" + colorOf(m.who)), av = mk("div", "av", m.who.charAt(0)); av.setAttribute("aria-hidden", "true");
-        var col = mk("div", "col"), b = mk("div", "bubble"); b.setAttribute("aria-label", _t("{name} 입력 중", { name: m.who })); b.appendChild(mk("i")); b.appendChild(mk("i")); b.appendChild(mk("i")); col.appendChild(b);
+        var row = mk("div", "row typing first last c" + colorOf(m.who)), av = mk("div", "av", dn(m.who).charAt(0)); av.setAttribute("aria-hidden", "true");
+        var col = mk("div", "col"), b = mk("div", "bubble"); b.setAttribute("aria-label", _t("{name} 입력 중", { name: dn(m.who) })); b.appendChild(mk("i")); b.appendChild(mk("i")); b.appendChild(mk("i")); col.appendChild(b);
         row.appendChild(av); row.appendChild(col); $("log").appendChild(row); $("log").scrollTop = $("log").scrollHeight; typRow = row;
         typTimer = setTimeout(dropTyping, 65000);
       }
@@ -1923,7 +1933,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 
   /* 입력 */
   function autosize() { var t = $("text"); t.style.height = "auto"; t.style.height = Math.min(120, t.scrollHeight) + "px"; $("send").disabled = !t.value.trim(); }
-  function sendText() { var t = $("text").value.trim(); if (!t) return; send({ t: "msg", text: t }); $("text").value = ""; autosize(); }
+  function sendText() { var t = $("text").value.trim(); if (!t) return; send({ t: "msg", text: swapMentions(t, false) }); $("text").value = ""; autosize(); }
   $("send").addEventListener("click", sendText);
   $("text").addEventListener("input", autosize);
   $("text").addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendText(); } });
