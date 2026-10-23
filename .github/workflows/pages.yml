@@ -28,9 +28,18 @@ jobs:
           mkdir -p _site
           node preview/build.js _site/index.html
           touch _site/.nojekyll
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      # Pages가 아직 켜져 있지 않으면 이 단계가 "Not Found"로 실패한다. 매 push마다 빨간 실패를 남기지 않도록 경고로 바꾸고,
+      # Settings → Pages → Source를 "GitHub Actions"로 켜면 다음 push부터 자동으로 배포된다.
+      - id: pages
+        uses: actions/configure-pages@v5
+        continue-on-error: true
+      - name: Pages 비활성 안내
+        if: steps.pages.outcome != 'success'
+        run: echo "::warning title=GitHub Pages가 켜져 있지 않아 데모 배포를 건너뜁니다::저장소 Settings → Pages → Build and deployment → Source를 'GitHub Actions'로 설정하세요."
+      - if: steps.pages.outcome == 'success'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: _site
       - id: deployment
+        if: steps.pages.outcome == 'success'
         uses: actions/deploy-pages@v4

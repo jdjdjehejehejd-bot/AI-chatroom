@@ -5,6 +5,7 @@ on:
 jobs:
   server:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy: { matrix: { node: [20, 22] } }
     steps:
       - uses: actions/checkout@v4
@@ -16,10 +17,13 @@ jobs:
         run: python3 scripts/build-i18n.py && git diff --exit-code public/i18n.js
   ui:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - run: pip install playwright && playwright install --with-deps chromium
+      - name: Playwright 설치 (멈추면 8분 뒤 실패하므로 '재실행'으로 다시 시도)
+        timeout-minutes: 8
+        run: pip install playwright && playwright install --with-deps chromium
       - run: bash test/ui/run.sh

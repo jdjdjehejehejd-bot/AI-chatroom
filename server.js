@@ -646,7 +646,7 @@ function meta(room) {
     t: 'meta', id: room.id, asset: room.asset, mode: room.mode ? { id: room.mode, hint: MODES[room.mode].hint, examples: MODES[room.mode].examples, pipeline: room.pipeline } : null,
     pipeline: room.pipeline ? room.pipeline.filter(n => room.ais.some(a => a.name === n)) : null, canPipeline: !!planOf(room).customPipeline, refund: !!planOf(room).refund,
     brand: room.brand, autoMemory: !!planOf(room).premium, shareDays: planOf(room).shareDays, badge: !!planOf(room).ads,
-    stats: { runs: room.stats.runs, calls: room.stats.calls, byAI: room.stats.byAI, versions: room.deliv ? room.deliv.v : 0, shares: room.shareCount, refunds: room.refunds },
+    stats: { runs: room.stats.runs, calls: room.stats.calls, byAI: room.stats.byAI, versions: room.deliv ? room.deliv.v : 0, shares: room.shareCount, refunds: room.refunds, tokIn: room.stats.tokIn || 0, tokOut: room.stats.tokOut || 0, tokMissing: room.stats.tokMissing || 0 },
     policy: room.policy, maxStreak: room.maxStreak, budget: room.budget, budgetMax: planOf(room).budgetMax,
     plan: { id: room.plan, label: planOf(room).label, ais: planOf(room).ais, premium: planOf(room).premium, ads: planOf(room).ads, dev: ALLOW_DEV_PLAN },
     adList: planOf(room).ads ? HOUSE_ADS : [],
@@ -833,6 +833,26 @@ function resolve(ai, room) {
   if (!model) throw new Error('모델 이름이 필요합니다.');
   return { provider, key, model, base: BASES[provider].replace(/\/+$/, '') };
 }
+/* 토큰 계측: 제공사 응답의 usage 값만 기록한다(제공사 보고 기준). usage가 없으면 추정하지 않고 "집계 불가"로 센다.
+   비용은 운영자가 MODEL_PRICES(JSON, 100만 토큰당 USD)에 단가를 넣은 모델만 계산한다. 단가는 코드에 넣지 않는다(바뀌고, 확인되지 않은 값을 쓰면 안 되므로).
+   예) MODEL_PRICES='{"openai/<모델>":{"in":0.5,"out":1.5}}'  MODEL_PRICES_VERSION='2026-10-24 공식 가격표 확인'
+   실패한 호출은 보통 usage가 없어 토큰·비용에 잡히지 않는다(재시도·실패 비용은 과소 집계될 수 있음). */
+const PRICES = (() => { try { const j = JSON.parse(process.env.MODEL_PRICES || '{}'); return j && typeof j === 'object' ? j : {}; } catch (e) { console.error('MODEL_PRICES 형식 오류: 무시합니다.'); return {}; } })();
+function noteUsage(room, prov, model, tin, tout) {
+  const p = /^[a-z0-9_-]{1,20}$/.test(prov) ? prov : 'other', st = room && room.stats;
+  if (!Number.isFinite(tin) || !Number.isFinite(tout) || tin < 0 || tout < 0) {
+    if (st) st.tokMissing = (st.tokMissing || 0) + 1;
+    if (room && room.runTok) room.runTok.missing++;
+    return track('tok_missing.' + p);
+  }
+  tin = Math.round(tin); tout = Math.round(tout);
+  if (st) { st.tokIn = (st.tokIn || 0) + tin; st.tokOut = (st.tokOut || 0) + tout; }
+  if (room && room.runTok) { room.runTok.in += tin; room.runTok.out += tout; }
+  track('tok_in.' + p, tin); track('tok_out.' + p, tout);
+  const pr = PRICES[p + '/' + model];
+  if (pr && pr.in >= 0 && pr.out >= 0) track('cost_micro.' + p, Math.round(tin * pr.in + tout * pr.out));   // 토큰 × (USD/100만 토큰) = 마이크로달러
+  else track('cost_unpriced.' + p);
+}
 async function callAnthropic(room, ai, cfg, dm) {
   const { system, user } = buildPrompt(room, ai, dm);
   const r = await fetch(cfg.base + '/v1/messages', {
@@ -842,6 +862,7 @@ async function callAnthropic(room, ai, cfg, dm) {
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error('Anthropic ' + r.status + ': ' + ((j.error && j.error.message) || '응답 오류'));
+  noteUsage(room, 'anthropic', cfg.model, j.usage && j.usage.input_tokens, j.usage && j.usage.output_tokens);
   return (j.content || []).map(c => c.text || '').join('');
 }
 async function callChat(room, ai, cfg, dm) {
@@ -853,6 +874,8 @@ async function callChat(room, ai, cfg, dm) {
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error('API ' + r.status + ': ' + ((j.error && j.error.message) || '응답 오류'));
+  const u = j.usage || {};
+  noteUsage(room, cfg.provider || 'free', cfg.model, u.prompt_tokens, u.completion_tokens);
   return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
 }
 const FONTS = { gothic: 'Noto Sans KR,sans-serif', serif: 'Noto Serif KR,serif', round: 'Jua,Noto Sans KR,sans-serif' };
@@ -975,7 +998,7 @@ function harvestDoc(room, ai, text) {
 async function orchestrate(room, first, sub) {
   const gen = ++room.gen;
   const order = first.slice(), forced = new Set(first), mutedNoted = new Set();
-  room.runCalls = 0; room.stats.runs++; if (room.mode) track('run_started');
+  room.runCalls = 0; room.runTok = { in: 0, out: 0, missing: 0 }; room.stats.runs++; if (room.mode) track('run_started');
   room.streak = 0;
   let passes = 0, dmTurns = 0;
   while (gen === room.gen) {
@@ -1047,7 +1070,8 @@ async function orchestrate(room, first, sub) {
   if (gen === room.gen) {
     if (room.mode && room.runCalls > 0) {
       track('run_completed');
-      system(room, '이번 실행: AI 호출 ' + room.runCalls + '회 · 남은 예산 ' + Math.max(0, room.budget.limit - room.budget.used) + '회', 'RUN_RECEIPT');
+      const tk = room.runTok && room.runTok.in + room.runTok.out > 0 ? ' · 토큰 입력 ' + room.runTok.in + '·출력 ' + room.runTok.out + '(제공사 보고 기준)' : '';
+      system(room, '이번 실행: AI 호출 ' + room.runCalls + '회 · 남은 예산 ' + Math.max(0, room.budget.limit - room.budget.used) + '회' + tk, 'RUN_RECEIPT');
     }
     broadcast(room, { t: 'typing', who: null }); maybeSummarize(room, sub);
   }
@@ -1470,7 +1494,7 @@ const server = http.createServer((req, res) => {
   if (u === '/admin/events' && req.method === 'GET') {
     const tok = (process.env.ADMIN_TOKEN || ''), got = String(req.headers.authorization || '').replace(/^Bearer /, '');
     if (!tok || got.length !== tok.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(tok))) return json(401, { error: 'unauthorized' });
-    return json(200, { events });
+    return json(200, { events, pricing: { configured: Object.keys(PRICES).length, version: process.env.MODEL_PRICES_VERSION || '' } });
   }
   if (u === '/admin/reports/resolve' && req.method === 'POST') {
     const tok = (process.env.ADMIN_TOKEN || ''), got = String(req.headers.authorization || '').replace(/^Bearer /, '');

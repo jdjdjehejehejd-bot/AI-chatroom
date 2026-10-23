@@ -1648,6 +1648,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var box = $("stats"), st = meta && meta.stats; box.textContent = "";
     if (!st) return;
     var rows = [[_t("AI 요청 실행"), _t("{n}회", { n: st.runs })], [_t("AI 호출"), _t("{n}회", { n: st.calls })], [_t("산출물 버전"), st.versions ? "v" + st.versions : _t("없음")], [_t("공유 링크"), _t("{n}개", { n: st.shares })]];
+    if (st.tokIn + st.tokOut > 0) rows.push([_t("토큰 (제공사 보고 기준)"), _t("입력 {i} · 출력 {o}", { i: st.tokIn, o: st.tokOut })]);
+    if (st.tokMissing) rows.push([_t("토큰 정보 없는 호출"), _t("{n}회", { n: st.tokMissing })]);
     if (meta.refund) rows.push([_t("품질 보증 환불"), _t("{n} / 5회", { n: st.refunds })]);
     rows.forEach(function (r) { var d = mk("div", "ai-item"); var n = mk("div", "nm"); n.appendChild(mk("b", "", r[0])); d.appendChild(n); d.appendChild(mk("span", "mono", r[1])); box.appendChild(d); });
     var names = Object.keys(st.byAI), max = 1; names.forEach(function (n) { max = Math.max(max, st.byAI[n]); });
