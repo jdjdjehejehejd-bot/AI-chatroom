@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#4F46E5">
 <link rel="manifest" href="/manifest.webmanifest">
+<script src="/i18n.js"></script>
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
@@ -437,6 +438,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 .consent{display:flex;gap:8px;align-items:flex-start;margin-top:18px;font-size:13px;color:var(--muted);line-height:1.5}
 .consent input{margin-top:3px;flex:none}.consent a,.legalfoot a{color:var(--accent-text);text-decoration:underline}
 .netbar{position:fixed;left:0;right:0;top:0;z-index:70;background:var(--warn-sf);color:var(--warn-tx);text-align:center;font-size:13px;padding:calc(6px + env(safe-area-inset-top,0px)) 12px 6px;border-bottom:1px solid var(--edge)}
+.langpick select{font:inherit;font-size:12px;padding:3px 6px;border:1px solid var(--edge);border-radius:8px;background:var(--surface);color:var(--ink)}
 .legalfoot{margin-top:16px;font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
 .mm{position:absolute;opacity:0;border:0;background:transparent;color:var(--muted);font-size:16px;line-height:1;padding:4px 6px;border-radius:8px;cursor:pointer}
 .row:hover .mm,.mm:focus,.row.mmon .mm{opacity:1}
@@ -530,10 +532,10 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
           <div class="err" id="jerr" role="alert" hidden></div>
         </div>
         <p class="err" id="gatemsg" hidden style="margin-top:16px">로그인한 뒤에 시작할 수 있어요. 위에서 로그인 방법을 골라 주세요.</p>
-        <label class="consent"><input type="checkbox" id="jconsent"><span>만 14세 이상이며 <a href="/terms" target="_blank" rel="noopener">이용약관</a>과 <a href="/privacy" target="_blank" rel="noopener">개인정보처리방침</a>에 동의합니다. AI 답변은 부정확할 수 있고, 대화는 연결한 AI 서비스 제공자에게 전달됩니다.</span></label>
+        <label class="consent"><input type="checkbox" id="jconsent"><span id="consenttxt"></span></label>
         <button class="btn primary lg" id="jgo" type="submit" style="margin-top:14px">방 만들고 입장</button>
         <div class="err" id="jerr2" role="alert" hidden></div>
-        <div class="legalfoot"><a href="/terms" target="_blank" rel="noopener">이용약관</a><a href="/privacy" target="_blank" rel="noopener">개인정보처리방침</a><a href="/delete-account" target="_blank" rel="noopener">계정·데이터 삭제</a></div>
+        <div class="legalfoot"><a href="/terms" target="_blank" rel="noopener">이용약관</a><a href="/privacy" target="_blank" rel="noopener">개인정보처리방침</a><a href="/delete-account" target="_blank" rel="noopener">계정·데이터 삭제</a><span class="langpick" id="langbox1"></span></div>
       </form>
     </section>
 
@@ -635,6 +637,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
         </section>
       </div>
       <div class="pn" data-panel="settings">
+        <section><h3>언어</h3><div id="langbox2"></div></section>
         <section><h3>계정</h3><div id="acct"></div></section>
         <section><h3>차단한 사용자</h3><div id="blklist"></div><p class="hint" style="margin-top:8px">메시지의 ⋯ 버튼으로 신고·차단할 수 있어요. 차단하면 그 사람의 메시지가 나에게만 숨겨집니다.</p></section>
         <section>
@@ -830,17 +833,17 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   };
   var jmode = "", deliv = null, dview = "preview";
   var aidms = [], peekOpen = -1, dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typingWho = "", msgIndex = {}, lastTap = { id: 0, t: 0 };
-  var POLNAME = { mention: "@멘션했을 때만", round: "순서대로", free: "AI가 알아서 판단" };
+  var POLNAME = { mention: _t("@멘션했을 때만"), round: _t("순서대로"), free: _t("AI가 알아서 판단") };
   var LIVE = ["anthropic", "openai", "openrouter", "groq", "google", "mistral", "nvidia"];
 
   function mk(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function rand(n) { var s = "", c = "abcdefghjkmnpqrstuvwxyz23456789"; for (var i = 0; i < n; i++) s += c[Math.floor(Math.random() * c.length)]; return s; }
   var unread = 0;
-  document.addEventListener("visibilitychange", function () { if (!document.hidden) { unread = 0; document.title = "AI 채팅방"; } });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) { unread = 0; document.title = _t("AI 채팅방"); } });
   if ("serviceWorker" in navigator && /^(https:|http:\/\/(localhost|127\.0\.0\.1))/.test(location.protocol + "//" + location.host)) { try { navigator.serviceWorker.register("/sw.js").catch(function () {}); } catch (e) {} }
   function alert_(t) { toast(t); }
   function toast(t) { var el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.hidden = true; }, 3500); }
-  function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); else if (joined && o.t !== "typing") toast("연결이 끊겨 보내지 못했어요. 다시 연결되면 보내 주세요."); }
+  function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); else if (joined && o.t !== "typing") toast(_t("연결이 끊겨 보내지 못했어요. 다시 연결되면 보내 주세요.")); }
   function colorOf(name) { if (!(name in colors)) colors[name] = colorCount++ % 6; return colors[name]; }
   function hue(name) { var h = 0; for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360; return h; }
   function humanStyle(el, name) { var h = hue(name); el.style.setProperty("--av", "hsl(" + h + " 38% 46%)"); el.style.setProperty("--av2", "hsl(" + ((h + 30) % 360) + " 45% 56%)"); }
@@ -855,20 +858,20 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     store("rooms", JSON.stringify(list.slice(0, 20)));
     renderRooms();
   }
-  function ago(ts) { var m = Math.floor((Date.now() - ts) / 60000); if (m < 1) return "방금"; if (m < 60) return m + "분 전"; var h = Math.floor(m / 60); if (h < 24) return h + "시간 전"; return Math.floor(h / 24) + "일 전"; }
+  function ago(ts) { var m = Math.floor((Date.now() - ts) / 60000); if (m < 1) return _t("방금"); if (m < 60) return _t("{n}분 전", { n: m }); var h = Math.floor(m / 60); if (h < 24) return _t("{n}시간 전", { n: h }); return _t("{n}일 전", { n: Math.floor(h / 24) }); }
   function renderRooms() {
     var box = $("roomlist"); box.textContent = ""; var list = loadRooms();
     if (!list.length) {
       var e = mk("div", "empty-list"), art = mk("div", "art"); art.appendChild(mk("i")); art.appendChild(mk("i")); art.appendChild(mk("i"));
-      e.appendChild(art); e.appendChild(mk("b", "", "아직 방이 없어요")); e.appendChild(mk("span", "", "새 방을 만들고 AI를 초대해 보세요."));
+      e.appendChild(art); e.appendChild(mk("b", "", _t("아직 방이 없어요"))); e.appendChild(mk("span", "", _t("새 방을 만들고 AI를 초대해 보세요.")));
       box.appendChild(e); return;
     }
     list.forEach(function (r) {
       var row = mk("div", "room"); row.setAttribute("role", "button"); row.tabIndex = 0;
       if (r.id === roomId) row.setAttribute("aria-current", "true");
-      var av = mk("div", "av", r.title.charAt(0) || "방"); humanStyle(av, r.title); av.setAttribute("aria-hidden", "true");
+      var av = mk("div", "av", r.title.charAt(0) || _t("방")); humanStyle(av, r.title); av.setAttribute("aria-hidden", "true");
       var nm = mk("div", "nm"); nm.appendChild(mk("b", "", r.title)); nm.appendChild(mk("small", "", ago(r.ts)));
-      var x = mk("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", r.title + " 목록에서 지우기");
+      var x = mk("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", _t("{name} 목록에서 지우기", { name: r.title }));
       x.addEventListener("click", function (ev) { ev.stopPropagation(); store("rooms", JSON.stringify(loadRooms().filter(function (q) { return q.id !== r.id; }))); renderRooms(); });
       var open = function () { if (joined && r.id === roomId) setView("main"); else enterRoom(r.id); };
       row.addEventListener("click", open);
@@ -881,30 +884,30 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   /* 에셋 검증 (서버가 같은 규칙으로 다시 검증한다) */
   function validateAsset(raw) {
     var d;
-    try { d = JSON.parse(raw); } catch (e) { return { error: "JSON 형식이 올바르지 않습니다." }; }
-    if (!d || typeof d !== "object" || Array.isArray(d)) return { error: "에셋은 JSON 객체여야 합니다." };
-    if (typeof d.name !== "string" || !d.name.trim() || d.name.length > 40) return { error: "name(40자 이내 문자열)이 필요합니다." };
-    if (!Array.isArray(d.ais)) return { error: "ais(AI 목록)가 필요합니다." };
-    if (d.ais.length > MAX_AI) return { error: "AI는 최대 " + MAX_AI + "명입니다." };
+    try { d = JSON.parse(raw); } catch (e) { return { error: _t("JSON 형식이 올바르지 않습니다.") }; }
+    if (!d || typeof d !== "object" || Array.isArray(d)) return { error: _t("에셋은 JSON 객체여야 합니다.") };
+    if (typeof d.name !== "string" || !d.name.trim() || d.name.length > 40) return { error: _t("name(40자 이내 문자열)이 필요합니다.") };
+    if (!Array.isArray(d.ais)) return { error: _t("ais(AI 목록)가 필요합니다.") };
+    if (d.ais.length > MAX_AI) return { error: _t("AI는 최대 {n}명입니다.", { n: MAX_AI }) };
     var seen = {};
     for (var i = 0; i < d.ais.length; i++) {
       var a = d.ais[i] || {};
-      if (typeof a.name !== "string" || !/^[^\s@]{1,12}$/.test(a.name)) return { error: (i + 1) + "번째 AI 이름은 공백·@ 없이 12자 이내여야 합니다." };
-      if (typeof a.persona !== "string" || !a.persona.trim() || a.persona.length > 200) return { error: a.name + "의 persona(200자 이내)가 필요합니다." };
-      if (seen[a.name]) return { error: "AI 이름이 중복됩니다: " + a.name };
+      if (typeof a.name !== "string" || !/^[^\s@]{1,12}$/.test(a.name)) return { error: _t("{n}번째 AI 이름은 공백·@ 없이 12자 이내여야 합니다.", { n: i + 1 }) };
+      if (typeof a.persona !== "string" || !a.persona.trim() || a.persona.length > 200) return { error: _t("{name}의 persona({n}자 이내)가 필요합니다.", { name: a.name, n: 200 }) };
+      if (seen[a.name]) return { error: _t("AI 이름이 중복됩니다: {name}", { name: a.name }) };
       seen[a.name] = 1;
     }
-    if (d.policy != null && ["mention", "round", "free"].indexOf(d.policy) < 0) return { error: "policy는 mention, round, free 중 하나여야 합니다." };
-    if (d.maxStreak != null && !(Number.isInteger(d.maxStreak) && d.maxStreak >= 1 && d.maxStreak <= 10)) return { error: "maxStreak는 1~10 정수여야 합니다." };
-    if (d.rules != null && (typeof d.rules !== "string" || d.rules.length > 600)) return { error: "rules는 600자 이내 문자열이어야 합니다." };
+    if (d.policy != null && ["mention", "round", "free"].indexOf(d.policy) < 0) return { error: _t("policy는 mention, round, free 중 하나여야 합니다.") };
+    if (d.maxStreak != null && !(Number.isInteger(d.maxStreak) && d.maxStreak >= 1 && d.maxStreak <= 10)) return { error: _t("maxStreak는 1~10 정수여야 합니다.") };
+    if (d.rules != null && (typeof d.rules !== "string" || d.rules.length > 600)) return { error: _t("rules는 600자 이내 문자열이어야 합니다.") };
     return { asset: d };
   }
   function readFile(file, onOk, onErr) {
     if (!file) return;
-    if (file.size > MAX_FILE) { onErr("파일이 너무 큽니다. 12KB 이하만 올릴 수 있습니다."); return; }
+    if (file.size > MAX_FILE) { onErr(_t("파일이 너무 큽니다. 12KB 이하만 올릴 수 있습니다.")); return; }
     var fr = new FileReader();
     fr.onload = function () { var r = validateAsset(String(fr.result)); if (r.error) onErr(r.error); else onOk(r.asset); };
-    fr.onerror = function () { onErr("파일을 읽지 못했습니다."); };
+    fr.onerror = function () { onErr(_t("파일을 읽지 못했습니다.")); };
     fr.readAsText(file);
   }
   function castChips(box, ais) {
@@ -918,10 +921,10 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   /* 입장 / 방 만들기 */
   $("jname").value = store("nick") || "";
   function setEntry() {
-    $("jtitle").textContent = inRoomUrl ? "방 " + roomId + " 참가" : "방 만들기";
-    $("jgo").textContent = inRoomUrl ? "입장" : "방 만들고 입장";
+    $("jtitle").textContent = inRoomUrl ? _t("방 {id} 참가", { id: roomId }) : _t("방 만들기");
+    $("jgo").textContent = inRoomUrl ? _t("입장") : _t("방 만들고 입장");
     $("jmodes").hidden = inRoomUrl; $("jassetbox").hidden = inRoomUrl || jmode !== "asset"; showFlow();
-    $("jhint").textContent = inRoomUrl ? "초대받은 방에 들어갑니다. 방 구성은 방을 만든 사람의 에셋을 따릅니다." : "이름만 정하면 빈 방으로 시작할 수 있어요.";
+    $("jhint").textContent = inRoomUrl ? _t("초대받은 방에 들어갑니다. 방 구성은 방을 만든 사람의 에셋을 따릅니다.") : _t("이름만 정하면 빈 방으로 시작할 수 있어요.");
     $("jgo").disabled = false; joinErr(""); assetJoinErr("");
   }
   function showFlow() {
@@ -929,7 +932,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     f.textContent = ""; f.hidden = !info;
     if (!info) return;
     info.flow.forEach(function (n, i) { if (i) f.appendChild(document.createTextNode("→")); f.appendChild(mk("i", "", n)); });
-    f.appendChild(mk("span", "", "  괄호는 플러스 플랜에서 추가"));
+    f.appendChild(mk("span", "", "  " + _t("괄호는 플러스 플랜에서 추가")));
   }
   document.querySelectorAll('input[name="jmode"]').forEach(function (r) {
     r.addEventListener("change", function () { jmode = r.value; $("jassetbox").hidden = inRoomUrl || jmode !== "asset"; showFlow(); });
@@ -942,7 +945,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     clearTimeout(retryTimer); netbar(""); if (ws) { ws.onclose = null; ws.onerror = null; try { ws.close(); } catch (e) {} ws = null; }
     resetRoomState(); roomId = ""; inRoomUrl = false; pendingAsset = null; showJoinAsset(); jmode = ""; document.querySelector('input[name="jmode"][value=""]').checked = true;
     try { history.replaceState(null, "", location.pathname); } catch (e) {}
-    $("room").hidden = true; $("entrypane").hidden = false; document.title = "AI 채팅방";
+    $("room").hidden = true; $("entrypane").hidden = false; document.title = _t("AI 채팅방");
     setEntry(); renderRooms(); setView("list");
   }
   function enterRoom(id) {
@@ -960,7 +963,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   /* 로그인: Google · GitHub · 이메일 코드 (서버에 설정된 것만 표시) + 계정에 GitHub 연동 */
   var authUser = null, ghLink = null, authCfg = {};
   function ret() { return encodeURIComponent(location.pathname + location.search); }
-  var PROV = { google: "Google", github: "GitHub", email: "이메일" };
+  var PROV = { google: "Google", github: "GitHub", email: _t("이메일") };
   function renderAuth() {
     var any = authCfg.clientId || authCfg.github || authCfg.email;
     $("gbox").hidden = !any;
@@ -970,18 +973,18 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     $("gwho").hidden = !authUser;
     $("gbtn").hidden = !authCfg.clientId; $("ghbtn").hidden = !authCfg.github; $("embtn").hidden = !authCfg.email;
     if (authUser) {
-      $("gname").textContent = authUser.name + " (" + (PROV[authUser.provider] || "계정") + " 로그인)";
+      $("gname").textContent = _t("{name} ({prov} 로그인)", { name: authUser.name, prov: PROV[authUser.provider] || _t("계정") });
       if (!$("jname").value) $("jname").value = authUser.name;
     }
     ghButtons($("ghstate"));
     var sec = $("acct"); if (sec) {
       sec.textContent = "";
-      if (!any) sec.appendChild(mk("p", "hint", "이 서버에는 로그인이 설정되어 있지 않아요."));
-      else if (!authUser) sec.appendChild(mk("p", "hint", "로그인하면 방장 권한, 귓속말 기록, GitHub 내보내기를 쓸 수 있어요. 방 입장 화면에서 로그인하세요."));
-      else { sec.appendChild(mk("div", "", authUser.name + " · " + (PROV[authUser.provider] || "계정"))); var w = mk("div"); w.style.marginTop = "8px"; ghButtons(w); sec.appendChild(w);
+      if (!any) sec.appendChild(mk("p", "hint", _t("이 서버에는 로그인이 설정되어 있지 않아요.")));
+      else if (!authUser) sec.appendChild(mk("p", "hint", _t("로그인하면 방장 권한, 귓속말 기록, GitHub 내보내기를 쓸 수 있어요. 방 입장 화면에서 로그인하세요.")));
+      else { sec.appendChild(mk("div", "", authUser.name + " · " + (PROV[authUser.provider] || _t("계정")))); var w = mk("div"); w.style.marginTop = "8px"; ghButtons(w); sec.appendChild(w);
         var dz = mk("div"); dz.style.cssText = "margin-top:12px;display:flex;gap:8px;flex-wrap:wrap";
-        var ex = mk("a", "btn sm", "내 데이터 내려받기"); ex.href = "/api/export"; ex.setAttribute("download", "my-data.json"); dz.appendChild(ex);
-        var dl = mk("a", "btn sm", "계정·데이터 삭제"); dl.href = "/delete-account"; dl.target = "_blank"; dl.rel = "noopener"; dz.appendChild(dl);
+        var ex = mk("a", "btn sm", _t("내 데이터 내려받기")); ex.href = "/api/export"; ex.setAttribute("download", "my-data.json"); dz.appendChild(ex);
+        var dl = mk("a", "btn sm", _t("계정·데이터 삭제")); dl.href = "/delete-account"; dl.target = "_blank"; dl.rel = "noopener"; dz.appendChild(dl);
         sec.appendChild(dz); }
     }
     renderGist();
@@ -990,25 +993,25 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     gh.textContent = "";
     if (!(authUser && authCfg.github)) return;
     if (ghLink) {
-      gh.appendChild(mk("span", "ghok", "GitHub 연결됨 @" + ghLink.login));
-      var d = mk("button", "btn sm", "연결 해제"); d.type = "button"; d.className = "btn sm ghdisc";
-      d.addEventListener("click", function () { fetch("/auth/github/disconnect", { method: "POST" }).then(function () { ghLink = null; renderAuth(); toast("GitHub 연결을 해제했어요"); }); });
+      gh.appendChild(mk("span", "ghok", _t("GitHub 연결됨 @{login}", { login: ghLink.login })));
+      var d = mk("button", "btn sm", _t("연결 해제")); d.type = "button"; d.className = "btn sm ghdisc";
+      d.addEventListener("click", function () { fetch("/auth/github/disconnect", { method: "POST" }).then(function () { ghLink = null; renderAuth(); toast(_t("GitHub 연결을 해제했어요")); }); });
       gh.appendChild(d);
-    } else { var a = mk("a", "btn sm", "GitHub 연결"); a.className = "btn sm ghconn"; a.href = "/auth/github/start?mode=connect&r=" + ret(); gh.appendChild(a); }
+    } else { var a = mk("a", "btn sm", _t("GitHub 연결")); a.className = "btn sm ghconn"; a.href = "/auth/github/start?mode=connect&r=" + ret(); gh.appendChild(a); }
   }
   function renderGist() {
     var on = !!(authUser && ghLink);
     $("gistres").hidden = !on; $("gistchat").hidden = !on;
-    $("gisthint").textContent = on ? "비공개 Gist로 GitHub에 저장해요. (연결된 계정: @" + ghLink.login + ")" : authUser ? "설정 탭의 계정에서 GitHub를 연결하면 산출물·대화를 Gist로 내보낼 수 있어요." : "로그인 후 GitHub를 연결하면 산출물·대화를 Gist로 내보낼 수 있어요.";
+    $("gisthint").textContent = on ? _t("비공개 Gist로 GitHub에 저장해요. (연결된 계정: @{login})", { login: ghLink.login }) : authUser ? _t("설정 탭의 계정에서 GitHub를 연결하면 산출물·대화를 Gist로 내보낼 수 있어요.") : _t("로그인 후 GitHub를 연결하면 산출물·대화를 Gist로 내보낼 수 있어요.");
   }
   function gistExport(kind) {
     var rid = (typeof roomId !== "undefined" ? roomId : ""); $("gistmsg").textContent = "";
     fetch("/gh/gist", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ room: rid, kind: kind }) })
       .then(function (r) { return r.json(); }).then(function (j) {
         $("gistmsg").textContent = "";
-        if (j.url) { var a = mk("a", "", "Gist 열기 ↗"); a.href = j.url; a.target = "_blank"; a.rel = "noopener noreferrer"; $("gistmsg").appendChild(a); toast("GitHub Gist로 내보냈어요"); }
-        else $("gistmsg").textContent = j.error || "내보내지 못했습니다.";
-      }).catch(function () { $("gistmsg").textContent = "내보내지 못했습니다."; });
+        if (j.url) { var a = mk("a", "", _t("Gist 열기 ↗")); a.href = j.url; a.target = "_blank"; a.rel = "noopener noreferrer"; $("gistmsg").appendChild(a); toast(_t("GitHub Gist로 내보냈어요")); }
+        else $("gistmsg").textContent = _tx(j.error) || _t("내보내지 못했습니다.");
+      }).catch(function () { $("gistmsg").textContent = _t("내보내지 못했습니다."); });
   }
   function initAuth() {
     var q = new URLSearchParams(location.search);
@@ -1017,13 +1020,13 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     $("embtn").addEventListener("click", function () { $("emform").hidden = !$("emform").hidden; if (!$("emform").hidden) $("emaddr").focus(); });
     function post(path, body) { return fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(function (r) { return r.json().then(function (j) { j._ok = r.ok; return j; }); }); }
     $("emsend").addEventListener("click", function () {
-      post("/auth/email/start", { email: $("emaddr").value }).then(function (j) {
-        if (j._ok) { $("emcodewrap").hidden = false; $("emcode").focus(); toast("코드를 보냈어요. 메일함을 확인하세요."); } else joinErr(j.error || "코드를 보내지 못했습니다.");
+      post("/auth/email/start", { email: $("emaddr").value, lang: _lang }).then(function (j) {
+        if (j._ok) { $("emcodewrap").hidden = false; $("emcode").focus(); toast(_t("코드를 보냈어요. 메일함을 확인하세요.")); } else joinErr(_tx(j.error) || _t("코드를 보내지 못했습니다."));
       });
     });
     $("emverify").addEventListener("click", function () {
       post("/auth/email/verify", { email: $("emaddr").value, code: $("emcode").value }).then(function (j) {
-        if (j.user) { authUser = j.user; $("emform").hidden = true; renderAuth(); joinErr(""); } else joinErr(j.error || "로그인에 실패했습니다.");
+        if (j.user) { authUser = j.user; $("emform").hidden = true; renderAuth(); joinErr(""); } else joinErr(_tx(j.error) || _t("로그인에 실패했습니다."));
       });
     });
     $("glogout").addEventListener("click", function () {
@@ -1040,8 +1043,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
         sc.onload = function () {
           if (!window.google || !google.accounts) return;
           google.accounts.id.initialize({ client_id: c.clientId, callback: function (resp) {
-            post("/auth/google", { credential: resp.credential }).then(function (j) { if (j.user) { authUser = j.user; renderAuth(); } else joinErr(j.error || "로그인에 실패했습니다."); })
-              .catch(function () { joinErr("로그인에 실패했습니다."); });
+            post("/auth/google", { credential: resp.credential }).then(function (j) { if (j.user) { authUser = j.user; renderAuth(); } else joinErr(_tx(j.error) || _t("로그인에 실패했습니다.")); })
+              .catch(function () { joinErr(_t("로그인에 실패했습니다.")); });
           } });
           google.accounts.id.renderButton($("gbtn"), { theme: "outline", size: "large", shape: "pill", text: "signin_with", locale: "ko", width: 280 });
         };
@@ -1055,10 +1058,10 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   function showJoinAsset() {
     var box = $("jasset"); box.textContent = "";
     $("jclear").hidden = !pendingAsset;
-    if (!pendingAsset) { var h = mk("p", "hint", "에셋 파일(.json)을 올리면 AI 구성과 규칙이 한 번에 적용됩니다."); h.style.margin = "0"; box.appendChild(h); return; }
+    if (!pendingAsset) { var h = mk("p", "hint", _t("에셋 파일(.json)을 올리면 AI 구성과 규칙이 한 번에 적용됩니다.")); h.style.margin = "0"; box.appendChild(h); return; }
     var l = mk("div", "loaded");
     l.appendChild(mk("b", "", pendingAsset.name));
-    l.appendChild(mk("small", "", (pendingAsset.description ? pendingAsset.description + " · " : "") + "AI " + pendingAsset.ais.length + "명 · " + POLNAME[pendingAsset.policy || "mention"]));
+    l.appendChild(mk("small", "", (pendingAsset.description ? pendingAsset.description + " · " : "") + _t("AI {n}명", { n: pendingAsset.ais.length }) + " · " + POLNAME[pendingAsset.policy || "mention"]));
     var cast = mk("div", "cast"); castChips(cast, pendingAsset.ais); l.appendChild(cast);
     box.appendChild(l);
   }
@@ -1070,12 +1073,24 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   $("jsample").addEventListener("click", function () { assetJoinErr(""); pendingAsset = validateAsset(SAMPLE_TEXT).asset; showJoinAsset(); });
   $("jclear").addEventListener("click", function () { pendingAsset = null; assetJoinErr(""); showJoinAsset(); });
   showJoinAsset();
+  (function () {
+    var tpl = _t("만 14세 이상이며 {terms}과 {privacy}에 동의합니다. AI 답변은 부정확할 수 있고, 대화는 연결한 AI 서비스 제공자에게 전달됩니다."), box = $("consenttxt"), re = /\{(terms|privacy)\}/g, i = 0, m;
+    while ((m = re.exec(tpl))) {
+      if (m.index > i) box.appendChild(document.createTextNode(tpl.slice(i, m.index)));
+      var a = mk("a", "", m[1] === "terms" ? _t("이용약관") : _t("개인정보처리방침")); a.href = "/" + m[1] + "?lang=" + _lang; a.target = "_blank"; a.rel = "noopener"; box.appendChild(a); i = m.index + m[0].length;
+    }
+    if (i < tpl.length) box.appendChild(document.createTextNode(tpl.slice(i)));
+    ["langbox1", "langbox2"].forEach(function (id) {
+      var sel = mk("select"); sel.setAttribute("aria-label", "Language"); _langs.forEach(function (l) { var o = mk("option", "", l[1]); o.value = l[0]; if (l[0] === _lang) o.selected = true; sel.appendChild(o); });
+      sel.addEventListener("change", function () { _setLang(sel.value); }); var host = $(id); if (id === "langbox1") host.appendChild(mk("span", "", "🌐 ")); host.appendChild(sel);
+    });
+  })();
   $("jconsent").checked = store("consent") === "1";
 
   function go() {
     var name = $("jname").value.trim();
-    if (!name) { joinErr("이름을 입력하세요."); return; }
-    if (!$("jconsent").checked && !(authUser && authUser.consent)) { joinErr("이용약관과 개인정보처리방침에 동의해 주세요."); return; }
+    if (!name) { joinErr(_t("이름을 입력하세요.")); return; }
+    if (!$("jconsent").checked && !(authUser && authUser.consent)) { joinErr(_t("이용약관과 개인정보처리방침에 동의해 주세요.")); return; }
     store("consent", "1"); store("nick", name);
     if (!inRoomUrl) { roomId = rand(6); try { history.replaceState(null, "", "?room=" + roomId); } catch (e) {} }
     $("jgo").disabled = true; joinErr("");
@@ -1094,17 +1109,17 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     sock.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (x) { return; } if (m.t === "state") { retry = 0; netbar(""); } onMsg(m); };
     sock.onclose = function () {
       if (ws !== sock) return;
-      if (joined) { netbar("연결이 끊어졌어요. 다시 연결하는 중…"); retry++; retryTimer = setTimeout(function () { if (joined) connect(lastName, false); }, Math.min(15000, 800 * Math.pow(1.7, retry))); }
+      if (joined) { netbar(_t("연결이 끊어졌어요. 다시 연결하는 중…")); retry++; retryTimer = setTimeout(function () { if (joined) connect(lastName, false); }, Math.min(15000, 800 * Math.pow(1.7, retry))); }
       else $("jgo").disabled = false;
     };
-    sock.onerror = function () { if (!joined) { joinErr("서버에 연결하지 못했습니다."); $("jgo").disabled = false; } };
+    sock.onerror = function () { if (!joined) { joinErr(_t("서버에 연결하지 못했습니다.")); $("jgo").disabled = false; } };
   }
   window.addEventListener("online", function () { if (joined && ws && ws.readyState !== 1 && ws.readyState !== 0) { clearTimeout(retryTimer); connect(lastName, false); } });
-  $("joinform").addEventListener("submit", function (e) { e.preventDefault(); if (authCfg.required && !authUser) { joinErr("로그인한 뒤에 시작할 수 있어요."); return; } go(); });
+  $("joinform").addEventListener("submit", function (e) { e.preventDefault(); if (authCfg.required && !authUser) { joinErr(_t("로그인한 뒤에 시작할 수 있어요.")); return; } go(); });
 
   /* 메시지 렌더 (같은 사람이 연속으로 보낸 말은 묶는다) */
   function fmtTime(ts) { var d = new Date(ts); return (d.getHours() < 10 ? "0" : "") + d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes(); }
-  function dayLabel(ts) { var d = new Date(ts), n = new Date(); if (d.toDateString() === n.toDateString()) return "오늘"; return (d.getMonth() + 1) + "월 " + d.getDate() + "일"; }
+  function dayLabel(ts) { var d = new Date(ts), n = new Date(); if (d.toDateString() === n.toDateString()) return _t("오늘"); try { return new Intl.DateTimeFormat(window._lang, { month: "long", day: "numeric" }).format(d); } catch (e) { return (d.getMonth() + 1) + "/" + d.getDate(); } }
   function withMentions(el, text) {
     var re = /@[^\s@]{1,12}/g, i = 0, m;
     while ((m = re.exec(text))) {
@@ -1125,7 +1140,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var h = m.hearts || [];
     if (!h.length) return;
     var c = mk("button", "sparkchip" + (h.indexOf(me) >= 0 ? " me" : ""), "✦ " + h.length); c.type = "button";
-    c.setAttribute("aria-label", "인정 " + h.length + "개" + (h.indexOf(me) >= 0 ? ", 내가 누름" : ""));
+    c.setAttribute("aria-label", _t("인정 {n}개", { n: h.length }) + (h.indexOf(me) >= 0 ? _t(", 내가 누름") : ""));
     c.addEventListener("click", function (e) { e.stopPropagation(); if (m.id) send({ t: "react", id: m.id }); });
     wrap.appendChild(c);
   }
@@ -1148,20 +1163,20 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   }
   function ccStatus(small, live) {
     small.textContent = "";
-    if (live) { var eq = mk("span", "eq"); eq.appendChild(mk("i")); eq.appendChild(mk("i")); eq.appendChild(mk("i")); small.appendChild(eq); small.appendChild(document.createTextNode("말하는 중")); }
-    else small.textContent = "대기";
+    if (live) { var eq = mk("span", "eq"); eq.appendChild(mk("i")); eq.appendChild(mk("i")); eq.appendChild(mk("i")); small.appendChild(eq); small.appendChild(document.createTextNode(_t("말하는 중"))); }
+    else small.textContent = _t("대기");
   }
   function renderStories(s) {
     var box = $("stories"); box.textContent = "";
     s.ais.forEach(function (ai) {
-      var b = mk("button", "cc c" + colorOf(ai.name) + (typingWho === ai.name ? " live" : "")); b.type = "button"; b.setAttribute("aria-label", ai.name + " 캐스트 카드"); b.dataset.ai = ai.id;
-      b.appendChild(avatarFor(ai)); b.appendChild(mk("b", "", ai.name)); var sm = mk("small"); ccStatus(sm, typingWho === ai.name); if (ai.muted) { sm.textContent = "🔇 뮤트"; b.style.opacity = ".6"; } b.appendChild(sm);
+      var b = mk("button", "cc c" + colorOf(ai.name) + (typingWho === ai.name ? " live" : "")); b.type = "button"; b.setAttribute("aria-label", _t("{name} 캐스트 카드", { name: ai.name })); b.dataset.ai = ai.id;
+      b.appendChild(avatarFor(ai)); b.appendChild(mk("b", "", ai.name)); var sm = mk("small"); ccStatus(sm, typingWho === ai.name); if (ai.muted) { sm.textContent = _t("🔇 뮤트"); b.style.opacity = ".6"; } b.appendChild(sm);
       b.addEventListener("click", function () { openProfile(ai.id); }); box.appendChild(b);
     });
     s.humans.forEach(function (n) {
-      var b = mk("div", "cc human"), av = mk("div", "av", n.charAt(0)); humanStyle(av, n); b.appendChild(av); b.appendChild(mk("b", "", n === me ? "나" : n)); b.appendChild(mk("small", "", "사람")); box.appendChild(b);
+      var b = mk("div", "cc human"), av = mk("div", "av", n.charAt(0)); humanStyle(av, n); b.appendChild(av); b.appendChild(mk("b", "", n === me ? _t("나") : n)); b.appendChild(mk("small", "", _t("사람"))); box.appendChild(b);
     });
-    var add = mk("button", "cc plus"); add.type = "button"; add.setAttribute("aria-label", "AI 초대"); add.appendChild(mk("div", "pl", "+")); add.appendChild(mk("small", "", "AI 초대"));
+    var add = mk("button", "cc plus"); add.type = "button"; add.setAttribute("aria-label", _t("AI 초대")); add.appendChild(mk("div", "pl", "+")); add.appendChild(mk("small", "", _t("AI 초대")));
     add.addEventListener("click", function () { openInfo("ai"); $("invdet").open = true; }); box.appendChild(add);
   }
   function setLive(who) {
@@ -1180,24 +1195,24 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     box.appendChild(mk("div", "pfband"));
     var body = mk("div", "pfbody"), por = mk("div", "pfpor"); por.appendChild(avatarFor(ai));
     var tools = mk("div"); tools.style.cssText = "display:flex;gap:6px";
-    var xb = mk("button", "icon", "×"); xb.type = "button"; xb.setAttribute("aria-label", "닫기"); xb.style.cssText = "font-size:22px;border:1px solid var(--edge);background:var(--surface)"; xb.addEventListener("click", closeProfile); tools.appendChild(xb);
+    var xb = mk("button", "icon", "×"); xb.type = "button"; xb.setAttribute("aria-label", _t("닫기")); xb.style.cssText = "font-size:22px;border:1px solid var(--edge);background:var(--surface)"; xb.addEventListener("click", closeProfile); tools.appendChild(xb);
     por.appendChild(tools); body.appendChild(por);
     var nm = mk("div", "pfname"); nm.appendChild(document.createTextNode(ai.name)); nm.appendChild(mk("span", "tag", "AI")); body.appendChild(nm);
     body.appendChild(mk("div", "pfhandle", "@" + ai.name));
-    var role = mk("div", "pfrole"); role.appendChild(mk("small", "", "배역")); role.appendChild(mk("p", "", ai.persona)); body.appendChild(role);
+    var role = mk("div", "pfrole"); role.appendChild(mk("small", "", _t("배역"))); role.appendChild(mk("p", "", ai.persona)); body.appendChild(role);
     var stats = mk("div", "pfstats");
-    [[st, "대사"], [sparks, "받은 ✦"], [th.filter(function (m) { return m.kind !== "system"; }).length, "귓속말"]].forEach(function (x) { var d = mk("div"); d.appendChild(mk("b", "", String(x[0]))); d.appendChild(mk("span", "", x[1])); stats.appendChild(d); });
+    [[st, _t("대사")], [sparks, _t("받은 ✦")], [th.filter(function (m) { return m.kind !== "system"; }).length, _t("귓속말")]].forEach(function (x) { var d = mk("div"); d.appendChild(mk("b", "", String(x[0]))); d.appendChild(mk("span", "", x[1])); stats.appendChild(d); });
     body.appendChild(stats);
-    var via = ai.provider && ai.provider !== "default" ? ai.provider + (ai.model ? " · " + ai.model : "") : "서버 기본 설정";
-    body.appendChild(mk("div", "pfvia", "엔진 " + via));
+    var via = ai.provider && ai.provider !== "default" ? ai.provider + (ai.model ? " · " + ai.model : "") : _t("서버 기본 설정");
+    body.appendChild(mk("div", "pfvia", _t("엔진 {via}", { via: via })));
     var act = mk("div", "pfact");
-    var dmb = mk("button", "btn primary sm", "귓속말 보내기"); dmb.type = "button"; dmb.id = "pfdm"; dmb.addEventListener("click", function () { closeProfile(); openDM(ai.id); });
-    var mb = mk("button", "btn sm", "@멘션"); mb.type = "button"; mb.addEventListener("click", function () { closeProfile(); insertMention(ai.name); });
-    var rb = mk("button", "btn sm", "퇴장"); rb.type = "button"; rb.addEventListener("click", function () { closeProfile(); send({ t: "removeAI", id: ai.id }); });
-    var mu = mk("button", "btn sm", ai.muted ? "뮤트 해제" : "뮤트"); mu.type = "button"; mu.id = "pfmute"; mu.addEventListener("click", function () { closeProfile(); send({ t: "mute", aiId: ai.id, muted: !ai.muted }); });
+    var dmb = mk("button", "btn primary sm", _t("귓속말 보내기")); dmb.type = "button"; dmb.id = "pfdm"; dmb.addEventListener("click", function () { closeProfile(); openDM(ai.id); });
+    var mb = mk("button", "btn sm", _t("@멘션")); mb.type = "button"; mb.addEventListener("click", function () { closeProfile(); insertMention(ai.name); });
+    var rb = mk("button", "btn sm", _t("퇴장")); rb.type = "button"; rb.addEventListener("click", function () { closeProfile(); send({ t: "removeAI", id: ai.id }); });
+    var mu = mk("button", "btn sm", ai.muted ? _t("뮤트 해제") : _t("뮤트")); mu.type = "button"; mu.id = "pfmute"; mu.addEventListener("click", function () { closeProfile(); send({ t: "mute", aiId: ai.id, muted: !ai.muted }); });
     act.appendChild(dmb); act.appendChild(mb); act.appendChild(mu); act.appendChild(rb); body.appendChild(act);
     var posts = Object.keys(msgIndex).map(function (k) { return msgIndex[k]; }).filter(function (m) { return m.kind === "ai" && m.who === ai.name; }).slice(-3).reverse();
-    if (posts.length) { var pp = mk("div", "pfposts"); pp.appendChild(mk("h4", "", "최근 대사")); posts.forEach(function (m) { pp.appendChild(mk("div", "pfpost", m.text.replace(/```[\s\S]*?```/g, "[코드블록]").slice(0, 160))); }); body.appendChild(pp); }
+    if (posts.length) { var pp = mk("div", "pfposts"); pp.appendChild(mk("h4", "", _t("최근 대사"))); posts.forEach(function (m) { pp.appendChild(mk("div", "pfpost", m.text.replace(/```[\s\S]*?```/g, _t("[코드블록]")).slice(0, 160))); }); body.appendChild(pp); }
     box.appendChild(body);
     $("pfwrap").hidden = false; dmb.focus();
   }
@@ -1211,12 +1226,12 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     ((meta && meta.ais) || []).forEach(function (ai) {
       any = true; var l = lastOf(ai.id);
       var r = mk("button", "inrow c" + colorOf(ai.name) + (dmUnread[ai.id] ? " unread" : "")); r.type = "button"; r.dataset.ai = ai.id;
-      var t = mk("div", "t"); t.appendChild(mk("b", "", ai.name)); t.appendChild(mk("small", "", l ? (l.kind === "human" ? "나: " : "") + l.text : "눌러서 귓속말 시작"));
+      var t = mk("div", "t"); t.appendChild(mk("b", "", ai.name)); t.appendChild(mk("small", "", l ? (l.kind === "human" ? _t("나") + ": " : "") + l.text : _t("눌러서 귓속말 시작")));
       r.appendChild(avatarFor(ai)); r.appendChild(t); r.appendChild(mk("span", "u")); r.addEventListener("click", function () { openDM(ai.id); }); box.appendChild(r);
     });
-    if (!any) box.appendChild(mk("div", "dmnote", "방에 AI가 없습니다. AI를 초대하면 둘이서만 말할 수 있어요."));
+    if (!any) box.appendChild(mk("div", "dmnote", _t("방에 AI가 없습니다. AI를 초대하면 둘이서만 말할 수 있어요.")));
     if (aidms.length) {
-      var hd = mk("div", "eyebrow", "AI끼리 몰래 나눈 대화 · 엿보기"); hd.style.cssText = "margin:18px 4px 8px"; box.appendChild(hd);
+      var hd = mk("div", "eyebrow", _t("AI끼리 몰래 나눈 대화 · 엿보기")); hd.style.cssText = "margin:18px 4px 8px"; box.appendChild(hd);
       aidms.forEach(function (t, i) {
         var l = t.msgs[t.msgs.length - 1];
         var r = mk("button", "inrow peek"); r.type = "button"; r.dataset.peek = String(i);
@@ -1231,7 +1246,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     peekOpen = i; delete dmUnread.peek; dmOpen = ""; $("inbox").hidden = false; $("dm").hidden = false; $("dmcomposer").hidden = true;
     var who = $("dmwho"); who.textContent = ""; who.onclick = null;
     var t = aidms[i] || { a: "", b: "" }; var tt = mk("div"); var b1 = mk("b", "", t.a + " ⇄ " + t.b); b1.style.cssText = "display:block;font:600 16px/1.2 var(--display)";
-    var s1 = mk("span", "", "엿보는 중 · 두 AI는 사람이 보는 걸 알아요"); s1.style.cssText = "font-size:12px;color:var(--muted)"; tt.appendChild(b1); tt.appendChild(s1); who.appendChild(tt);
+    var s1 = mk("span", "", _t("엿보는 중 · 두 AI는 사람이 보는 걸 알아요")); s1.style.cssText = "font-size:12px;color:var(--muted)"; tt.appendChild(b1); tt.appendChild(s1); who.appendChild(tt);
     renderPeek(); renderInbox();
   }
   function renderPeek() {
@@ -1250,13 +1265,13 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     dmOpen = id; peekOpen = -1; $("dmcomposer").hidden = false; delete dmUnread[id]; $("inbox").hidden = false; $("dm").hidden = false;
     var who = $("dmwho"); who.textContent = ""; who.className = "c" + colorOf(ai.name);
     var av = avatarFor(ai); av.style.width = "40px"; av.style.height = "40px"; av.style.fontSize = "17px";
-    var t = mk("div"); t.style.cssText = "min-width:0"; var b1 = mk("b", "", ai.name); b1.style.cssText = "display:block;font:600 17px/1.2 var(--display)"; var s1 = mk("span", "", "귓속말 · 둘만 보는 대화"); s1.style.cssText = "display:block;font-size:11.5px;color:var(--muted)";
+    var t = mk("div"); t.style.cssText = "min-width:0"; var b1 = mk("b", "", ai.name); b1.style.cssText = "display:block;font:600 17px/1.2 var(--display)"; var s1 = mk("span", "", _t("귓속말 · 둘만 보는 대화")); s1.style.cssText = "display:block;font-size:11.5px;color:var(--muted)";
     t.appendChild(b1); t.appendChild(s1); who.appendChild(av); who.appendChild(t);
     who.onclick = function () { openProfile(id); };
     renderDM(); renderInbox(); $("dmtext").focus();
   }
   function dmBubble(m, ai) {
-    if (m.kind === "system") return mk("div", "sys", m.text);
+    if (m.kind === "system") return mk("div", "sys", _tx(m.text));
     var mine = m.kind === "human";
     var row = mk("div", "row first last" + (mine ? " mine" : " c" + colorOf(ai.name)));
     var col = mk("div", "col");
@@ -1269,7 +1284,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var log = $("dmlog"); log.textContent = "";
     var th = dmThreads[ai.id] || [];
     if (!th.length) {
-      var e = mk("div", "dmnote", ai.name + "에게 몰래 말해 보세요. 방의 다른 사람은 볼 수 없고, " + ai.name + "은(는) 이 얘기를 단체방에서 쓸 수도 있어요."); e.style.margin = "auto 0"; log.appendChild(e);
+      var e = mk("div", "dmnote", _t("{name}에게 몰래 말해 보세요. 방의 다른 사람은 볼 수 없고, {name}은(는) 이 얘기를 단체방에서 쓸 수도 있어요.", { name: ai.name })); e.style.margin = "auto 0"; log.appendChild(e);
     }
     th.forEach(function (m) { log.appendChild(dmBubble(m, ai)); });
     if (dmTyping[ai.id]) { var row = mk("div", "row typing first last c" + colorOf(ai.name)), av = avatarFor(ai); av.style.width = "28px"; av.style.height = "28px"; av.style.fontSize = "11px"; var col = mk("div", "col"), b = mk("div", "bubble"); b.appendChild(mk("i")); b.appendChild(mk("i")); b.appendChild(mk("i")); col.appendChild(b); row.appendChild(av); row.appendChild(col); log.appendChild(row); }
@@ -1292,7 +1307,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     while ((m = re.exec(text))) {
       any = true;
       var before = text.slice(i, m.index).trim(); if (before) { var d = mk("div"); withMentions(d, before); el.appendChild(d); }
-      var chip = mk("button", "codechip", "코드블록 · " + (m[1] || "text") + " · " + m[2].trim().length + "자 — 산출물에서 보기"); chip.type = "button";
+      var chip = mk("button", "codechip", _t("코드블록 · {lang} · {n}자 — 산출물에서 보기", { lang: m[1] || "text", n: m[2].trim().length })); chip.type = "button";
       chip.addEventListener("click", function () { openInfo("deliv"); });
       el.appendChild(chip); i = m.index + m[0].length;
     }
@@ -1305,7 +1320,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var emp = log.querySelector(".empty"); if (emp) emp.remove();
     var dl = dayLabel(ts);
     if (dl !== lastDay) { lastDay = dl; log.appendChild(mk("div", "date", dl)); last = null; }
-    if (m.kind === "system") { log.appendChild(mk("div", "sys", m.text)); last = null; }
+    if (m.kind === "system") { log.appendChild(mk("div", "sys", _tx(m.text))); last = null; }
     else {
       var ai = m.kind === "ai", mine = m.kind === "human" && m.who === me;
       var cont = last && last.who === m.who && last.kind === m.kind && ts - last.ts < 120000;
@@ -1318,7 +1333,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       col.appendChild(heartChip(m));
       col.appendChild(mk("div", "time", fmtTime(ts)));
       b.addEventListener("click", function () { tapHeart(m, b); });
-      if (m.id) { var mmb = mk("button", "mm", "⋯"); mmb.type = "button"; mmb.setAttribute("aria-label", "신고·차단 메뉴"); mmb.addEventListener("click", function (e) { e.stopPropagation(); openMsgMenu(m, row); }); col.appendChild(mmb); }
+      if (m.id) { var mmb = mk("button", "mm", "⋯"); mmb.type = "button"; mmb.setAttribute("aria-label", _t("신고·차단 메뉴")); mmb.addEventListener("click", function (e) { e.stopPropagation(); openMsgMenu(m, row); }); col.appendChild(mmb); }
       if (ai) {
         av.style.cursor = "pointer"; av.addEventListener("click", function () { var a = aiByName(m.who); if (a) openProfile(a.id); });
         var nmEl = col.querySelector(".name span"); if (nmEl) { nmEl.style.cursor = "pointer"; nmEl.addEventListener("click", function () { var a = aiByName(m.who); if (a) openProfile(a.id); }); }
@@ -1332,14 +1347,14 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     log.scrollTop = log.scrollHeight;
   }
   /* 신고·차단·강퇴 */
-  var REASONS = [["spam", "스팸·광고"], ["abuse", "욕설·괴롭힘"], ["sexual", "성적인 내용"], ["violence", "폭력·위험한 내용"], ["illegal", "불법 정보"], ["privacy", "개인정보 노출"], ["other", "기타"]];
+  var REASONS = [["spam", _t("스팸·광고")], ["abuse", _t("욕설·괴롭힘")], ["sexual", _t("성적인 내용")], ["violence", _t("폭력·위험한 내용")], ["illegal", _t("불법 정보")], ["privacy", _t("개인정보 노출")], ["other", _t("기타")]];
   function closeSheet() { var b = $("sheetbg"); if (b) b.remove(); document.querySelectorAll(".row.mmon").forEach(function (r) { r.classList.remove("mmon"); }); }
   function openSheet(title, sub, opts) {
     closeSheet();
     var bg = mk("div"); bg.id = "sheetbg"; var sh = mk("div"); sh.id = "sheet"; sh.setAttribute("role", "dialog"); sh.setAttribute("aria-modal", "true");
     sh.appendChild(mk("h4", "", title)); if (sub) sh.appendChild(mk("p", "", sub));
     opts.forEach(function (o) { var b = mk("button", "opt" + (o.danger ? " danger" : ""), o.label); b.type = "button"; b.addEventListener("click", function () { closeSheet(); o.run(); }); sh.appendChild(b); });
-    var c = mk("button", "opt", "취소"); c.type = "button"; c.addEventListener("click", closeSheet); sh.appendChild(c);
+    var c = mk("button", "opt", _t("취소")); c.type = "button"; c.addEventListener("click", closeSheet); sh.appendChild(c);
     bg.appendChild(sh); bg.addEventListener("click", function (e) { if (e.target === bg) closeSheet(); });
     document.addEventListener("keydown", function esc(e) { if (e.key === "Escape") { closeSheet(); document.removeEventListener("keydown", esc); } });
     document.body.appendChild(bg); var f = sh.querySelector("button"); if (f) f.focus();
@@ -1348,14 +1363,14 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     row.classList.add("mmon");
     var human = m.kind === "human", mineMsg = human && m.who === me, opts = [];
     var canDel = mineMsg || (youOwner && authUser && joined);
-    if (canDel) opts.push({ label: "메시지 삭제", danger: true, run: function () { send({ t: "delmsg", id: m.id }); } });
-    if (mineMsg) { openSheet("내 메시지", "", opts); return; }
-    opts.push({ label: "이 메시지 신고", run: function () {
-      openSheet("신고 사유", "운영자가 확인합니다. 신고한 메시지는 내 화면에서 숨겨져요.", REASONS.map(function (r) { return { label: r[1], run: function () { send({ t: "report", id: m.id, reason: r[0] }); } }; }));
+    if (canDel) opts.push({ label: _t("메시지 삭제"), danger: true, run: function () { send({ t: "delmsg", id: m.id }); } });
+    if (mineMsg) { openSheet(_t("내 메시지"), "", opts); return; }
+    opts.push({ label: _t("이 메시지 신고"), run: function () {
+      openSheet(_t("신고 사유"), _t("운영자가 확인합니다. 신고한 메시지는 내 화면에서 숨겨져요."), REASONS.map(function (r) { return { label: r[1], run: function () { send({ t: "report", id: m.id, reason: r[0] }); } }; }));
     } });
-    if (human) opts.push({ label: m.who + " 님 차단", danger: true, run: function () { send({ t: "block", name: m.who }); } });
-    if (human && youOwner && joined && authUser) opts.push({ label: m.who + " 님 강퇴", danger: true, run: function () {
-      openSheet(m.who + " 님을 강퇴할까요?", "이 방에 다시 들어올 수 없게 됩니다.", [{ label: "강퇴하기", danger: true, run: function () { send({ t: "kick", name: m.who }); } }]);
+    if (human) opts.push({ label: _t("{name} 님 차단", { name: m.who }), danger: true, run: function () { send({ t: "block", name: m.who }); } });
+    if (human && youOwner && joined && authUser) opts.push({ label: _t("{name} 님 강퇴", { name: m.who }), danger: true, run: function () {
+      openSheet(_t("{name} 님을 강퇴할까요?", { name: m.who }), _t("이 방에 다시 들어올 수 없게 됩니다."), [{ label: _t("강퇴하기"), danger: true, run: function () { send({ t: "kick", name: m.who }); } }]);
     } });
     openSheet(m.who + (m.kind === "ai" ? " (AI)" : ""), "", opts);
   }
@@ -1363,14 +1378,14 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   function dropFromLog(name) { Object.keys(msgIndex).forEach(function (k) { var x = msgIndex[k]; if (x.kind === "human" && x.who === name) hideMsgLocal(k); }); }
   function renderBlocked(list) {
     var box = $("blklist"); if (!box) return; box.textContent = ""; blocked = list || [];
-    if (!blocked.length) { box.appendChild(mk("p", "hint", "차단한 사용자가 없어요.")); return; }
-    blocked.forEach(function (n) { var r = mk("div", "blkrow"); r.appendChild(mk("span", "", n)); var b = mk("button", "btn sm", "차단 해제"); b.type = "button"; b.addEventListener("click", function () { send({ t: "unblock", name: n }); }); r.appendChild(b); box.appendChild(r); });
+    if (!blocked.length) { box.appendChild(mk("p", "hint", _t("차단한 사용자가 없어요."))); return; }
+    blocked.forEach(function (n) { var r = mk("div", "blkrow"); r.appendChild(mk("span", "", n)); var b = mk("button", "btn sm", _t("차단 해제")); b.type = "button"; b.addEventListener("click", function () { send({ t: "unblock", name: n }); }); r.appendChild(b); box.appendChild(r); });
   }
   var blocked = [];
   function insertAd(ad) {
-    var row = mk("div", "adrow"); row.appendChild(mk("b", "", "광고"));
-    if (ad.url) { var a = mk("a", "", ad.text); a.href = ad.url; a.target = "_blank"; a.rel = "noopener noreferrer sponsored"; row.appendChild(a); }
-    else row.appendChild(mk("span", "", ad.text));
+    var row = mk("div", "adrow"); row.appendChild(mk("b", "", _t("광고")));
+    if (ad.url) { var a = mk("a", "", _tx(ad.text)); a.href = ad.url; a.target = "_blank"; a.rel = "noopener noreferrer sponsored"; row.appendChild(a); }
+    else row.appendChild(mk("span", "", _tx(ad.text)));
     var log = $("log"); log.appendChild(row); log.scrollTop = log.scrollHeight; last = null;
   }
   function renderEmpty() {
@@ -1378,15 +1393,15 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     if (log.querySelector(".row") || log.querySelector(".empty")) return;
     var e = mk("div", "empty"), art = mk("div", "art"), has = meta && meta.ais.length;
     art.appendChild(mk("i")); art.appendChild(mk("i")); art.appendChild(mk("i")); e.appendChild(art);
-    e.appendChild(mk("h2", "", meta && meta.mode ? "요청을 보내 보세요" : has ? "대화를 시작해 보세요" : "아직 AI가 없어요"));
-    e.appendChild(mk("p", "", meta && meta.mode ? meta.mode.hint : has ? "@이름 으로 AI를 부르거나, 발언 방식을 바꿔 보세요." : "에셋을 불러오거나 AI를 직접 초대하면 @이름 으로 불러서 대화할 수 있어요."));
+    e.appendChild(mk("h2", "", meta && meta.mode ? _t("요청을 보내 보세요") : has ? _t("대화를 시작해 보세요") : _t("아직 AI가 없어요")));
+    e.appendChild(mk("p", "", meta && meta.mode ? _tx(meta.mode.hint) : has ? _t("@이름 으로 AI를 부르거나, 발언 방식을 바꿔 보세요.") : _t("에셋을 불러오거나 AI를 직접 초대하면 @이름 으로 불러서 대화할 수 있어요.")));
     if (meta && meta.mode) {
       var ex = mk("div", "cast"); ex.style.justifyContent = "center";
-      meta.mode.examples.forEach(function (t) { var b = mk("button", "btn sm", t); b.type = "button"; b.style.textAlign = "left"; b.addEventListener("click", function () { $("text").value = t; autosize(); $("text").focus(); }); ex.appendChild(b); });
+      meta.mode.examples.forEach(function (exs) { var t = _tx(exs); var b = mk("button", "btn sm", t); b.type = "button"; b.style.textAlign = "left"; b.addEventListener("click", function () { $("text").value = t; autosize(); $("text").focus(); }); ex.appendChild(b); });
       e.appendChild(ex);
     } else if (!has) {
-      var b1 = mk("button", "btn primary sm", "에셋 불러오기"); b1.type = "button"; b1.addEventListener("click", function () { openInfo("assets"); });
-      var b2 = mk("button", "btn sm", "AI 초대"); b2.type = "button"; b2.style.marginLeft = "8px"; b2.addEventListener("click", function () { openInfo("ai"); $("invdet").open = true; $("ainame").focus(); });
+      var b1 = mk("button", "btn primary sm", _t("에셋 불러오기")); b1.type = "button"; b1.addEventListener("click", function () { openInfo("assets"); });
+      var b2 = mk("button", "btn sm", _t("AI 초대")); b2.type = "button"; b2.style.marginLeft = "8px"; b2.addEventListener("click", function () { openInfo("ai"); $("invdet").open = true; $("ainame").focus(); });
       e.appendChild(b1); e.appendChild(b2);
     }
     log.appendChild(e);
@@ -1396,20 +1411,20 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var b = meta.budget;
     if (budgetAlert && b.used >= b.limit) {
       var w = mk("div", "banner warn");
-      w.appendChild(mk("span", "t", "이 방의 AI 호출 예산(" + b.limit + "회)을 모두 사용했습니다. AI는 멈추고 사람끼리만 대화할 수 있습니다."));
-      var add = mk("button", "btn sm", b.limit >= meta.budgetMax ? "이 플랜의 최대 한도" : "예산 10회 추가");
+      w.appendChild(mk("span", "t", _t("이 방의 AI 호출 예산({n}회)을 모두 사용했습니다. AI는 멈추고 사람끼리만 대화할 수 있습니다.", { n: b.limit })));
+      var add = mk("button", "btn sm", b.limit >= meta.budgetMax ? _t("이 플랜의 최대 한도") : _t("예산 10회 추가"));
       add.type = "button"; add.id = "addbudget"; add.disabled = b.limit >= meta.budgetMax;
       add.addEventListener("click", function () { send({ t: "config", budgetLimit: Math.min(meta.budgetMax, b.limit + 10) }); });
       w.appendChild(add);
-      if (b.limit >= meta.budgetMax && !meta.plan.premium) { var up = mk("button", "btn sm", "업그레이드"); up.type = "button"; up.addEventListener("click", function () { $("upgrade").click(); }); w.appendChild(up); }
+      if (b.limit >= meta.budgetMax && !meta.plan.premium) { var up = mk("button", "btn sm", _t("업그레이드")); up.type = "button"; up.addEventListener("click", function () { $("upgrade").click(); }); w.appendChild(up); }
       box.appendChild(w);
     }
     if (errAI) {
       var e = mk("div", "banner err2"), t = mk("span", "t");
-      t.appendChild(mk("strong", "", errAI.name)); t.appendChild(document.createTextNode(" 응답 오류: " + errAI.text)); e.appendChild(t);
-      var open = mk("button", "btn sm", "AI 설정 열기"); open.type = "button"; open.id = "openai";
+      t.appendChild(mk("strong", "", errAI.name)); t.appendChild(document.createTextNode(" " + _t("응답 오류: {text}", { text: _tx(errAI.text) }))); e.appendChild(t);
+      var open = mk("button", "btn sm", _t("AI 설정 열기")); open.type = "button"; open.id = "openai";
       open.addEventListener("click", function () { openInfo("ai"); });
-      var rm = mk("button", "btn sm", "이 AI 내보내기"); rm.type = "button"; rm.id = "rmerr";
+      var rm = mk("button", "btn sm", _t("이 AI 내보내기")); rm.type = "button"; rm.id = "rmerr";
       rm.addEventListener("click", function () { send({ t: "removeAI", id: errAI.id }); errAI = null; renderStatus(); });
       e.appendChild(open); e.appendChild(rm); box.appendChild(e);
     }
@@ -1424,37 +1439,37 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   function renderFree() {
     var f = meta.free, opt = $("aiprov").querySelector('option[value="free"]'), hint = $("freehint");
     opt.disabled = !f.available;
-    if (!f.available) { hint.textContent = "이 서버에는 무료 모델이 설정되어 있지 않습니다."; if ($("aiprov").value === "free") $("aiprov").value = "default"; }
-    else hint.textContent = "무료 모델은 서버 전체 하루 한도를 함께 씁니다. 오늘 남은 호출 약 " + f.left + "회, 이 방 " + f.roomUsed + " / " + f.roomCap + "회.";
+    if (!f.available) { hint.textContent = _t("이 서버에는 무료 모델이 설정되어 있지 않습니다."); if ($("aiprov").value === "free") $("aiprov").value = "default"; }
+    else hint.textContent = _t("무료 모델은 서버 전체 하루 한도를 함께 씁니다. 오늘 남은 호출 약 {left}회, 이 방 {used} / {cap}회.", { left: f.left, used: f.roomUsed, cap: f.roomCap });
     provChange();
   }
   function renderMeta(s) {
     meta = s;
-    var title = s.asset ? s.asset.name : "방 " + s.id;
-    $("rtitle").textContent = title; document.title = title + " · AI 채팅방";
-    $("rsub").textContent = "사람 " + s.humans.length + " · AI " + s.ais.length + " · " + POLNAME[s.policy];
+    var title = s.asset ? s.asset.name : _t("방 {id}", { id: s.id });
+    $("rtitle").textContent = title; document.title = title + " · " + _t("AI 채팅방");
+    $("rsub").textContent = _t("사람 {h} · AI {a} · {pol}", { h: s.humans.length, a: s.ais.length, pol: POLNAME[s.policy] });
     renderStories(s); renderInbox();
     var st = $("stack"); st.textContent = "";
     s.ais.slice(0, 3).forEach(function (ai) { var a = mk("div", "av c" + colorOf(ai.name), ai.name.charAt(0)); st.appendChild(a); });
     if (!s.ais.length) s.humans.slice(0, 3).forEach(function (n) { var a = mk("div", "av", n.charAt(0)); humanStyle(a, n); st.appendChild(a); });
     var h = $("humans"); h.textContent = "";
-    $("humtitle").textContent = "사람 " + s.humans.length + "명";
-    s.humans.forEach(function (n) { var p = mk("span", "pill" + (n === me ? " me" : "")); p.appendChild(mk("span", "dot")); p.appendChild(document.createTextNode(n === me ? n + " (나)" : n)); h.appendChild(p); });
-    $("aititle").textContent = "AI " + s.ais.length + " / " + s.plan.ais + "명";
-    $("planbadge").textContent = "방 플랜 · " + s.plan.label;
-    $("plandesc").textContent = s.plan.ads ? "AI " + s.plan.ais + "명까지, 광고가 표시돼요" : "AI " + s.plan.ais + "명까지, 광고 없음";
+    $("humtitle").textContent = _t("사람 {n}명", { n: s.humans.length });
+    s.humans.forEach(function (n) { var p = mk("span", "pill" + (n === me ? " me" : "")); p.appendChild(mk("span", "dot")); p.appendChild(document.createTextNode(n === me ? n + " " + _t("(나)") : n)); h.appendChild(p); });
+    $("aititle").textContent = _t("AI {n} / {max}명", { n: s.ais.length, max: s.plan.ais });
+    $("planbadge").textContent = _t("방 플랜 · {label}", { label: _tx(s.plan.label) });
+    $("plandesc").textContent = s.plan.ads ? _t("AI {n}명까지, 광고가 표시돼요", { n: s.plan.ais }) : _t("AI {n}명까지, 광고 없음", { n: s.plan.ais });
     $("upgrade").hidden = s.plan.premium; $("devplan").hidden = !s.plan.dev;
-    $("budhint").textContent = "사용량보다 낮게 설정할 수 없습니다. 이 플랜의 최대 " + s.budgetMax + "회. 예산을 다 쓰면 AI가 멈추고 사람끼리만 대화합니다.";
+    $("budhint").textContent = _t("사용량보다 낮게 설정할 수 없습니다. 이 플랜의 최대 {n}회. 예산을 다 쓰면 AI가 멈추고 사람끼리만 대화합니다.", { n: s.budgetMax });
     var box = $("ais"); box.textContent = "";
-    if (!s.ais.length) box.appendChild(mk("div", "hint", "아직 AI가 없습니다. 아래에서 초대하거나 에셋을 불러오세요."));
+    if (!s.ais.length) box.appendChild(mk("div", "hint", _t("아직 AI가 없습니다. 아래에서 초대하거나 에셋을 불러오세요.")));
     s.ais.forEach(function (ai) {
       var row = mk("div", "ai-item c" + colorOf(ai.name)), av = mk("div", "av", ai.name.charAt(0)); av.setAttribute("aria-hidden", "true");
       var nm = mk("div", "nm"); nm.appendChild(mk("b", "", ai.name));
-      var via = ai.provider && ai.provider !== "default" ? ai.provider + (ai.model ? "/" + ai.model : "") + (ai.ownKey ? " · 개인 키" : "") + " · " : "";
+      var via = ai.provider && ai.provider !== "default" ? ai.provider + (ai.model ? "/" + ai.model : "") + (ai.ownKey ? " · " + _t("개인 키") : "") + " · " : "";
       nm.appendChild(mk("small", "", via + ai.persona));
-      var rm = mk("button", "btn sm", "내보내기"); rm.type = "button"; rm.setAttribute("aria-label", ai.name + " 내보내기");
+      var rm = mk("button", "btn sm", _t("내보내기")); rm.type = "button"; rm.setAttribute("aria-label", _t("{name} 내보내기", { name: ai.name }));
       rm.addEventListener("click", function () { send({ t: "removeAI", id: ai.id }); });
-      var mt = mk("button", "btn sm", ai.muted ? "뮤트 해제" : "뮤트"); mt.type = "button"; mt.dataset.mute = ai.id; mt.setAttribute("aria-pressed", ai.muted ? "true" : "false");
+      var mt = mk("button", "btn sm", ai.muted ? _t("뮤트 해제") : _t("뮤트")); mt.type = "button"; mt.dataset.mute = ai.id; mt.setAttribute("aria-pressed", ai.muted ? "true" : "false");
       mt.addEventListener("click", function () { send({ t: "mute", aiId: ai.id, muted: !ai.muted }); });
       if (ai.muted) row.style.opacity = ".6";
       row.appendChild(av); row.appendChild(nm); row.appendChild(mt); row.appendChild(rm); box.appendChild(row);
@@ -1463,15 +1478,15 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     if (!s.mode) s.ais.forEach(function (ai) {
       var c = mk("button", "c" + colorOf(ai.name), "@" + ai.name); c.type = "button"; c.addEventListener("click", function () { insertMention(ai.name); }); chips.appendChild(c);
     });
-    if (s.ais.length && !s.mode) { var a2 = mk("button", "", "@모두"); a2.type = "button"; a2.addEventListener("click", function () { insertMention("모두"); }); chips.appendChild(a2); }
+    if (s.ais.length && !s.mode) { var a2 = mk("button", "", _t("@모두")); a2.type = "button"; a2.addEventListener("click", function () { insertMention(_t("모두")); }); chips.appendChild(a2); }
     var cur = $("curasset"); cur.textContent = "";
-    if (s.asset) { cur.appendChild(mk("b", "", s.asset.name)); cur.appendChild(mk("small", "", (s.asset.description || "설명 없음") + " · AI " + s.asset.ais + "명")); }
-    else { cur.appendChild(mk("b", "", "적용된 에셋 없음")); cur.appendChild(mk("small", "", "빈 방이거나 AI를 직접 초대한 상태입니다.")); }
+    if (s.asset) { cur.appendChild(mk("b", "", s.asset.name)); cur.appendChild(mk("small", "", (s.asset.description || _t("설명 없음")) + " · " + _t("AI {n}명", { n: s.asset.ais }))); }
+    else { cur.appendChild(mk("b", "", _t("적용된 에셋 없음"))); cur.appendChild(mk("small", "", _t("빈 방이거나 AI를 직접 초대한 상태입니다."))); }
     var active = document.activeElement;
     document.querySelectorAll('input[name="policy"]').forEach(function (r) { r.checked = r.value === s.policy; });
     if (active !== $("stplus") && active !== $("stminus")) $("stval").textContent = s.maxStreak;
     if (errAI && !s.ais.some(function (a) { return a.id === errAI.id; })) errAI = null;
-    $("text").placeholder = s.mode ? "요청을 입력하세요" : "메시지 입력 (@이름 으로 AI 호출)";
+    $("text").placeholder = s.mode ? _t("요청을 입력하세요") : _t("메시지 입력 (@이름 으로 AI 호출)");
     renderFlowBox(); renderDeliv(); renderModeCards(); renderLib(); renderPipe(); renderBrand(); renderStats(); renderShareHints();
     renderBudget(s.budget); renderFree(); renderStatus(); renderEmpty();
     if (joined) saveRoom(s.id, title);
@@ -1480,11 +1495,11 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var old = $("flowbox"); if (old) old.remove();
     if (!meta || !meta.mode) return;
     var box = mk("section"); box.id = "flowbox";
-    box.appendChild(mk("h3", "", MODEINFO[meta.mode.id].label + " 진행 순서"));
+    box.appendChild(mk("h3", "", _t("{label} 진행 순서", { label: MODEINFO[meta.mode.id].label })));
     var f = mk("div", "flow"); f.style.marginTop = "0";
     (meta.pipeline || meta.mode.pipeline).forEach(function (n, i) { if (i) f.appendChild(document.createTextNode("→")); f.appendChild(mk("i", "", n)); });
     box.appendChild(f);
-    box.appendChild(mk("p", "hint", "사람이 요청을 보낼 때마다 이 순서로 AI가 이어 받고, 결과가 산출물 탭에 쌓입니다. 한 번에 AI 호출 " + (meta.pipeline || meta.mode.pipeline).length + "회를 씁니다."));
+    box.appendChild(mk("p", "hint", _t("사람이 요청을 보낼 때마다 이 순서로 AI가 이어 받고, 결과가 산출물 탭에 쌓입니다. 한 번에 AI 호출 {n}회를 씁니다.", { n: (meta.pipeline || meta.mode.pipeline).length })));
     var host = document.querySelector('[data-panel="ai"]'), first = host.querySelector("section");
     host.insertBefore(box, first);
   }
@@ -1492,29 +1507,29 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   function renderDeliv() {
     var box = $("delivbox"); box.textContent = "";
     if (!deliv) {
-      box.appendChild(mk("p", "hint", meta && meta.mode ? "AI들이 요청을 처리하면 최종 결과가 여기에 쌓입니다. 코드는 파일로, 웹페이지는 미리보기로 볼 수 있어요." : "AI가 ``` 코드블록으로 결과를 내면 이곳에 표시됩니다. 모드를 적용하면 AI들이 순서대로 산출물을 만듭니다."));
+      box.appendChild(mk("p", "hint", meta && meta.mode ? _t("AI들이 요청을 처리하면 최종 결과가 여기에 쌓입니다. 코드는 파일로, 웹페이지는 미리보기로 볼 수 있어요.") : _t("AI가 ``` 코드블록으로 결과를 내면 이곳에 표시됩니다. 모드를 적용하면 AI들이 순서대로 산출물을 만듭니다.")));
       return;
     }
     var m = mk("div", "dmeta"), isHtml = deliv.lang === "html";
-    m.appendChild(mk("span", "pill", "v" + deliv.v)); m.appendChild(mk("span", "", deliv.by + " · " + deliv.lang + " · " + deliv.text.length + "자"));
+    m.appendChild(mk("span", "pill", "v" + deliv.v)); m.appendChild(mk("span", "", deliv.by + " · " + deliv.lang + " · " + _t("{n}자", { n: deliv.text.length })));
     if (isHtml) {
-      var tg = mk("button", "btn sm", dview === "preview" ? "코드 보기" : "미리보기"); tg.type = "button"; tg.id = "dtoggle";
+      var tg = mk("button", "btn sm", dview === "preview" ? _t("코드 보기") : _t("미리보기")); tg.type = "button"; tg.id = "dtoggle";
       tg.addEventListener("click", function () { dview = dview === "preview" ? "code" : "preview"; renderDeliv(); });
       m.appendChild(tg);
     }
     box.appendChild(m);
     if (isHtml && dview === "preview") {
-      var fr = document.createElement("iframe"); fr.id = "dframe"; fr.setAttribute("sandbox", ""); fr.setAttribute("title", "산출물 미리보기"); fr.srcdoc = deliv.text; box.appendChild(fr);
+      var fr = document.createElement("iframe"); fr.id = "dframe"; fr.setAttribute("sandbox", ""); fr.setAttribute("title", _t("산출물 미리보기")); fr.srcdoc = deliv.text; box.appendChild(fr);
     } else { var pre = mk("pre", "code mono dpre", deliv.text); pre.id = "dcode"; box.appendChild(pre); }
     var act = mk("div", "dact");
-    var cp = mk("button", "btn sm", "복사"); cp.type = "button"; cp.id = "dcopy";
-    cp.addEventListener("click", function () { try { navigator.clipboard.writeText(deliv.text).then(function () { toast("복사했습니다."); }, function () { toast("복사하지 못했습니다."); }); } catch (e) { toast("복사하지 못했습니다."); } });
-    var dl = mk("button", "btn sm primary", "파일로 저장"); dl.type = "button"; dl.id = "ddown";
+    var cp = mk("button", "btn sm", _t("복사")); cp.type = "button"; cp.id = "dcopy";
+    cp.addEventListener("click", function () { try { navigator.clipboard.writeText(deliv.text).then(function () { toast(_t("복사했습니다.")); }, function () { toast(_t("복사하지 못했습니다.")); }); } catch (e) { toast(_t("복사하지 못했습니다.")); } });
+    var dl = mk("button", "btn sm primary", _t("파일로 저장")); dl.type = "button"; dl.id = "ddown";
     dl.addEventListener("click", function () {
       try {
         var a = document.createElement("a"), u = URL.createObjectURL(new Blob([deliv.text], { type: "text/plain;charset=utf-8" }));
         a.href = u; a.download = "result-v" + deliv.v + "." + (EXT[deliv.lang] || "txt"); document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
-      } catch (e) { toast("저장하지 못했습니다. 복사해서 쓰세요."); }
+      } catch (e) { toast(_t("저장하지 못했습니다. 복사해서 쓰세요.")); }
     });
     act.appendChild(cp); act.appendChild(dl); box.appendChild(act);
   }
@@ -1522,19 +1537,19 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     try {
       var a = document.createElement("a"), u = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" }));
       a.href = u; a.download = fname; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
-    } catch (e) { toast("저장하지 못했습니다."); }
+    } catch (e) { toast(_t("저장하지 못했습니다.")); }
   }
   function renderLib() {
     var box = $("liblist"); box.textContent = "";
-    if (!meta || !meta.library.length) { box.appendChild(mk("p", "hint", "아직 없습니다. 에셋을 올리면 여기에 보관됩니다.")); return; }
+    if (!meta || !meta.library.length) { box.appendChild(mk("p", "hint", _t("아직 없습니다. 에셋을 올리면 여기에 보관됩니다."))); return; }
     meta.library.forEach(function (l) {
       var c = mk("div", "mcard"), t = mk("div");
-      t.appendChild(mk("b", "", l.name)); t.appendChild(mk("small", "", "AI " + l.ais + "명 · 올린 사람 " + l.by));
-      var ap = mk("button", "btn sm", "적용"); ap.type = "button"; ap.setAttribute("data-lib-apply", l.id);
+      t.appendChild(mk("b", "", l.name)); t.appendChild(mk("small", "", _t("AI {n}명 · 올린 사람 {by}", { n: l.ais, by: l.by })));
+      var ap = mk("button", "btn sm", _t("적용")); ap.type = "button"; ap.setAttribute("data-lib-apply", l.id);
       ap.addEventListener("click", function () { send({ t: "applyLib", id: l.id }); });
-      var dl = mk("button", "btn sm", "저장"); dl.type = "button"; dl.setAttribute("data-lib-dl", l.id); dl.setAttribute("aria-label", l.name + " 파일로 저장");
+      var dl = mk("button", "btn sm", _t("저장")); dl.type = "button"; dl.setAttribute("data-lib-dl", l.id); dl.setAttribute("aria-label", _t("{name} 파일로 저장", { name: l.name }));
       dl.addEventListener("click", function () { send({ t: "getAsset", id: l.id }); });
-      var rm = mk("button", "btn sm", "삭제"); rm.type = "button"; rm.setAttribute("aria-label", l.name + " 보관함에서 삭제");
+      var rm = mk("button", "btn sm", _t("삭제")); rm.type = "button"; rm.setAttribute("aria-label", _t("{name} 보관함에서 삭제", { name: l.name }));
       rm.addEventListener("click", function () { send({ t: "delLib", id: l.id }); });
       c.appendChild(t); c.appendChild(ap); c.appendChild(dl); c.appendChild(rm); box.appendChild(c);
     });
@@ -1546,10 +1561,10 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var can = !!(meta && meta.canPipeline), names = meta ? meta.ais.map(function (a) { return a.name; }) : [];
     $("pipelock").hidden = can;
     if (!pipeDirty) pipeDraft = (meta && meta.pipeline ? meta.pipeline.slice() : names.slice());
-    if (!pipeDraft.length) box.appendChild(mk("span", "hint", "AI가 없습니다."));
+    if (!pipeDraft.length) box.appendChild(mk("span", "hint", _t("AI가 없습니다.")));
     pipeDraft.forEach(function (n, i) {
       if (i) box.appendChild(document.createTextNode("→"));
-      var c = mk("i", "", n + " "), x = mk("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", n + " 단계 빼기");
+      var c = mk("i", "", n + " "), x = mk("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", _t("{name} 단계 빼기", { name: n }));
       x.style.cssText = "border:none;background:transparent;color:var(--muted);padding:0 2px;font-size:14px";
       x.addEventListener("click", function () { pipeDraft.splice(i, 1); pipeDirty = true; renderPipe(); });
       c.appendChild(x); box.appendChild(c);
@@ -1559,8 +1574,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     if (cur && names.indexOf(cur) >= 0) sel.value = cur;
     ["pipeadd", "pipeplus", "pipeapply", "pipereset"].forEach(function (id) { $(id).disabled = !can; });
   }
-  $("pipeplus").addEventListener("click", function () { if (pipeDraft.length >= 8) { toast("단계는 최대 8개입니다."); return; } pipeDraft.push($("pipeadd").value); pipeDirty = true; renderPipe(); });
-  $("pipeapply").addEventListener("click", function () { send({ t: "pipeline", steps: pipeDraft }); pipeDirty = false; toast("진행 순서를 적용했습니다."); });
+  $("pipeplus").addEventListener("click", function () { if (pipeDraft.length >= 8) { toast(_t("단계는 최대 8개입니다.")); return; } pipeDraft.push($("pipeadd").value); pipeDirty = true; renderPipe(); });
+  $("pipeapply").addEventListener("click", function () { send({ t: "pipeline", steps: pipeDraft }); pipeDirty = false; toast(_t("진행 순서를 적용했습니다.")); });
   $("pipereset").addEventListener("click", function () { send({ t: "pipeline", steps: [] }); pipeDirty = false; });
   function renderBrand() {
     var b = meta && meta.brand;
@@ -1571,17 +1586,17 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   }
   $("bsave").addEventListener("click", function () {
     send({ t: "brand", name: $("bname").value.trim(), primary: $("bprimary").value, bg: $("bbg").value, font: $("bfont").value, tone: $("btone").value.trim() });
-    toast("브랜드 키트를 저장했습니다.");
+    toast(_t("브랜드 키트를 저장했습니다."));
   });
   $("bclear").addEventListener("click", function () { send({ t: "brand", clear: true }); });
   function renderStats() {
     var box = $("stats"), st = meta && meta.stats; box.textContent = "";
     if (!st) return;
-    var rows = [["AI 요청 실행", st.runs + "회"], ["AI 호출", st.calls + "회"], ["산출물 버전", st.versions ? "v" + st.versions : "없음"], ["공유 링크", st.shares + "개"]];
-    if (meta.refund) rows.push(["품질 보증 환불", st.refunds + " / 5회"]);
+    var rows = [[_t("AI 요청 실행"), _t("{n}회", { n: st.runs })], [_t("AI 호출"), _t("{n}회", { n: st.calls })], [_t("산출물 버전"), st.versions ? "v" + st.versions : _t("없음")], [_t("공유 링크"), _t("{n}개", { n: st.shares })]];
+    if (meta.refund) rows.push([_t("품질 보증 환불"), _t("{n} / 5회", { n: st.refunds })]);
     rows.forEach(function (r) { var d = mk("div", "ai-item"); var n = mk("div", "nm"); n.appendChild(mk("b", "", r[0])); d.appendChild(n); d.appendChild(mk("span", "mono", r[1])); box.appendChild(d); });
     var names = Object.keys(st.byAI), max = 1; names.forEach(function (n) { max = Math.max(max, st.byAI[n]); });
-    if (names.length) { var h = mk("div", "hint", "AI별 발언 수"); h.style.marginTop = "12px"; box.appendChild(h); }
+    if (names.length) { var h = mk("div", "hint", _t("AI별 발언 수")); h.style.marginTop = "12px"; box.appendChild(h); }
     names.forEach(function (n) {
       var row = mk("div", "ai-item c" + colorOf(n)), l = mk("div", "nm"); l.appendChild(mk("b", "", n));
       var bar = mk("div"); bar.style.cssText = "height:6px;border-radius:3px;background:var(--h-sf);margin-top:4px;overflow:hidden";
@@ -1591,19 +1606,19 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   }
   function renderShareHints() {
     if (!meta) return;
-    $("retryhint").textContent = meta.refund ? "플러스 품질 보증: 결과가 마음에 안 들면 이전 실행에서 쓴 호출을 돌려받고 다시 만듭니다(방당 5회)." : "같은 요청을 처음부터 다시 실행합니다. 호출 예산을 씁니다. 플러스 플랜은 이전 호출을 돌려받아요.";
-    $("sharehint").textContent = "링크가 있는 누구나 볼 수 있고 " + meta.shareDays + "일 뒤 사라집니다." + (meta.badge ? " 무료 플랜은 페이지 위에 앱 안내 배너가 붙어요." : "");
+    $("retryhint").textContent = meta.refund ? _t("플러스 품질 보증: 결과가 마음에 안 들면 이전 실행에서 쓴 호출을 돌려받고 다시 만듭니다(방당 5회).") : _t("같은 요청을 처음부터 다시 실행합니다. 호출 예산을 씁니다. 플러스 플랜은 이전 호출을 돌려받아요.");
+    $("sharehint").textContent = _t("링크가 있는 누구나 볼 수 있고 {n}일 뒤 사라집니다.", { n: meta.shareDays }) + (meta.badge ? " " + _t("무료 플랜은 페이지 위에 앱 안내 배너가 붙어요.") : "");
   }
   function showShared(m) {
     var box = $("sharebox"); box.textContent = "";
-    var url = location.origin + m.url, f = mk("input", "field mono"); f.value = url; f.readOnly = true; f.style.marginTop = "10px"; f.setAttribute("aria-label", "공유 링크");
+    var url = location.origin + m.url, f = mk("input", "field mono"); f.value = url; f.readOnly = true; f.style.marginTop = "10px"; f.setAttribute("aria-label", _t("공유 링크"));
     f.addEventListener("focus", function () { f.select(); });
-    var b = mk("button", "btn sm", "링크 복사"); b.type = "button"; b.style.marginTop = "8px"; b.id = "copyshare";
-    b.addEventListener("click", function () { try { navigator.clipboard.writeText(url).then(function () { toast("링크를 복사했습니다."); }, function () { f.select(); }); } catch (e) { f.select(); } });
-    var a = mk("a", "", "새 탭에서 열기"); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.style.cssText = "margin-left:12px;font-size:13px;color:var(--accent-text)";
+    var b = mk("button", "btn sm", _t("링크 복사")); b.type = "button"; b.style.marginTop = "8px"; b.id = "copyshare";
+    b.addEventListener("click", function () { try { navigator.clipboard.writeText(url).then(function () { toast(_t("링크를 복사했습니다.")); }, function () { f.select(); }); } catch (e) { f.select(); } });
+    var a = mk("a", "", _t("새 탭에서 열기")); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.style.cssText = "margin-left:12px;font-size:13px;color:var(--accent-text)";
     box.appendChild(f); box.appendChild(b); box.appendChild(a);
   }
-  $("retry").addEventListener("click", function () { send({ t: "retry" }); toast("다시 만들고 있습니다."); });
+  $("retry").addEventListener("click", function () { send({ t: "retry" }); toast(_t("다시 만들고 있습니다.")); });
   $("shareres").addEventListener("click", function () { send({ t: "share", kind: "result" }); });
   $("sharechat").addEventListener("click", function () { send({ t: "share", kind: "chat" }); });
   var modeCand = null;
@@ -1611,13 +1626,13 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var box = $("modecards"); box.textContent = ""; $("modeconfirm").textContent = "";
     Object.keys(MODEINFO).forEach(function (id) {
       var i = MODEINFO[id], c = mk("div", "mcard"), t = mk("div");
-      t.appendChild(mk("b", "", i.label + (meta && meta.mode && meta.mode.id === id ? " (적용 중)" : ""))); t.appendChild(mk("small", "", i.desc));
-      var b = mk("button", "btn sm", "적용"); b.type = "button"; b.setAttribute("data-mode", id);
+      t.appendChild(mk("b", "", i.label + (meta && meta.mode && meta.mode.id === id ? " " + _t("(적용 중)") : ""))); t.appendChild(mk("small", "", i.desc));
+      var b = mk("button", "btn sm", _t("적용")); b.type = "button"; b.setAttribute("data-mode", id);
       b.addEventListener("click", function () {
         var cf = $("modeconfirm"); cf.textContent = "";
-        var l = mk("div", "inl"); l.appendChild(mk("div", "", i.label + " 모드를 적용하면 AI 구성과 산출물이 교체됩니다."));
-        var ok = mk("button", "btn sm primary", "적용"); ok.type = "button"; ok.id = "modeok";
-        var no = mk("button", "btn sm", "취소"); no.type = "button";
+        var l = mk("div", "inl"); l.appendChild(mk("div", "", _t("{label} 모드를 적용하면 AI 구성과 산출물이 교체됩니다.", { label: i.label })));
+        var ok = mk("button", "btn sm primary", _t("적용")); ok.type = "button"; ok.id = "modeok";
+        var no = mk("button", "btn sm", _t("취소")); no.type = "button";
         ok.addEventListener("click", function () { cf.textContent = ""; send({ t: "mode", id: id }); });
         no.addEventListener("click", function () { cf.textContent = ""; });
         l.appendChild(ok); l.appendChild(no); cf.appendChild(l);
@@ -1643,23 +1658,23 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 
   /* ---- 크레딧 · 내 방 · 마켓 · 방 기억 ---- */
   var credits = null;
-  function fmtCredits(c) { return "오늘 " + (c.limit - c.used) + "/" + c.limit + (c.plan === "plus" ? " ✦" : ""); }
+  function fmtCredits(c) { return _t("오늘 {left}/{limit}", { left: c.limit - c.used, limit: c.limit }) + (c.plan === "plus" ? " ✦" : ""); }
   function renderCredits() {
     var on = !!(credits && joined); $("crchip").hidden = !on;
     if (on) { $("crtxt").textContent = fmtCredits(credits); $("crchip").style.color = credits.used >= credits.limit ? "var(--err-tx)" : ""; }
     var sec = $("acct"); if (sec && authUser && credits) { var old = sec.querySelector(".crline"); if (!old) { old = mk("div", "hint crline"); old.style.marginTop = "8px"; sec.appendChild(old); }
-      old.textContent = "플랜 " + (credits.plan === "plus" ? "플러스" : "무료") + " · 오늘 남은 AI 호출 " + (credits.limit - credits.used) + "회 (한국 시간 자정에 초기화)"; }
+      old.textContent = _t("플랜 {plan} · 오늘 남은 AI 호출 {n}회 (한국 시간 자정에 초기화)", { plan: credits.plan === "plus" ? _t("플러스") : _t("무료"), n: credits.limit - credits.used }); }
   }
   function loadMyRooms() {
     if (!authUser) { $("acctroomswrap").hidden = true; return; }
     fetch("/api/myrooms").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
       if (!j) return; var local = {}; try { JSON.parse(store("rooms") || "[]").forEach(function (r) { local[r.id] = 1; }); } catch (e) {}
       var list = j.rooms.filter(function (r) { return !local[r.id]; }); var box = $("acctrooms"); box.textContent = "";
-      $("acctroomswrap").hidden = !list.length; $("keephint").textContent = "· " + j.keepDays + "일 보관";
+      $("acctroomswrap").hidden = !list.length; $("keephint").textContent = "· " + _t("{n}일 보관", { n: j.keepDays });
       list.forEach(function (r) {
         var row = mk("div", "room"); row.setAttribute("role", "button"); row.tabIndex = 0;
-        var av = mk("div", "av", (r.title || "방").charAt(0)); humanStyle(av, r.title || "방");
-        var nm = mk("div", "nm"); nm.appendChild(mk("b", "", r.title)); nm.appendChild(mk("small", "", "AI " + r.ais + "명 · " + ago(r.ts) + (r.owner ? " · 내가 만든 방" : "")));
+        var av = mk("div", "av", (r.title || _t("방")).charAt(0)); humanStyle(av, r.title || _t("방"));
+        var nm = mk("div", "nm"); nm.appendChild(mk("b", "", r.title)); nm.appendChild(mk("small", "", _t("AI {n}명", { n: r.ais }) + " · " + ago(r.ts) + (r.owner ? " · " + _t("내가 만든 방") : "")));
         var open = function () { enterRoom(r.id); }; row.addEventListener("click", open); row.addEventListener("keydown", function (ev) { if (ev.key === "Enter") open(); });
         row.appendChild(av); row.appendChild(nm); box.appendChild(row);
       });
@@ -1670,33 +1685,33 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   function mkApi(path, body) { return fetch(path, body === undefined ? undefined : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(function (r) { return r.json().then(function (j) { j._ok = r.ok; j._st = r.status; return j; }); }); }
   function mkCard(it, feat) {
     var c = mk("div", "mk" + (feat ? " feat" : "")); c.dataset.id = it.id;
-    if (feat) c.appendChild(mk("span", "badge-prem", "오늘의 에셋"));
-    if (it.premium) c.appendChild(mk("span", "badge-prem", "플러스 전용"));
+    if (feat) c.appendChild(mk("span", "badge-prem", _t("오늘의 에셋")));
+    if (it.premium) c.appendChild(mk("span", "badge-prem", _t("플러스 전용")));
     c.appendChild(mk("h4", "", it.name)); c.appendChild(mk("p", "", it.desc));
     var tags = mk("div", "tags"); it.ais.forEach(function (a) { var t = mk("span", "", a.name); t.title = a.persona; tags.appendChild(t); }); c.appendChild(tags);
-    var m = mk("div", "meta"); m.appendChild(mk("span", "", "by " + it.author)); m.appendChild(mk("span", "", "설치 " + it.installs)); m.appendChild(mk("span", "likes", "♥ " + it.likes)); c.appendChild(m);
+    var m = mk("div", "meta"); m.appendChild(mk("span", "", "by " + it.author)); m.appendChild(mk("span", "", _t("설치 {n}", { n: it.installs }))); m.appendChild(mk("span", "likes", "♥ " + it.likes)); c.appendChild(m);
     var acts = mk("div", "acts");
-    acts.appendChild(mkAct("이 구성으로 방 만들기", function () {
-      mkApi("/api/gallery/" + it.id + "/install", {}).then(function (j) { if (!j._ok) { $("mkmsg").textContent = j.error || "설치하지 못했습니다."; return; } $("market").hidden = true; startFromAsset(j.asset); });
+    acts.appendChild(mkAct(_t("이 구성으로 방 만들기"), function () {
+      mkApi("/api/gallery/" + it.id + "/install", {}).then(function (j) { if (!j._ok) { $("mkmsg").textContent = _tx(j.error) || _t("설치하지 못했습니다."); return; } $("market").hidden = true; startFromAsset(j.asset); });
     }, "primary"));
-    acts.appendChild(mkAct((it.liked ? "♥ 취소" : "♡ 좋아요"), function () { mkApi("/api/gallery/" + it.id + "/like", {}).then(function () { loadMarket(); }); }));
-    if (it.mine) acts.appendChild(mkAct("삭제", function () { mkApi("/api/gallery/" + it.id + "/delete", {}).then(function () { loadMarket(); }); }));
-    else acts.appendChild(mkAct("신고", function () { mkApi("/api/gallery/" + it.id + "/report", { reason: "user" }).then(function () { toast("신고했어요. 검토 전까지 다른 사용자에게 숨김 처리될 수 있어요."); }); }));
+    acts.appendChild(mkAct((it.liked ? _t("♥ 취소") : _t("♡ 좋아요")), function () { mkApi("/api/gallery/" + it.id + "/like", {}).then(function () { loadMarket(); }); }));
+    if (it.mine) acts.appendChild(mkAct(_t("삭제"), function () { mkApi("/api/gallery/" + it.id + "/delete", {}).then(function () { loadMarket(); }); }));
+    else acts.appendChild(mkAct(_t("신고"), function () { mkApi("/api/gallery/" + it.id + "/report", { reason: "user" }).then(function () { toast(_t("신고했어요. 검토 전까지 다른 사용자에게 숨김 처리될 수 있어요.")); }); }));
     c.appendChild(acts); return c;
   }
   function loadMarket() {
     var q = encodeURIComponent($("mkq").value || "");
     mkApi("/api/gallery?sort=" + mkSort + "&q=" + q).then(function (j) {
       var list = $("mklist"), feat = $("mkfeat"); list.textContent = ""; feat.textContent = ""; $("mkmsg").textContent = "";
-      if (!j._ok) { $("mkmsg").textContent = j._st === 401 ? "로그인한 뒤에 이용할 수 있어요." : (j.error || "불러오지 못했습니다."); return; }
+      if (!j._ok) { $("mkmsg").textContent = j._st === 401 ? _t("로그인한 뒤에 이용할 수 있어요.") : (_tx(j.error) || _t("불러오지 못했습니다.")); return; }
       var f = j.items.filter(function (i) { return i.id === j.featured; })[0]; if (f && !$("mkq").value) feat.appendChild(mkCard(f, true));
       j.items.forEach(function (i) { list.appendChild(mkCard(i, false)); });
-      if (!j.items.length) $("mkmsg").textContent = "아직 게시된 에셋이 없어요. 방을 만들고 정보 패널 → 에셋 탭에서 첫 에셋을 올려 보세요.";
+      if (!j.items.length) $("mkmsg").textContent = _t("아직 게시된 에셋이 없어요. 방을 만들고 정보 패널 → 에셋 탭에서 첫 에셋을 올려 보세요.");
     });
   }
   function startFromAsset(a) {
     if (joined || ws || inRoomUrl) goHome(); setView("main");
-    pendingAsset = a; var r = document.querySelector('input[name="jmode"][value="asset"]'); r.checked = true; r.dispatchEvent(new Event("change")); showJoinAsset(); toast("에셋을 불러왔어요. 이름을 입력하고 입장하세요.");
+    pendingAsset = a; var r = document.querySelector('input[name="jmode"][value="asset"]'); r.checked = true; r.dispatchEvent(new Event("change")); showJoinAsset(); toast(_t("에셋을 불러왔어요. 이름을 입력하고 입장하세요."));
   }
   $("marketbtn").addEventListener("click", function () { $("market").hidden = false; loadMarket(); });
   $("mkback").addEventListener("click", function () { $("market").hidden = true; });
@@ -1704,51 +1719,51 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   document.querySelectorAll(".seg2 button").forEach(function (b) { b.addEventListener("click", function () { mkSort = b.dataset.sort; document.querySelectorAll(".seg2 button").forEach(function (x) { x.setAttribute("aria-current", x === b ? "true" : "false"); }); loadMarket(); }); });
   $("pubgo").addEventListener("click", function () {
     $("pubmsg").textContent = "";
-    mkApi("/api/gallery", { room: roomId, desc: $("pubdesc").value, premium: $("pubpremium").checked }).then(function (j) { $("pubmsg").textContent = j._ok ? (j.updated ? "마켓의 내 에셋을 갱신했어요." : "마켓에 게시했어요!") : (j.error || "게시하지 못했습니다."); if (j._ok) $("pubdesc").value = ""; });
+    mkApi("/api/gallery", { room: roomId, desc: $("pubdesc").value, premium: $("pubpremium").checked }).then(function (j) { $("pubmsg").textContent = j._ok ? (j.updated ? _t("마켓의 내 에셋을 갱신했어요.") : _t("마켓에 게시했어요!")) : (_tx(j.error) || _t("게시하지 못했습니다.")); if (j._ok) $("pubdesc").value = ""; });
   });
   function renderPub() {
     var isOwner = !!(authUser && youOwner), plus = !!(credits && credits.plan === "plus");
     $("pubgo").disabled = !isOwner; $("pubdesc").disabled = !isOwner; $("pubprem").hidden = !plus;
-    $("pubhint").textContent = !authUser ? "로그인하면 내 방 구성을 마켓에 올릴 수 있어요." : !isOwner ? "내가 만든 방에서만 게시할 수 있어요." : "내 방 구성(AI, 규칙, 시작 문서)을 마켓에 올려 다른 사람이 쓰게 할 수 있어요. 대화 내용과 API 키는 올라가지 않아요. 무료는 1개, 플러스는 10개까지.";
+    $("pubhint").textContent = !authUser ? _t("로그인하면 내 방 구성을 마켓에 올릴 수 있어요.") : !isOwner ? _t("내가 만든 방에서만 게시할 수 있어요.") : _t("내 방 구성(AI, 규칙, 시작 문서)을 마켓에 올려 다른 사람이 쓰게 할 수 있어요. 대화 내용과 API 키는 올라가지 않아요. 무료는 1개, 플러스는 10개까지.");
   }
   var youOwner = true;
   function renderMemory(text) {
     $("memtext").value = text || "";
-    $("memhint").textContent = meta && meta.autoMemory ? "대화가 길어지면 AI가 자동으로 요약해 기억해요. (플러스)" : "자동 요약은 플러스에서 켜져요. 여기에 직접 적어 두면 모든 AI가 참고해요.";
+    $("memhint").textContent = meta && meta.autoMemory ? _t("대화가 길어지면 AI가 자동으로 요약해 기억해요. (플러스)") : _t("자동 요약은 플러스에서 켜져요. 여기에 직접 적어 두면 모든 AI가 참고해요.");
   }
-  $("memsave").addEventListener("click", function () { send({ t: "memory", text: $("memtext").value }); toast("방 기억을 저장했어요"); });
+  $("memsave").addEventListener("click", function () { send({ t: "memory", text: $("memtext").value }); toast(_t("방 기억을 저장했어요")); });
   $("memclear").addEventListener("click", function () { $("memtext").value = ""; send({ t: "memory", text: "" }); });
 
   /* ---- 내장 도구 (전부 브라우저 안에서만 실행) ---- */
   var TOOLS = {
     json: function (box) {
-      var ta = tArea(box, "JSON을 붙여 넣으세요", 7), out = tArea(box, "결과", 7, true);
+      var ta = tArea(box, _t("JSON을 붙여 넣으세요"), 7), out = tArea(box, _t("결과"), 7, true);
       var row = mk("div", "pfact"); row.style.marginTop = "8px";
-      function run(ind) { try { var v = JSON.parse(ta.value); out.value = JSON.stringify(v, null, ind); out.style.borderColor = ""; } catch (e) { out.value = "오류: " + e.message; out.style.borderColor = "var(--err-tx)"; } }
-      row.appendChild(tBtn("정리(들여쓰기)", function () { run(2); })); row.appendChild(tBtn("압축", function () { run(0); })); box.insertBefore(row, out);
+      function run(ind) { try { var v = JSON.parse(ta.value); out.value = JSON.stringify(v, null, ind); out.style.borderColor = ""; } catch (e) { out.value = _t("오류: {msg}", { msg: e.message }); out.style.borderColor = "var(--err-tx)"; } }
+      row.appendChild(tBtn(_t("정리(들여쓰기)"), function () { run(2); })); row.appendChild(tBtn(_t("압축"), function () { run(0); })); box.insertBefore(row, out);
       tOut(box, out);
     },
     regex: function (box) {
-      var pat = tInput(box, "정규식 (예: (\\d+)-(\\w+))"), fl = tInput(box, "플래그 (기본 g)"); fl.value = "g";
-      var ta = tArea(box, "테스트할 글", 5), out = tArea(box, "일치 결과", 6, true);
+      var pat = tInput(box, "정규식 (예: (\\d+)-(\\w+))"), fl = tInput(box, _t("플래그 (기본 g)")); fl.value = "g";
+      var ta = tArea(box, _t("테스트할 글"), 5), out = tArea(box, _t("일치 결과"), 6, true);
       function run() {
         if (!pat.value) { out.value = ""; return; }
-        if (ta.value.length > 5000) { out.value = "글이 너무 깁니다(5000자 이하)."; return; }
+        if (ta.value.length > 5000) { out.value = _t("글이 너무 깁니다(5000자 이하)."); return; }
         try {
           var re = new RegExp(pat.value, fl.value.replace(/[^dgimsuy]/g, "")), res = [], m, n = 0;
           if (!re.global) { m = re.exec(ta.value); if (m) res.push(m); } else while ((m = re.exec(ta.value)) && n++ < 200) { res.push(m); if (m[0] === "") re.lastIndex++; }
-          out.value = res.length ? res.length + "개 일치\n" + res.map(function (r, i) { return (i + 1) + ". “" + r[0] + "” @" + r.index + (r.length > 1 ? "  그룹: " + r.slice(1).map(function (g) { return g === undefined ? "∅" : "“" + g + "”"; }).join(", ") : ""); }).join("\n") : "일치 없음";
-        } catch (e) { out.value = "정규식 오류: " + e.message; }
+          out.value = res.length ? _t("{n}개 일치", { n: res.length }) + "\n" + res.map(function (r, i) { return (i + 1) + ". “" + r[0] + "” @" + r.index + (r.length > 1 ? "  " + _t("그룹") + ": " + r.slice(1).map(function (g) { return g === undefined ? "∅" : "“" + g + "”"; }).join(", ") : ""); }).join("\n") : _t("일치 없음");
+        } catch (e) { out.value = _t("정규식 오류: {msg}", { msg: e.message }); }
       }
       [pat, fl, ta].forEach(function (el) { el.addEventListener("input", run); }); tOut(box, out);
     },
     enc: function (box) {
-      var ta = tArea(box, "변환할 글", 5), out = tArea(box, "결과", 5, true);
+      var ta = tArea(box, _t("변환할 글"), 5), out = tArea(box, _t("결과"), 5, true);
       function b64e(t) { var b = new TextEncoder().encode(t), s = ""; b.forEach(function (c) { s += String.fromCharCode(c); }); return btoa(s); }
       function b64d(t) { var s = atob(t.replace(/\s/g, "")), b = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return new TextDecoder().decode(b); }
       var row = mk("div", "pfact"); row.style.marginTop = "8px";
-      [["Base64 인코딩", b64e], ["Base64 디코딩", b64d], ["URL 인코딩", encodeURIComponent], ["URL 디코딩", decodeURIComponent]].forEach(function (x) {
-        row.appendChild(tBtn(x[0], function () { try { out.value = x[1](ta.value); } catch (e) { out.value = "변환 오류: " + e.message; } }));
+      [[_t("Base64 인코딩"), b64e], [_t("Base64 디코딩"), b64d], [_t("URL 인코딩"), encodeURIComponent], [_t("URL 디코딩"), decodeURIComponent]].forEach(function (x) {
+        row.appendChild(tBtn(x[0], function () { try { out.value = x[1](ta.value); } catch (e) { out.value = _t("변환 오류: {msg}", { msg: e.message }); } }));
       });
       box.insertBefore(row, out); tOut(box, out);
     },
@@ -1760,46 +1775,46 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       function hsl(r, g, b) { r /= 255; g /= 255; b /= 255; var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, h = 0, s = 0, d = mx - mn; if (d) { s = d / (1 - Math.abs(2 * l - 1)); h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360; } return [h, s, l]; }
       function hex(h, s, l) { var c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2, r = 0, g = 0, b = 0; if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; } else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; } return "#" + [r, g, b].map(function (v) { return ("0" + Math.round((v + m) * 255).toString(16)).slice(-2); }).join("").toUpperCase(); }
       function run() {
-        out.textContent = ""; var c = toRgb(inp.value); if (!c) { out.appendChild(mk("div", "hint", "#RRGGBB 형식으로 입력하세요.")); return; }
+        out.textContent = ""; var c = toRgb(inp.value); if (!c) { out.appendChild(mk("div", "hint", _t("#RRGGBB 형식으로 입력하세요."))); return; }
         var L = lum(c[0], c[1], c[2]), cw = 1.05 / (L + .05), cb = (L + .05) / .05;
-        out.appendChild(mk("div", "hint", "흰 글씨 대비 " + cw.toFixed(2) + ":1 · 검정 글씨 대비 " + cb.toFixed(2) + ":1 · " + (Math.max(cw, cb) >= 4.5 ? "본문 글씨 기준(AA) 통과" : "본문 글씨 기준(AA) 미달")));
+        out.appendChild(mk("div", "hint", _t("흰 글씨 대비 {a}:1 · 검정 글씨 대비 {b}:1 · {res}", { a: cw.toFixed(2), b: cb.toFixed(2), res: Math.max(cw, cb) >= 4.5 ? _t("본문 글씨 기준(AA) 통과") : _t("본문 글씨 기준(AA) 미달") })));
         var h = hsl(c[0], c[1], c[2]), sw = mk("div"); sw.style.cssText = "display:flex;gap:6px;margin-top:10px;flex-wrap:wrap";
-        [["기준", h[0]], ["보색", h[0] + 180], ["유사1", h[0] + 30], ["유사2", h[0] - 30], ["삼각1", h[0] + 120], ["삼각2", h[0] + 240]].forEach(function (x) {
-          var hh = ((x[1] % 360) + 360) % 360, hx = x[0] === "기준" ? inp.value.toUpperCase() : hex(hh, h[1], h[2]);
+        [[_t("기준"), h[0]], [_t("보색"), h[0] + 180], [_t("유사1"), h[0] + 30], [_t("유사2"), h[0] - 30], [_t("삼각1"), h[0] + 120], [_t("삼각2"), h[0] + 240]].forEach(function (x) {
+          var hh = ((x[1] % 360) + 360) % 360, hx = x[0] === _t("기준") ? inp.value.toUpperCase() : hex(hh, h[1], h[2]);
           var b = mk("button", "btn sm", x[0] + " " + hx); b.type = "button"; b.style.cssText = "border-left:14px solid " + hx; b.addEventListener("click", function () { copyText(hx); });
           sw.appendChild(b);
         });
-        out.appendChild(sw); out.appendChild(mk("div", "hint", "누르면 색상 코드가 복사돼요."));
+        out.appendChild(sw); out.appendChild(mk("div", "hint", _t("누르면 색상 코드가 복사돼요.")));
       }
       inp.addEventListener("input", run); run();
     },
     count: function (box) {
-      var ta = tArea(box, "글을 붙여 넣으세요", 7), out = mk("div", "hint"); out.style.marginTop = "10px"; box.appendChild(out);
+      var ta = tArea(box, _t("글을 붙여 넣으세요"), 7), out = mk("div", "hint"); out.style.marginTop = "10px"; box.appendChild(out);
       function run() {
         var t = ta.value, ko = (t.match(/[ㄱ-ㆎ가-힣]/g) || []).length, cjk = (t.match(/[一-鿿぀-ヿ]/g) || []).length, rest = t.length - ko - cjk;
         var tok = Math.ceil(rest / 4 + ko * 0.9 + cjk * 1.1);
-        out.textContent = "글자 " + t.length + " · 공백 제외 " + t.replace(/\s/g, "").length + " · 단어 " + (t.trim() ? t.trim().split(/\s+/).length : 0) + " · 줄 " + (t ? t.split("\n").length : 0) + " · 바이트 " + new TextEncoder().encode(t).length + "\n토큰(아주 대략) ≈ " + tok + " — 모델마다 달라요. 긴 글은 요약해서 보내면 호출 비용이 줄어요.";
+        out.textContent = _t("글자 {c} · 공백 제외 {s} · 단어 {w} · 줄 {l} · 바이트 {b}", { c: t.length, s: t.replace(/\s/g, "").length, w: t.trim() ? t.trim().split(/\s+/).length : 0, l: t ? t.split("\n").length : 0, b: new TextEncoder().encode(t).length }) + "\n" + _t("토큰(아주 대략) ≈ {n} — 모델마다 달라요. 긴 글은 요약해서 보내면 호출 비용이 줄어요.", { n: tok });
         out.style.whiteSpace = "pre-wrap";
       }
       ta.addEventListener("input", run); run();
     },
     spark: function (box) {
-      var A = ["고장 난 시계탑", "마지막 버스", "비 오는 옥상", "잃어버린 레시피", "야간 편의점", "느린 우주선", "말하는 우산", "폐교의 도서관", "새벽 3시의 라디오", "사라진 지도"];
-      var B = ["미스터리", "코미디", "SF", "로맨스", "다큐처럼", "동화", "누아르", "일상 힐링", "역사 패러디", "공포(순한 맛)"];
-      var C = ["대사 없이 표현", "주인공이 둘", "반전 하나", "3줄 요약 가능하게", "숫자 7을 꼭 포함", "시점을 바꿔서", "제한시간 24시간", "예산 0원", "한 장소에서만", "AI가 조연"];
+      var A = [_t("고장 난 시계탑"), _t("마지막 버스"), _t("비 오는 옥상"), _t("잃어버린 레시피"), _t("야간 편의점"), _t("느린 우주선"), _t("말하는 우산"), _t("폐교의 도서관"), _t("새벽 3시의 라디오"), _t("사라진 지도")];
+      var B = [_t("미스터리"), _t("코미디"), "SF", _t("로맨스"), _t("다큐처럼"), _t("동화"), _t("누아르"), _t("일상 힐링"), _t("역사 패러디"), _t("공포(순한 맛)")];
+      var C = [_t("대사 없이 표현"), _t("주인공이 둘"), _t("반전 하나"), _t("3줄 요약 가능하게"), _t("숫자 7을 꼭 포함"), _t("시점을 바꿔서"), _t("제한시간 24시간"), _t("예산 0원"), _t("한 장소에서만"), _t("AI가 조연")];
       var out = mk("div"); out.id = "sparkout"; box.appendChild(out);
       function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
       var cur = "";
-      function run() { cur = "소재: " + pick(A) + "\n장르: " + pick(B) + "\n제약: " + pick(C); out.textContent = cur; out.style.cssText = "white-space:pre-wrap;padding:14px;border:1px solid var(--line2);border-radius:14px;background:var(--surface2);font-weight:600;line-height:1.7;margin-bottom:8px"; }
-      var row = mk("div", "pfact"); row.appendChild(tBtn("다시 뽑기", run)); row.appendChild(tBtn("채팅에 붙이기", function () { pasteToChat(cur); })); row.appendChild(tBtn("복사", function () { copyText(cur); })); box.appendChild(row); run();
+      function run() { cur = _t("소재: {a}\n장르: {b}\n제약: {c}", { a: pick(A), b: pick(B), c: pick(C) }); out.textContent = cur; out.style.cssText = "white-space:pre-wrap;padding:14px;border:1px solid var(--line2);border-radius:14px;background:var(--surface2);font-weight:600;line-height:1.7;margin-bottom:8px"; }
+      var row = mk("div", "pfact"); row.appendChild(tBtn(_t("다시 뽑기"), run)); row.appendChild(tBtn(_t("채팅에 붙이기"), function () { pasteToChat(cur); })); row.appendChild(tBtn(_t("복사"), function () { copyText(cur); })); box.appendChild(row); run();
     }
   };
   function tArea(box, ph, rows, ro) { var t = mk("textarea", "field"); t.placeholder = ph; t.rows = rows; t.style.cssText = "margin-top:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12.5px;resize:vertical"; t.setAttribute("aria-label", ph); if (ro) t.readOnly = true; box.appendChild(t); return t; }
   function tInput(box, ph) { var t = mk("input", "field"); t.placeholder = ph; t.style.marginTop = "8px"; t.setAttribute("aria-label", ph); box.appendChild(t); return t; }
   function tBtn(label, fn) { var b = mk("button", "btn sm", label); b.type = "button"; b.addEventListener("click", fn); return b; }
-  function copyText(t) { try { navigator.clipboard.writeText(t).then(function () { toast("복사했어요"); }, function () { toast("복사하지 못했어요"); }); } catch (e) { toast("복사하지 못했어요"); } }
+  function copyText(t) { try { navigator.clipboard.writeText(t).then(function () { toast(_t("복사했어요")); }, function () { toast(_t("복사하지 못했어요")); }); } catch (e) { toast(_t("복사하지 못했어요")); } }
   function pasteToChat(t) { var el = $("text"); el.value = (el.value ? el.value + "\n" : "") + t; el.dispatchEvent(new Event("input")); if (!wide()) closeInfo(); el.focus(); }
-  function tOut(box, out) { var row = mk("div", "pfact"); row.style.marginTop = "8px"; row.appendChild(tBtn("복사", function () { copyText(out.value); })); row.appendChild(tBtn("채팅에 붙이기", function () { if (out.value) pasteToChat(out.value); })); box.appendChild(row); }
+  function tOut(box, out) { var row = mk("div", "pfact"); row.style.marginTop = "8px"; row.appendChild(tBtn(_t("복사"), function () { copyText(out.value); })); row.appendChild(tBtn(_t("채팅에 붙이기"), function () { if (out.value) pasteToChat(out.value); })); box.appendChild(row); }
   function renderTool() { var box = $("toolbox"); box.textContent = ""; (TOOLS[$("toolsel").value] || TOOLS.json)(box); }
   $("toolsel").addEventListener("change", renderTool); renderTool();
 
@@ -1814,7 +1829,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     } else if (m.t === "meta") { renderMeta(m); }
     else if (m.t === "msg") {
       dropTyping(); addMessage(m.msg);
-      if (document.hidden && m.msg.kind !== "system" && m.msg.who !== me) { unread++; document.title = "(" + unread + ") AI 채팅방"; }
+      if (document.hidden && m.msg.kind !== "system" && m.msg.who !== me) { unread++; document.title = "(" + unread + ") " + _t("AI 채팅방"); }
       if (m.msg.kind === "ai" && meta && meta.plan.ads && meta.adList.length && ++aiShown % 4 === 0) insertAd(meta.adList[(aiShown / 4 - 1) % meta.adList.length]);
       if (m.msg.kind === "ai" && errAI && errAI.name === m.msg.who) { errAI = null; renderStatus(); }
       if (m.msg.code === "BUDGET_EXHAUSTED") { budgetAlert = true; renderStatus(); }
@@ -1824,14 +1839,14 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     else if (m.t === "dm") {
       (dmThreads[m.aiId] = dmThreads[m.aiId] || []).push(m.msg);
       var dai = aiById(m.aiId);
-      if (m.msg.kind === "ai") { if (dmOpen !== m.aiId) { dmUnread[m.aiId] = true; toast((dai ? dai.name : "AI") + "님이 귓속말을 보냈어요"); } }
+      if (m.msg.kind === "ai") { if (dmOpen !== m.aiId) { dmUnread[m.aiId] = true; toast(_t("{name}님이 귓속말을 보냈어요", { name: dai ? dai.name : "AI" })); } }
       if (dmOpen === m.aiId) renderDM(); renderInbox();
     }
     else if (m.t === "credits") { credits = m.credits; renderCredits(); renderPub(); }
-    else if (m.t === "memory") { renderMemory(m.text); if (m.auto) toast("방 기억이 갱신됐어요"); }
+    else if (m.t === "memory") { renderMemory(m.text); if (m.auto) toast(_t("방 기억이 갱신됐어요")); }
     else if (m.t === "aidms") {
       var grew = JSON.stringify(m.list).length > JSON.stringify(aidms).length; aidms = m.list || [];
-      if (grew && peekOpen < 0) { dmUnread.peek = true; toast("AI끼리 몰래 쪽지를 주고받았어요 · 엿보기"); }
+      if (grew && peekOpen < 0) { dmUnread.peek = true; toast(_t("AI끼리 몰래 쪽지를 주고받았어요 · 엿보기")); }
       if (peekOpen >= 0) renderPeek(); renderInbox();
     }
     else if (m.t === "dmtyping") { dmTyping[m.aiId] = m.on; if (dmOpen === m.aiId) renderDM(); }
@@ -1842,31 +1857,31 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       dropTyping(); setLive(m.who);
       if (m.who) {
         var row = mk("div", "row typing first last c" + colorOf(m.who)), av = mk("div", "av", m.who.charAt(0)); av.setAttribute("aria-hidden", "true");
-        var col = mk("div", "col"), b = mk("div", "bubble"); b.setAttribute("aria-label", m.who + " 입력 중"); b.appendChild(mk("i")); b.appendChild(mk("i")); b.appendChild(mk("i")); col.appendChild(b);
+        var col = mk("div", "col"), b = mk("div", "bubble"); b.setAttribute("aria-label", _t("{name} 입력 중", { name: m.who })); b.appendChild(mk("i")); b.appendChild(mk("i")); b.appendChild(mk("i")); col.appendChild(b);
         row.appendChild(av); row.appendChild(col); $("log").appendChild(row); $("log").scrollTop = $("log").scrollHeight; typRow = row;
         typTimer = setTimeout(dropTyping, 65000);
       }
     }
-    else if (m.t === "shared") { showShared(m); openInfo("deliv"); toast("공유 링크를 만들었습니다."); }
+    else if (m.t === "shared") { showShared(m); openInfo("deliv"); toast(_t("공유 링크를 만들었습니다.")); }
     else if (m.t === "assetfile") {
       var nm = String(m.asset.name || "asset").replace(/[^\w가-힣-]+/g, "_").slice(0, 30) || "asset";
-      saveJson(m.asset, nm + ".aichat.json"); toast("에셋 파일을 저장했습니다.");
+      saveJson(m.asset, nm + ".aichat.json"); toast(_t("에셋 파일을 저장했습니다."));
     }
     else if (m.t === "deliv") {
       deliv = m.deliv; renderDeliv();
       if (deliv) {
         var visible = $("shell").dataset.info === "1" && $("info").dataset.tab === "deliv";
-        if (!visible) { document.querySelector('#seg [data-go="deliv"]').classList.add("new"); toast("산출물이 갱신됐습니다 (v" + deliv.v + ")"); }
+        if (!visible) { document.querySelector('#seg [data-go="deliv"]').classList.add("new"); toast(_t("산출물이 갱신됐습니다 (v{v})", { v: deliv.v })); }
       }
     }
     else if (m.t === "doc") { if (document.activeElement !== $("doc")) $("doc").value = m.text; }
     else if (m.t === "msgdel") { hideMsgLocal(m.id); }
-    else if (m.t === "reported") { hideMsgLocal(m.id); toast("신고했어요. 검토 후 조치합니다."); }
-    else if (m.t === "blocked") { renderBlocked(m.list); if (m.name) { dropFromLog(m.name); toast(m.name + " 님을 차단했어요"); } else toast("차단을 해제했어요. 다시 입장하면 이전 메시지가 보여요."); }
+    else if (m.t === "reported") { hideMsgLocal(m.id); toast(_t("신고했어요. 검토 후 조치합니다.")); }
+    else if (m.t === "blocked") { renderBlocked(m.list); if (m.name) { dropFromLog(m.name); toast(_t("{name} 님을 차단했어요", { name: m.name })); } else toast(_t("차단을 해제했어요. 다시 입장하면 이전 메시지가 보여요.")); }
     else if (m.t === "err") {
-      if (m.code === "KICKED" || m.code === "ROOM_DELETED" || m.code === "TOO_MANY") { joined = false; try { history.replaceState(null, "", location.pathname); } catch (e) {} alert_(m.text); setTimeout(function () { location.href = location.pathname; }, 1200); return; }
+      if (m.code === "KICKED" || m.code === "ROOM_DELETED" || m.code === "TOO_MANY") { joined = false; try { history.replaceState(null, "", location.pathname); } catch (e) {} alert_(_tx(m.text)); setTimeout(function () { location.href = location.pathname; }, 1200); return; }
       if (m.code === "CONSENT_REQUIRED") { $("jconsent").checked = false; }
-      if (!joined) { joinErr(m.text); $("jgo").disabled = false; } else toast(m.text);
+      if (!joined) { joinErr(_tx(m.text)); $("jgo").disabled = false; } else toast(_tx(m.text));
     }
   }
 
@@ -1878,14 +1893,14 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   $("text").addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendText(); } });
   $("invite").addEventListener("click", function () {
     var url = location.origin + location.pathname + "?room=" + roomId, fail = function () { toast(url); };
-    try { navigator.clipboard.writeText(url).then(function () { toast("초대 링크를 복사했습니다."); }, fail); } catch (e) { fail(); }
+    try { navigator.clipboard.writeText(url).then(function () { toast(_t("초대 링크를 복사했습니다.")); }, fail); } catch (e) { fail(); }
   });
   function provChange() {
     var v = $("aiprov").value;
     $("aiextra").hidden = LIVE.indexOf(v) < 0;
     var byok = ["nvidia", "google", "mistral"].indexOf(v) >= 0;
-    $("keylabel").textContent = byok ? "본인 API 키 (필수)" : "개인 API 키 (선택)";
-    $("aikey").placeholder = byok ? "이 제공사는 본인 키만 사용할 수 있습니다" : "비우면 서버 설정 키 사용";
+    $("keylabel").textContent = byok ? _t("본인 API 키 (필수)") : _t("개인 API 키 (선택)");
+    $("aikey").placeholder = byok ? _t("이 제공사는 본인 키만 사용할 수 있습니다") : _t("비우면 서버 설정 키 사용");
   }
   $("aiprov").addEventListener("change", provChange);
   $("aiform").addEventListener("submit", function (e) {
@@ -1897,11 +1912,11 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   $("stplus").addEventListener("click", function () { $("stval").textContent = Math.min(10, Number($("stval").textContent) + 1); });
   $("apply").addEventListener("click", function () {
     send({ t: "config", policy: document.querySelector('input[name="policy"]:checked').value, maxStreak: Number($("stval").textContent), budgetLimit: Number($("budget").value) });
-    toast("설정을 적용했습니다.");
+    toast(_t("설정을 적용했습니다."));
   });
-  $("upgrade").addEventListener("click", function () { toast("결제는 아직 준비 중입니다. 플러스 플랜은 AI 6명, 호출 예산 300회, 광고 없음입니다."); });
+  $("upgrade").addEventListener("click", function () { toast(_t("결제는 아직 준비 중입니다. 플러스 플랜은 AI 6명, 호출 예산 300회, 광고 없음입니다.")); });
   $("devplan").addEventListener("click", function () { send({ t: "plan", id: meta.plan.id === "free" ? "plus" : "free" }); });
-  $("savedoc").addEventListener("click", function () { send({ t: "doc", text: $("doc").value }); toast("문서를 저장했습니다."); });
+  $("savedoc").addEventListener("click", function () { send({ t: "doc", text: $("doc").value }); toast(_t("문서를 저장했습니다.")); });
 
   function assetErr(t) { var e = $("aerr"); e.textContent = t || ""; e.hidden = !t; }
   function showPreview(a) {
@@ -1909,9 +1924,9 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     if (!a) return;
     var l = mk("div", "inl"), t = mk("div");
     t.appendChild(mk("strong", "", a.name));
-    t.appendChild(document.createTextNode(" · AI " + a.ais.length + "명 · " + POLNAME[a.policy || "mention"] + ". 적용하면 방 전체의 AI 구성이 교체됩니다."));
-    var ok = mk("button", "btn sm primary", "적용"); ok.type = "button"; ok.id = "aok";
-    var no = mk("button", "btn sm", "취소"); no.type = "button"; no.id = "ano";
+    t.appendChild(document.createTextNode(" · " + _t("AI {n}명", { n: a.ais.length }) + " · " + POLNAME[a.policy || "mention"] + ". " + _t("적용하면 방 전체의 AI 구성이 교체됩니다.")));
+    var ok = mk("button", "btn sm primary", _t("적용")); ok.type = "button"; ok.id = "aok";
+    var no = mk("button", "btn sm", _t("취소")); no.type = "button"; no.id = "ano";
     ok.addEventListener("click", function () { var x = applyCand; showPreview(null); send({ t: "asset", asset: x }); });
     no.addEventListener("click", function () { showPreview(null); });
     l.appendChild(t); l.appendChild(ok); l.appendChild(no); box.appendChild(l);
@@ -1919,7 +1934,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   $("afile").addEventListener("change", function () { assetErr(""); showPreview(null); readFile(this.files[0], showPreview, assetErr); this.value = ""; });
   $("asample").addEventListener("click", function () { assetErr(""); showPreview(validateAsset(SAMPLE_TEXT).asset); });
   $("copyfmt").addEventListener("click", function () {
-    var done = function () { toast("형식을 복사했습니다."); }, fail = function () { toast("복사하지 못했습니다. 직접 선택해서 복사하세요."); };
+    var done = function () { toast(_t("형식을 복사했습니다.")); }, fail = function () { toast(_t("복사하지 못했습니다. 직접 선택해서 복사하세요.")); };
     try { navigator.clipboard.writeText(SAMPLE_TEXT).then(done, fail); } catch (e) { fail(); }
   });
   renderRooms();

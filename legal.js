@@ -3,18 +3,21 @@ const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 const OPERATOR = () => process.env.OPERATOR_NAME || '[운영자 이름을 OPERATOR_NAME에 설정하세요]';
 const CONTACT = () => process.env.CONTACT_EMAIL || '[문의 이메일을 CONTACT_EMAIL에 설정하세요]';
 const VERSION = '2026-10-23';
+const T = require('./legal-text'), EN = require('./legal-en');
+const pickLang = l => T.LANGS.includes(l) ? l : 'en';
 
 const CSS = ':root{--bg:#f5f6f8;--fg:#0f172a;--mut:#64748b;--card:#fff;--line:#e2e6ec;--acc:#4f46e5}@media(prefers-color-scheme:dark){:root{--bg:#0b0d12;--fg:#e7eaf0;--mut:#8b93a5;--card:#12151c;--line:#242a38;--acc:#818cf8}}' +
   'body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.75 "Inter","Noto Sans KR",system-ui,sans-serif}main{max-width:760px;margin:0 auto;padding:28px max(16px,env(safe-area-inset-left,0px)) 60px}' +
   'h1{font-size:26px;margin:0 0 6px}h2{font-size:17px;margin:30px 0 8px}p,li{color:var(--fg)}.mut{color:var(--mut);font-size:13px}table{border-collapse:collapse;width:100%;font-size:13.5px;display:block;overflow-x:auto}th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}th{background:var(--card)}' +
   'a{color:var(--acc)}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:14px 0}button{font:inherit;border-radius:10px;border:1px solid var(--line);padding:9px 16px;background:var(--card);color:var(--fg);cursor:pointer}button.danger{background:#b42318;color:#fff;border-color:#b42318}input{font:inherit;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg)}nav a{margin-right:14px;font-size:13px}';
 
-function shell(title, body, script) {
-  return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>' + esc(title) + '</title><style>' + CSS + '</style></head><body><main>' +
-    '<nav><a href="/">← 앱으로</a><a href="/terms">이용약관</a><a href="/privacy">개인정보처리방침</a><a href="/delete-account">계정·데이터 삭제</a></nav>' + body + (script ? '<script>' + script + '</script>' : '') + '</main></body></html>';
+function shell(title, body, script, lang, navLang) {
+  const nav = T.NAV[navLang || lang || 'ko'];
+  return '<!doctype html><html lang="' + (lang || 'ko') + '"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>' + esc(title) + '</title><style>' + CSS + '</style></head><body><main>' +
+    '<nav><a href="/">' + nav[0] + '</a><a href="/terms?lang=' + (lang || 'ko') + '">' + nav[1] + '</a><a href="/privacy?lang=' + (lang || 'ko') + '">' + nav[2] + '</a><a href="/delete-account?lang=' + (lang || 'ko') + '">' + nav[3] + '</a>' + (lang && lang !== 'ko' ? '<a href="?lang=ko">한국어</a>' : '<a href="?lang=en">English</a>') + '</nav>' + body + (script ? '<script>' + script + '</script>' : '') + '</main></body></html>';
 }
 
-function privacy() {
+function privacyKo() {
   return shell('개인정보처리방침', `<h1>개인정보처리방침</h1><p class="mut">시행일 ${VERSION} · 운영자 ${esc(OPERATOR())}</p>
 <p>이 서비스(“AI 채팅방”)는 사람과 여러 AI가 함께 대화하는 채팅 서비스입니다. 운영자는 이용자의 개인정보를 아래와 같이 처리합니다.</p>
 <h2>1. 수집하는 항목과 방법</h2>
@@ -58,7 +61,7 @@ function privacy() {
 <p>이 방침이 바뀌면 시행 7일 전에 서비스 화면에 알립니다. 이용자에게 불리한 변경은 30일 전에 알립니다.</p>`);
 }
 
-function terms() {
+function termsKo() {
   return shell('이용약관', `<h1>이용약관</h1><p class="mut">시행일 ${VERSION} · 운영자 ${esc(OPERATOR())}</p>
 <h2>1. 서비스</h2><p>사람과 여러 AI가 한 방에서 대화하고, 코드·아이디어·문서 같은 결과물을 함께 만드는 서비스입니다. 일부 기능은 로그인과 플랜(무료/플러스)에 따라 제한됩니다.</p>
 <h2>2. 계정</h2><p>Google, GitHub, 이메일 코드로 로그인합니다. 만 14세 미만은 이용할 수 없습니다. 계정은 본인이 관리해야 하며 타인에게 양도할 수 없습니다.</p>
@@ -72,7 +75,7 @@ function terms() {
 <h2>10. 문의</h2><p>${esc(OPERATOR())} · ${esc(CONTACT())}</p>`);
 }
 
-function deleteAccount() {
+function deleteAccountKo() {
   const script = `
 var $=function(i){return document.getElementById(i)};
 fetch('/auth/me').then(function(r){return r.json()}).then(function(me){
@@ -93,5 +96,30 @@ $('exp').addEventListener('click',function(){location.href='/api/export'});`;
 <p>정말 삭제하려면 아래 칸에 <b>삭제</b>라고 입력하세요.</p><p><input id="cf" placeholder="삭제" aria-label="확인 입력"> <button id="go" type="button" class="danger">계정과 데이터 영구 삭제</button></p><p id="msg" style="color:#b42318"></p></div>
 <div id="no" hidden class="card"><p>삭제하려면 먼저 <a href="/">앱</a>에서 로그인한 뒤 이 페이지로 다시 오세요.</p><p>로그인할 수 없다면 가입에 쓴 이메일 또는 계정 정보를 적어 <b>${esc(CONTACT())}</b>로 삭제를 요청하세요. 본인 확인 후 처리합니다.</p></div>
 <div id="done" hidden class="card"><b>삭제를 완료했습니다.</b><p>이용해 주셔서 감사합니다.</p></div>`, script);
+}
+const privacy = lang => { lang = pickLang(lang); return lang === 'ko' ? privacyKo() : shell('Privacy Policy', EN.privacy(esc(OPERATOR()), esc(CONTACT()), VERSION), '', 'en', lang); };
+const terms = lang => { lang = pickLang(lang); return lang === 'ko' ? termsKo() : shell('Terms of Service', EN.terms(esc(OPERATOR()), esc(CONTACT()), VERSION), '', 'en', lang); };
+/* 계정 삭제 페이지는 다섯 언어 모두 제공한다 */
+function deleteAccount(lang) {
+  lang = pickLang(lang); if (lang === 'ko') return deleteAccountKo();
+  const D = T.DEL[lang], j = JSON.stringify;
+  const script = `var $=function(i){return document.getElementById(i)};
+fetch('/auth/me').then(function(r){return r.json()}).then(function(me){
+  if(me.user){$('who').textContent=${j(D.who)}.replace('{name}',me.user.name);$('yes').hidden=false}else{$('no').hidden=false}
+});
+$('go').addEventListener('click',function(){
+  $('msg').textContent='';
+  fetch('/auth/delete',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({confirm:$('cf').value})}).then(function(r){return r.json()}).then(function(j){
+    if(j.ok){$('yes').hidden=true;$('done').hidden=false}else{$('msg').textContent=${j(D.fail)}}
+  }).catch(function(){$('msg').textContent=${j(D.fail)}});
+});
+$('exp').addEventListener('click',function(){location.href='/api/export'});`;
+  return shell(D.title, `<h1>${esc(D.title)}</h1><p class="mut">${esc(D.eff)} ${VERSION}</p>
+<div class="card"><b>${esc(D.del)}</b><ul>${D.li.map(x => '<li>' + esc(x) + '</li>').join('')}</ul><p class="mut">${esc(D.note)}</p></div>
+<p id="who" class="mut"></p>
+<div id="yes" hidden class="card"><p><b>${esc(D.first)}</b> <button id="exp" type="button">${esc(D.exp)}</button></p>
+<p>${esc(D.ask).replace('{w}', '<b>' + esc(D.word) + '</b>')}</p><p><input id="cf" placeholder="${esc(D.word)}" aria-label="${esc(D.aria)}"> <button id="go" type="button" class="danger">${esc(D.btn)}</button></p><p id="msg" style="color:#b42318"></p></div>
+<div id="no" hidden class="card"><p>${esc(D.nologin).replace('{app}', '<a href="/">' + esc(D.app) + '</a>')}</p><p>${esc(D.contact).replace('{c}', '<b>' + esc(CONTACT()) + '</b>')}</p></div>
+<div id="done" hidden class="card"><b>${esc(D.done)}</b><p>${esc(D.thanks)}</p></div>`, script, lang);
 }
 module.exports = { privacy, terms, deleteAccount, TERMS_VERSION: VERSION };

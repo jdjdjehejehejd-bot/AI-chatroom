@@ -2,6 +2,8 @@ const fs=require('fs');
 const root=__dirname+'/../';
 const server=fs.readFileSync(root+'server.js','utf8').replace(/^#!.*\n/,'');
 let html=fs.readFileSync(root+'public/index.html','utf8');
+const i18n=fs.readFileSync(root+'public/i18n.js','utf8').replace(/<\/script/gi,'<\\/script');
+html=html.replace('<script src="/i18n.js"></script>',()=>'<script>'+i18n+'</script>');
 const shim=`<script>
 /* 미리보기: 실제 server.js를 브라우저 안에서 그대로 돌리고 WebSocket만 가짜로 연결한다. 데모 응답만 사용, 네트워크 호출 없음. */
 (function(){
@@ -14,6 +16,7 @@ const shim=`<script>
     if(n==='./store')return{createStore:function(){return{enabled:false,read:function(){return null},write:function(){},remove:function(){},list:function(){return[]}}}};
     if(n==='./legal')return{TERMS_VERSION:'preview',privacy:function(){return''},terms:function(){return''},deleteAccount:function(){return''}};
     if(n==='./admin')return'';
+    if(n==='./legal-text')return{};
     if(n==='path')return{join:function(){return[].slice.call(arguments).join('/')},resolve:function(){return''},extname:function(){return''}};
     if(n==='crypto')return{randomBytes:function(k){var h='';for(var i=0;i<k*2;i++)h+='0123456789abcdef'[Math.floor(Math.random()*16)];return{toString:function(){return h}}}};
     if(n==='ws')return{WebSocketServer:function(){return{on:function(ev,fn){if(ev==='connection')handlers=fn}}}};

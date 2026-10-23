@@ -5,7 +5,7 @@ self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Pr
 self.addEventListener('fetch', e => {
   const r = e.request, u = new URL(r.url);
   if (r.method !== 'GET' || u.origin !== location.origin) return;
-  if (!(u.pathname === '/' || /\.(png|svg|webmanifest)$/.test(u.pathname))) return;
+  if (!(u.pathname === '/' || /\.(png|svg|webmanifest)$|^\/i18n\.js$/.test(u.pathname))) return;
   e.respondWith(fetch(r).then(res => { if (res.ok) { const c = res.clone(); caches.open(V).then(ca => ca.put(r, c)); } return res; })
     .catch(() => caches.match(r).then(m => m || new Response('오프라인입니다. 연결을 확인한 뒤 다시 열어 주세요.', { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } }))));
 });
