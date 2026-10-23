@@ -865,6 +865,16 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 
   /* 최근 방 목록 (이 기기에만 저장) */
   function loadRooms() { try { return JSON.parse(store("rooms") || "[]").filter(function (r) { return r && typeof r.id === "string"; }); } catch (e) { return []; } }
+  /* 방 이름: 직접 지은 이름은 입력한 그대로(번역·변환 없음). 자동 이름("방 abc", "Code 방")은 저장된 언어와 상관없이
+     현재 언어로 보여 주고, 아이콘 글자는 언어와 무관한 방 코드/모드 이름의 첫 글자를 쓴다. */
+  var AUTO_ID = /^(방|Room|ルーム|房间|房間|Sala)\s*([a-z0-9]{3,12})$/i, AUTO_MODE = /^(Code|Brainstorm|Make)\s+(방|Room|ルーム|房间|房間|Sala)$/i;
+  function titleInfo(r) {
+    var t = String(r.title || ""), m = AUTO_ID.exec(t);
+    if (m) return { text: _t("방 {id}", { id: m[2] }), ch: m[2].charAt(0).toUpperCase() };
+    m = AUTO_MODE.exec(t);
+    if (m) { var lb = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase(); return { text: lb + " " + _t("방"), ch: lb.charAt(0) }; }
+    return { text: t, ch: Array.from(t)[0] || _t("방") };
+  }
   function saveRoom(id, title) {
     var list = loadRooms().filter(function (r) { return r.id !== id; });
     list.unshift({ id: id, title: String(title).slice(0, 40), ts: Date.now() });
@@ -882,9 +892,9 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     list.forEach(function (r) {
       var row = mk("div", "room"); row.setAttribute("role", "button"); row.tabIndex = 0;
       if (r.id === roomId) row.setAttribute("aria-current", "true");
-      var av = mk("div", "av", r.title.charAt(0) || _t("방")); humanStyle(av, r.title); av.setAttribute("aria-hidden", "true");
-      var nm = mk("div", "nm"); nm.appendChild(mk("b", "", r.title)); nm.appendChild(mk("small", "", ago(r.ts)));
-      var x = mk("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", _t("{name} 목록에서 지우기", { name: r.title }));
+      var ti = titleInfo(r), av = mk("div", "av", ti.ch); humanStyle(av, r.id); av.setAttribute("aria-hidden", "true");
+      var nm = mk("div", "nm"); nm.appendChild(mk("b", "", ti.text)); nm.appendChild(mk("small", "", ago(r.ts)));
+      var x = mk("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", _t("{name} 목록에서 지우기", { name: ti.text }));
       x.addEventListener("click", function (ev) { ev.stopPropagation(); store("rooms", JSON.stringify(loadRooms().filter(function (q) { return q.id !== r.id; }))); renderRooms(); });
       var open = function () { if (joined && r.id === roomId) setView("main"); else enterRoom(r.id); };
       row.addEventListener("click", open);
@@ -1718,8 +1728,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       $("acctroomswrap").hidden = !list.length; $("keephint").textContent = "· " + _t("{n}일 보관", { n: j.keepDays });
       list.forEach(function (r) {
         var row = mk("div", "room"); row.setAttribute("role", "button"); row.tabIndex = 0;
-        var av = mk("div", "av", (r.title || _t("방")).charAt(0)); humanStyle(av, r.title || _t("방"));
-        var nm = mk("div", "nm"); nm.appendChild(mk("b", "", r.title)); nm.appendChild(mk("small", "", _t("AI {n}명", { n: r.ais }) + " · " + ago(r.ts) + (r.owner ? " · " + _t("내가 만든 방") : "")));
+        var ti = titleInfo(r), av = mk("div", "av", ti.ch); humanStyle(av, r.id);
+        var nm = mk("div", "nm"); nm.appendChild(mk("b", "", ti.text)); nm.appendChild(mk("small", "", _t("AI {n}명", { n: r.ais }) + " · " + ago(r.ts) + (r.owner ? " · " + _t("내가 만든 방") : "")));
         var open = function () { enterRoom(r.id); }; row.addEventListener("click", open); row.addEventListener("keydown", function (ev) { if (ev.key === "Enter") open(); });
         row.appendChild(av); row.appendChild(nm); box.appendChild(row);
       });
