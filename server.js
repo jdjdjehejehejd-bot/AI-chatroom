@@ -89,6 +89,43 @@ function readBody(req, max) {
 }
 const sameOrigin = req => { const o = req.headers.origin; if (!o) return true; try { return new URL(o).host === req.headers.host; } catch (e) { return false; } };
 const dmKeyFor = sub => hmac(SESSION_SECRET, 'dm|' + sub).toString('hex').slice(0, 32);
+/* ---------- GitHub 로그인·연동, 이메일 코드 로그인 ---------- */
+const GH_ID = (process.env.GITHUB_CLIENT_ID || '').trim(), GH_SECRET = (process.env.GITHUB_CLIENT_SECRET || '').trim();
+const GH_AUTH_URL = process.env.GITHUB_AUTH_URL || 'https://github.com/login/oauth/authorize';
+const GH_TOKEN_URL = process.env.GITHUB_TOKEN_URL || 'https://github.com/login/oauth/access_token';
+const GH_API = (process.env.GITHUB_API_URL || 'https://api.github.com').replace(/\/+$/, '');
+const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
+const RESEND_KEY = (process.env.RESEND_API_KEY || '').trim(), MAIL_FROM = process.env.MAIL_FROM || '';
+const RESEND_URL = process.env.RESEND_URL || 'https://api.resend.com/emails';
+const EMAIL_DEV_LOG = process.env.EMAIL_DEV_LOG === '1';
+const emailEnabled = () => !!((RESEND_KEY && MAIL_FROM) || EMAIL_DEV_LOG);
+const getCookie = (h, n) => { const m = new RegExp('(?:^|;\\s*)' + n + '=([^;]+)').exec(h || ''); return m ? m[1] : ''; };
+const GH_COOKIE = 'aichat_gh', OAUTH_COOKIE = 'aichat_oauth';
+const ghKey = () => crypto.createHash('sha256').update('gh|' + SESSION_SECRET).digest();
+function sealGH(o) {
+  const iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', ghKey(), iv);
+  const ct = Buffer.concat([c.update(JSON.stringify(o), 'utf8'), c.final()]);
+  return b64u(Buffer.concat([iv, c.getAuthTag(), ct]));
+}
+function openGH(v, sub) {
+  try {
+    const b = Buffer.from(v, 'base64url'), d = crypto.createDecipheriv('aes-256-gcm', ghKey(), b.subarray(0, 12));
+    d.setAuthTag(b.subarray(12, 28));
+    const o = JSON.parse(Buffer.concat([d.update(b.subarray(28)), d.final()]).toString('utf8'));
+    return o && o.sub === sub && o.exp > Date.now() && typeof o.token === 'string' ? o : null;
+  } catch (e) { return null; }
+}
+const safeReturn = r => { r = String(r || '/'); return /^\/(?!\/)[\w\-./?=&%]*$/.test(r) && r.length < 200 ? r : '/'; };
+const otps = new Map(), otpSends = new Map();
+const normEmail = e => { e = String(e || '').trim().toLowerCase(); return e.length <= 120 && /^[^\s@]{1,64}@[^\s@]+\.[^\s@]{2,}$/.test(e) ? e : ''; };
+async function sendEmailCode(email, code) {
+  if (RESEND_KEY && MAIL_FROM) {
+    const r = await fetch(RESEND_URL, { method: 'POST', headers: { authorization: 'Bearer ' + RESEND_KEY, 'content-type': 'application/json' },
+      body: JSON.stringify({ from: MAIL_FROM, to: [email], subject: '로그인 코드 ' + code, text: '로그인 코드: ' + code + '\n10분 안에 입력하세요. 본인이 요청하지 않았다면 무시하세요.' }), signal: AbortSignal.timeout(10000) });
+    if (!r.ok) throw new Error('mail ' + r.status);
+  } else console.log('[email-dev] ' + email + ' 코드: ' + code);
+}
+const GIST_EXT = { html: 'html', css: 'css', js: 'js', javascript: 'js', ts: 'ts', py: 'py', python: 'py', json: 'json', md: 'md', markdown: 'md', sh: 'sh', bash: 'sh', java: 'java', c: 'c', cpp: 'cpp', go: 'go', rs: 'rs', sql: 'sql', yaml: 'yml', yml: 'yml', svg: 'svg' };
 const DEMO_DELAY = Number(process.env.DEMO_DELAY_MS || 700);
 const BUDGET_DEFAULT = Number(process.env.ROOM_CALL_BUDGET || 30);
 const BUDGET_MAX = Number(process.env.ROOM_CALL_BUDGET_MAX || 50);
@@ -935,17 +972,119 @@ const server = http.createServer((req, res) => {
   const u = req.url.split('?')[0];
   const json = (code, o, hdr) => { res.writeHead(code, Object.assign({ 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, hdr || {})); res.end(JSON.stringify(o)); };
   const cookie = (v, age) => COOKIE_NAME + '=' + v + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + age + (COOKIE_SECURE || req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '');
-  if (u === '/auth/config' && req.method === 'GET') return json(200, { clientId: GOOGLE_CLIENT_ID });
-  if (u === '/auth/me' && req.method === 'GET') { const me = readSession(req.headers.cookie); return json(200, { user: me ? { name: me.name, picture: me.pic } : null }); }
-  if (u === '/auth/logout' && req.method === 'POST') { if (!sameOrigin(req)) return json(403, { error: 'origin' }); return json(200, { ok: true }, { 'set-cookie': cookie('', 0) }); }
+  const secure = COOKIE_SECURE || req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '';
+  const ck = (n, v, age) => n + '=' + v + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + age + secure;
+  const base = () => PUBLIC_URL || ((req.headers['x-forwarded-proto'] === 'https' || COOKIE_SECURE ? 'https' : 'http') + '://' + req.headers.host);
+  const ghOf = me => { if (!me) return null; const o = openGH(getCookie(req.headers.cookie, GH_COOKIE), me.sub); return o ? o : null; };
+  if (u === '/auth/config' && req.method === 'GET') return json(200, { clientId: GOOGLE_CLIENT_ID, github: !!(GH_ID && GH_SECRET), email: emailEnabled() });
+  if (u === '/auth/me' && req.method === 'GET') {
+    const me = readSession(req.headers.cookie), g = ghOf(me);
+    return json(200, { user: me ? { name: me.name, picture: me.pic, provider: me.sub.split(':')[0] } : null, github: g ? { login: g.login } : null });
+  }
+  if (u === '/auth/logout' && req.method === 'POST') { if (!sameOrigin(req)) return json(403, { error: 'origin' }); res.setHeader('set-cookie', [ck(COOKIE_NAME, '', 0), ck(GH_COOKIE, '', 0)]); return json(200, { ok: true }); }
+  if (u === '/auth/github/disconnect' && req.method === 'POST') { if (!sameOrigin(req)) return json(403, { error: 'origin' }); res.setHeader('set-cookie', ck(GH_COOKIE, '', 0)); return json(200, { ok: true }); }
+  if (u === '/auth/github/start' && req.method === 'GET') {
+    if (!(GH_ID && GH_SECRET)) return json(404, { error: 'GitHub 로그인이 설정되지 않았습니다.' });
+    const q = new URL(req.url, 'http://x').searchParams, mode = q.get('mode') === 'connect' ? 'connect' : 'login';
+    const state = crypto.randomBytes(16).toString('hex');
+    res.writeHead(302, { 'set-cookie': ck(OAUTH_COOKIE, state + '.' + mode + '.' + b64u(safeReturn(q.get('r'))), 600), location: GH_AUTH_URL + '?' + new URLSearchParams({ client_id: GH_ID, redirect_uri: base() + '/auth/github/callback', scope: mode === 'connect' ? 'read:user gist' : 'read:user', state, allow_signup: 'true' }) });
+    return res.end();
+  }
+  if (u === '/auth/github/callback' && req.method === 'GET') {
+    const q = new URL(req.url, 'http://x').searchParams, [st, mode, rb] = getCookie(req.headers.cookie, OAUTH_COOKIE).split('.');
+    const back = safeReturn(rb ? Buffer.from(rb, 'base64url').toString() : '/');
+    const fail = msg => { res.writeHead(302, { 'set-cookie': ck(OAUTH_COOKIE, '', 0), location: back + (back.includes('?') ? '&' : '?') + 'autherr=' + encodeURIComponent(msg) }); res.end(); };
+    const qs = q.get('state') || '';
+    if (!st || qs.length !== st.length || !crypto.timingSafeEqual(Buffer.from(qs), Buffer.from(st))) return fail('요청이 올바르지 않습니다. 다시 시도하세요.');
+    if (!q.get('code')) return fail('GitHub 로그인이 취소되었습니다.');
+    return (async () => {
+      const tr = await fetch(GH_TOKEN_URL, { method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ client_id: GH_ID, client_secret: GH_SECRET, code: q.get('code'), redirect_uri: base() + '/auth/github/callback' }), signal: AbortSignal.timeout(10000) });
+      const tj = await tr.json();
+      if (!tj.access_token) throw new Error('토큰을 받지 못했습니다.');
+      const ur = await fetch(GH_API + '/user', { headers: { authorization: 'Bearer ' + tj.access_token, accept: 'application/vnd.github+json', 'user-agent': 'ai-chatroom' }, signal: AbortSignal.timeout(10000) });
+      const gu = await ur.json();
+      if (!ur.ok || !gu.id) throw new Error('GitHub 계정 정보를 읽지 못했습니다.');
+      const cookies = [ck(OAUTH_COOKIE, '', 0)];
+      const existing = readSession(req.headers.cookie);
+      let sub;
+      if (mode === 'connect' && existing) sub = existing.sub;
+      else {
+        sub = 'github:' + gu.id;
+        const user = { sub, name: cleanText(gu.name || gu.login, 16).replace(/\s+/g, ' ') || 'GitHub', pic: /^https:\/\//.test(gu.avatar_url || '') ? gu.avatar_url : '' };
+        cookies.push(ck(COOKIE_NAME, signSession(user), SESSION_DAYS * 86400));
+      }
+      if (mode === 'connect') cookies.push(ck(GH_COOKIE, sealGH({ sub, login: String(gu.login).slice(0, 40), token: tj.access_token, exp: Date.now() + SESSION_DAYS * 86400000 }), SESSION_DAYS * 86400));
+      res.writeHead(302, { 'set-cookie': cookies, location: back }); res.end();
+    })().catch(e => fail(e.message || '로그인에 실패했습니다.'));
+  }
+  if (u === '/auth/email/start' && req.method === 'POST') {
+    if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' });
+    if (!emailEnabled()) return json(404, { error: '이메일 로그인이 설정되지 않았습니다.' });
+    if (authLimited(req.socket.remoteAddress || '')) return json(429, { error: '잠시 뒤 다시 시도하세요.' });
+    return readBody(req, 2048).then(async b => {
+      let email = ''; try { email = normEmail(JSON.parse(b).email); } catch (e) {}
+      if (!email) return json(400, { error: '이메일 주소를 확인하세요.' });
+      const now = Date.now(), sends = (otpSends.get(email) || []).filter(t => now - t < 600000);
+      if (sends.length >= 3) return json(429, { error: '코드를 너무 자주 요청했습니다. 10분 뒤 다시 시도하세요.' });
+      sends.push(now); otpSends.set(email, sends); if (otpSends.size > 5000) otpSends.clear();
+      const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+      otps.set(email, { h: hmac(SESSION_SECRET, 'otp|' + email + '|' + code).toString('hex'), exp: now + 600000, tries: 0 }); if (otps.size > 5000) otps.clear();
+      await sendEmailCode(email, code);
+      json(200, { ok: true });
+    }).catch(() => json(502, { error: '메일을 보내지 못했습니다.' }));
+  }
+  if (u === '/auth/email/verify' && req.method === 'POST') {
+    if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' });
+    if (authLimited(req.socket.remoteAddress || '')) return json(429, { error: '잠시 뒤 다시 시도하세요.' });
+    return readBody(req, 2048).then(b => {
+      let email = '', code = ''; try { const j = JSON.parse(b); email = normEmail(j.email); code = String(j.code || '').trim(); } catch (e) {}
+      const o = otps.get(email);
+      if (!o || o.exp < Date.now() || !/^\d{6}$/.test(code)) return json(401, { error: '코드가 올바르지 않거나 만료되었습니다.' });
+      if (++o.tries > 5) { otps.delete(email); return json(401, { error: '시도 횟수를 넘었습니다. 새 코드를 받으세요.' }); }
+      const want = Buffer.from(o.h, 'hex'), got = hmac(SESSION_SECRET, 'otp|' + email + '|' + code);
+      if (!crypto.timingSafeEqual(want, got)) return json(401, { error: '코드가 올바르지 않거나 만료되었습니다.' });
+      otps.delete(email);
+      const user = { sub: 'email:' + crypto.createHash('sha256').update(email).digest('hex').slice(0, 24), name: cleanText(email.split('@')[0], 16) || '사용자', pic: '' };
+      res.setHeader('set-cookie', ck(COOKIE_NAME, signSession(user), SESSION_DAYS * 86400));
+      json(200, { user: { name: user.name, picture: '', provider: 'email' } });
+    }).catch(() => json(400, { error: '요청이 올바르지 않습니다.' }));
+  }
+  if (u === '/gh/gist' && req.method === 'POST') {
+    if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' });
+    const me = readSession(req.headers.cookie), g = ghOf(me);
+    if (!me) return json(401, { error: '먼저 로그인하세요.' });
+    if (!g) return json(401, { error: 'GitHub 계정을 먼저 연결하세요.' });
+    if (authLimited('gist:' + me.sub)) return json(429, { error: '잠시 뒤 다시 시도하세요.' });
+    return readBody(req, 2048).then(async b => {
+      let j = {}; try { j = JSON.parse(b); } catch (e) {}
+      const room = rooms.get(String(j.room || ''));
+      if (!room || ![...room.clients].some(c => c.user && c.user.sub === me.sub)) return json(403, { error: '이 방에 참여 중일 때만 내보낼 수 있습니다.' });
+      if (room.ownerSub && room.ownerSub !== me.sub) return json(403, { error: '방장만 내보낼 수 있습니다.' });
+      let files;
+      if (j.kind === 'chat') {
+        const msgs = room.messages.filter(x => x.kind !== 'system').slice(-100);
+        if (!msgs.length) return json(400, { error: '내보낼 대화가 아직 없습니다.' });
+        files = { 'chat.md': { content: '# 방 ' + room.id + ' 대화\n\n' + msgs.map(x => '**' + x.who + (x.kind === 'ai' ? ' (AI)' : '') + '**: ' + x.text).join('\n\n') } };
+      } else {
+        if (!room.deliv) return json(400, { error: '내보낼 산출물이 아직 없습니다.' });
+        files = { ['deliverable.' + (GIST_EXT[room.deliv.lang] || 'txt')]: { content: room.deliv.text } };
+      }
+      const r = await fetch(GH_API + '/gists', { method: 'POST', headers: { authorization: 'Bearer ' + g.token, accept: 'application/vnd.github+json', 'content-type': 'application/json', 'user-agent': 'ai-chatroom' },
+        body: JSON.stringify({ description: 'AI 채팅방 ' + room.id + (room.asset ? ' · ' + room.asset.name : ''), public: false, files }), signal: AbortSignal.timeout(15000) });
+      const out = await r.json().catch(() => ({}));
+      if (r.status === 401) return json(401, { error: 'GitHub 연결이 만료되었습니다. 다시 연결하세요.' });
+      if (!r.ok || !out.html_url) return json(502, { error: 'Gist를 만들지 못했습니다. (' + r.status + ')' });
+      json(200, { url: out.html_url });
+    }).catch(() => json(502, { error: 'Gist를 만들지 못했습니다.' }));
+  }
   if (u === '/auth/google' && req.method === 'POST') {
     if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' });
     if (authLimited(req.socket.remoteAddress || '')) return json(429, { error: '잠시 뒤 다시 시도하세요.' });
     return readBody(req, 8192).then(async b => {
       let cred = ''; try { cred = JSON.parse(b).credential; } catch (e) {}
       const g = await verifyGoogleIdToken(cred);
-      const user = { sub: g.sub, name: cleanText(g.name, 16).replace(/\s+/g, ' ') || '사용자', pic: g.pic };
-      json(200, { user: { name: user.name, picture: user.pic } }, { 'set-cookie': cookie(signSession(user), SESSION_DAYS * 86400) });
+      const user = { sub: 'google:' + g.sub, name: cleanText(g.name, 16).replace(/\s+/g, ' ') || '사용자', pic: g.pic };
+      json(200, { user: { name: user.name, picture: user.pic, provider: 'google' } }, { 'set-cookie': cookie(signSession(user), SESSION_DAYS * 86400) });
     }).catch(e => json(401, { error: e.message === 'too large' ? '요청이 너무 큽니다.' : e.message }));
   }
   const sm = /^\/s\/([0-9a-f]{12})$/.exec(u);

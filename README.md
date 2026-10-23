@@ -101,16 +101,25 @@ npm start          # http://localhost:3000
 이전 프로젝트(logtimeline)는 git 이력에 남아 있다: `git checkout b78f5a7`
 
 
-## Google 로그인 (선택)
+## 로그인 · 계정 · GitHub 연동 (모두 선택)
 
-서버에 `GOOGLE_CLIENT_ID`(Google Cloud Console의 웹 OAuth 클라이언트 ID)를 설정하면 입장 화면에 Google 로그인 버튼이 나타난다. `SESSION_SECRET`도 반드시 고정값으로 설정한다(없으면 재시작 때 세션이 풀린다). HTTPS 뒤에서는 `COOKIE_SECURE=1`.
+입장 화면에 설정된 로그인 방식만 나타난다. 로그인 없이도 쓸 수 있다. 계정 ID는 방식별 접두어(`google:`, `github:`, `email:`)로 구분하며, 같은 사람이 방식을 바꾸면 다른 계정으로 취급된다(자동 병합 없음).
 
-- 브라우저가 받은 Google ID 토큰(JWT, RS256)을 서버가 Google 공개키(JWKS)로 서명·발급자·audience·만료까지 검증하고, 서명된 HttpOnly 세션 쿠키를 발급한다. 비밀번호나 Google 토큰은 저장하지 않는다.
-- 로그인한 사람이 만든 방은 방장 전용이 된다(AI 추가·삭제, 설정, 모드, 에셋, 공유 링크는 방장만). 로그인 없이 만든 방은 기존처럼 누구나 바꿀 수 있다.
-- 귓속말 키가 계정에서 파생되어 기기를 바꿔도 이어진다.
-- Google Play: Google은 앱 내 WebView 로그인을 막으므로 WebView 래핑 대신 **PWA + Trusted Web Activity**(Bubblewrap)로 올리는 것을 권장한다. HTTPS 도메인과 `/.well-known/assetlinks.json`이 필요하다.
-- 아직 실제 Google 서버로는 검증하지 못했다(모의 JWKS로만 테스트: `GOOGLE_JWKS_URL` 환경변수).
+| 방식 | 켜는 환경변수 |
+|---|---|
+| Google | `GOOGLE_CLIENT_ID` (웹 OAuth 클라이언트 ID) |
+| GitHub | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (GitHub OAuth App, 콜백 URL `<PUBLIC_URL>/auth/github/callback`) |
+| 이메일 코드 | `RESEND_API_KEY` + `MAIL_FROM` (Resend 사용). 개발용으로 `EMAIL_DEV_LOG=1`이면 코드를 서버 콘솔에 출력 |
+| 공통 | `SESSION_SECRET`(고정값 필수), `PUBLIC_URL`(예: `https://example.com`), HTTPS 뒤에서는 `COOKIE_SECURE=1` |
 
+- **Google**: ID 토큰(JWT, RS256)을 서버가 Google 공개키(JWKS)로 서명·발급자·audience·만료까지 검증한다.
+- **GitHub**: 표준 OAuth 웹 흐름(state 쿠키로 CSRF 방지, 복귀 경로는 같은 사이트 경로만 허용).
+- **이메일**: 6자리 코드를 보내고 10분 안에 입력. 코드는 해시로만 보관, 1회용, 5번 틀리면 폐기, 주소당 10분에 3회까지 발송.
+- **세션**: 서명된 HttpOnly 쿠키(30일). 비밀번호는 저장하지 않는다.
+- **계정에 GitHub 연동**: 로그인한 상태에서 "GitHub 연결"을 누르면 `gist` 권한만 요청한다(최소 권한). 토큰은 서버가 AES-GCM으로 암호화한 HttpOnly 쿠키에만 두고 브라우저 스크립트에는 노출하지 않으며, 연결은 그 계정에만 묶인다. 연결하면 "산출물/대화를 비공개 Gist로" 내보낼 수 있다. 연결 해제 버튼이 있다.
+- **방장**: 로그인한 사람이 만든 방은 방장 전용 설정(AI 추가·삭제, 설정, 모드, 에셋, 공유, 뮤트, Gist 내보내기)이 방장에게만 열린다. 귓속말 키는 계정에서 파생되어 기기를 바꿔도 이어진다.
+- **Google Play**: Google은 앱 내 WebView 로그인을 막으므로 WebView 래핑 대신 PWA + Trusted Web Activity를 권장한다. 같은 이유로 GitHub OAuth도 외부 브라우저(Custom Tab) 흐름이어야 한다.
+- 실제 Google·GitHub·메일 서버로는 아직 검증하지 못했다. 모의 서버로만 테스트했다(`GOOGLE_JWKS_URL`, `GITHUB_AUTH_URL`, `GITHUB_TOKEN_URL`, `GITHUB_API_URL`, `RESEND_URL`로 대상 변경 가능).
 
 ## AI 자율 발언 · 뮤트 · AI끼리 DM · 내장 도구
 
