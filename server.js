@@ -12,6 +12,83 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 
 const PORT = Number(process.env.PORT || 3000);
+/* ---------- Google 로그인 (선택): ID 토큰을 서버에서 검증하고 서명된 세션 쿠키를 발급한다 ---------- */
+const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+const GOOGLE_JWKS_URL = process.env.GOOGLE_JWKS_URL || 'https://www.googleapis.com/oauth2/v3/certs';
+const COOKIE_SECURE = process.env.COOKIE_SECURE === '1';
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+if (GOOGLE_CLIENT_ID && !process.env.SESSION_SECRET) console.warn('SESSION_SECRET이 없어 서버를 재시작하면 로그인 세션이 모두 풀립니다.');
+const SESSION_DAYS = 30, COOKIE_NAME = 'aichat_session';
+const b64u = b => Buffer.from(b).toString('base64url');
+const hmac = (k, d) => crypto.createHmac('sha256', k).update(d).digest();
+function signSession(u) {
+  const body = b64u(JSON.stringify({ sub: u.sub, name: u.name, pic: u.pic || '', exp: Date.now() + SESSION_DAYS * 86400000 }));
+  return body + '.' + b64u(hmac(SESSION_SECRET, body));
+}
+function readSession(cookieHeader) {
+  const m = new RegExp('(?:^|;\\s*)' + COOKIE_NAME + '=([^;]+)').exec(cookieHeader || '');
+  if (!m) return null;
+  const [body, sig] = m[1].split('.');
+  if (!body || !sig) return null;
+  const want = hmac(SESSION_SECRET, body), got = Buffer.from(sig, 'base64url');
+  if (got.length !== want.length || !crypto.timingSafeEqual(got, want)) return null;
+  try {
+    const u = JSON.parse(Buffer.from(body, 'base64url').toString());
+    if (!u || typeof u.sub !== 'string' || !u.sub || u.exp < Date.now()) return null;
+    return { sub: u.sub, name: String(u.name || '').slice(0, 16), pic: /^https:\/\//.test(u.pic || '') ? String(u.pic).slice(0, 300) : '' };
+  } catch (e) { return null; }
+}
+let jwksCache = { keys: new Map(), exp: 0, fetched: 0 };
+async function loadJwks(force) {
+  const now = Date.now();
+  if (!force && jwksCache.exp > now) return;
+  if (now - jwksCache.fetched < 60000 && jwksCache.keys.size) return;
+  const r = await fetch(GOOGLE_JWKS_URL, { signal: AbortSignal.timeout(10000) });
+  if (!r.ok) throw new Error('JWKS ' + r.status);
+  const j = await r.json();
+  const keys = new Map();
+  for (const k of j.keys || []) if (k.kid && k.kty === 'RSA') keys.set(k.kid, crypto.createPublicKey({ key: k, format: 'jwk' }));
+  const age = /max-age=(\d+)/.exec(r.headers.get('cache-control') || '');
+  jwksCache = { keys, exp: now + (age ? Number(age[1]) : 3600) * 1000, fetched: now };
+}
+async function verifyGoogleIdToken(token) {
+  if (!GOOGLE_CLIENT_ID) throw new Error('로그인이 설정되지 않았습니다.');
+  const parts = String(token || '').split('.');
+  if (parts.length !== 3 || token.length > 4000) throw new Error('토큰 형식이 올바르지 않습니다.');
+  let head, pay;
+  try { head = JSON.parse(Buffer.from(parts[0], 'base64url').toString()); pay = JSON.parse(Buffer.from(parts[1], 'base64url').toString()); }
+  catch (e) { throw new Error('토큰 형식이 올바르지 않습니다.'); }
+  if (head.alg !== 'RS256' || !head.kid) throw new Error('지원하지 않는 토큰입니다.');
+  await loadJwks(false);
+  let key = jwksCache.keys.get(head.kid);
+  if (!key) { await loadJwks(true); key = jwksCache.keys.get(head.kid); }
+  if (!key) throw new Error('서명 키를 찾지 못했습니다.');
+  const ok = crypto.verify('RSA-SHA256', Buffer.from(parts[0] + '.' + parts[1]), key, Buffer.from(parts[2], 'base64url'));
+  if (!ok) throw new Error('서명이 올바르지 않습니다.');
+  const now = Math.floor(Date.now() / 1000);
+  if (!['https://accounts.google.com', 'accounts.google.com'].includes(pay.iss)) throw new Error('발급자가 올바르지 않습니다.');
+  if (pay.aud !== GOOGLE_CLIENT_ID) throw new Error('이 앱용 토큰이 아닙니다.');
+  if (typeof pay.exp !== 'number' || pay.exp + 60 < now) throw new Error('토큰이 만료되었습니다.');
+  if (typeof pay.iat === 'number' && pay.iat - 300 > now) throw new Error('토큰 시각이 올바르지 않습니다.');
+  if (typeof pay.sub !== 'string' || !pay.sub) throw new Error('계정 정보가 없습니다.');
+  return { sub: pay.sub, name: String(pay.name || pay.given_name || '사용자'), pic: /^https:\/\//.test(pay.picture || '') ? pay.picture : '' };
+}
+const authHits = new Map();
+function authLimited(ip) {
+  const now = Date.now(), h = (authHits.get(ip) || []).filter(t => now - t < 60000);
+  h.push(now); authHits.set(ip, h);
+  if (authHits.size > 5000) authHits.clear();
+  return h.length > 20;
+}
+function readBody(req, max) {
+  return new Promise((res, rej) => {
+    let b = '', n = 0;
+    req.on('data', c => { n += c.length; if (n > max) { rej(new Error('too large')); req.destroy(); } else b += c; });
+    req.on('end', () => res(b)); req.on('error', rej);
+  });
+}
+const sameOrigin = req => { const o = req.headers.origin; if (!o) return true; try { return new URL(o).host === req.headers.host; } catch (e) { return false; } };
+const dmKeyFor = sub => hmac(SESSION_SECRET, 'dm|' + sub).toString('hex').slice(0, 32);
 const DEMO_DELAY = Number(process.env.DEMO_DELAY_MS || 700);
 const BUDGET_DEFAULT = Number(process.env.ROOM_CALL_BUDGET || 30);
 const BUDGET_MAX = Number(process.env.ROOM_CALL_BUDGET_MAX || 50);
@@ -119,7 +196,7 @@ function newRoom(id) {
   return {
     id, asset: null, rules: '', clients: new Set(), ais: [], messages: [], seq: 0,
     policy: 'mention', maxStreak: 4, streak: 0, lastAI: null, gen: 0,
-    mode: null, pipeline: null, pipelineDefault: null, deliv: null, library: [], brand: null, dms: new Map(), shareCount: 0, refunds: 0, runCalls: 0, stats: { runs: 0, calls: 0, byAI: {} }, plan: 'free', budget: { used: 0, limit: PLANS.free.budgetDefault }, doc: '', cleanup: null
+    ownerSub: '', ownerName: '', mode: null, pipeline: null, pipelineDefault: null, deliv: null, library: [], brand: null, dms: new Map(), shareCount: 0, refunds: 0, runCalls: 0, stats: { runs: 0, calls: 0, byAI: {} }, plan: 'free', budget: { used: 0, limit: PLANS.free.budgetDefault }, doc: '', cleanup: null
   };
 }
 
@@ -254,7 +331,7 @@ function meta(room) {
     adList: planOf(room).ads ? HOUSE_ADS : [],
     free: { available: freeAvailable(), left: freeLeft(), roomUsed: room.freeUsed || 0, roomCap: FREE_ROOM_CAP },
     library: room.library.map(l => ({ id: l.id, name: l.asset.name, description: l.asset.description, by: l.by, ais: l.asset.ais.length })),
-    humans: [...room.clients].map(c => c.meta.name),
+    humans: [...room.clients].map(c => c.meta.name), verified: [...room.clients].filter(c => c.meta.user).map(c => c.meta.name), ownerName: room.ownerSub ? room.ownerName : '',
     ais: room.ais.map(a => ({ id: a.id, name: a.name, persona: a.persona, provider: a.provider, model: a.model, ownKey: !!a.apiKey }))
   };
 }
@@ -527,8 +604,9 @@ function join(ws, m) {
   if (!/^[a-z0-9]{3,12}$/.test(id)) return send(ws, { t: 'err', text: '방 코드는 영문 소문자/숫자 3~12자여야 합니다.' });
   let name = cleanText(m.name, 16).replace(/\s+/g, ' ');
   if (!name) return send(ws, { t: 'err', text: '이름을 입력하세요.' });
-  let room = rooms.get(id), assetErr = '';
+  let room = rooms.get(id), assetErr = '', justCreated = false;
   if (!room) {
+    justCreated = true;
     if (rooms.size >= LIMITS.rooms) return send(ws, { t: 'err', text: '서버가 가득 찼습니다.' });
     room = newRoom(id);
     rooms.set(id, room);
@@ -545,10 +623,11 @@ function join(ws, m) {
   const taken = new Set([...room.clients].map(c => c.meta.name).concat(room.ais.map(a => a.name)));
   const base = name; let k = 2;
   while (taken.has(name)) name = base + k++;
-  ws.meta = { room, name, key: /^[A-Za-z0-9]{8,40}$/.test(String(m.key || '')) ? String(m.key) : crypto.randomBytes(8).toString('hex') };
+  ws.meta = { room, name, user: ws.user, key: ws.user ? dmKeyFor(ws.user.sub) : /^[A-Za-z0-9]{8,40}$/.test(String(m.key || '')) ? String(m.key) : crypto.randomBytes(8).toString('hex') };
+  if (justCreated && ws.user) { room.ownerSub = ws.user.sub; room.ownerName = name; }
   room.clients.add(ws);
   if (room.cleanup) { clearTimeout(room.cleanup); room.cleanup = null; }
-  send(ws, Object.assign(meta(room), { t: 'state', you: name, messages: room.messages.slice(-100), doc: room.doc, deliv: room.deliv, dms: dmsFor(room, ws.meta.key) }));
+  send(ws, Object.assign(meta(room), { t: 'state', you: name, messages: room.messages.slice(-100), doc: room.doc, deliv: room.deliv, dms: dmsFor(room, ws.meta.key), user: ws.user ? { name: ws.user.name, picture: ws.user.pic } : null, youOwner: !room.ownerSub || !!(ws.user && ws.user.sub === room.ownerSub) }));
   if (assetErr) send(ws, { t: 'err', text: '에셋을 적용하지 못했습니다: ' + assetErr });
   system(room, name + ' 님이 입장했습니다.', 'MEMBER_JOIN');
   broadcast(room, meta(room));
@@ -572,6 +651,9 @@ function handle(ws, m) {
   if (!ws.meta) return;
   const room = ws.meta.room, name = ws.meta.name;
   if (!rate(ws)) return send(ws, { t: 'err', text: '너무 빠르게 보내고 있습니다. 잠시 후 다시 시도하세요.' });
+  const OWNER_ONLY = ['config', 'plan', 'asset', 'brand', 'pipeline', 'applyLib', 'delLib', 'mode', 'addAI', 'removeAI', 'share'];
+  if (room.ownerSub && OWNER_ONLY.includes(m.t) && !(ws.user && ws.user.sub === room.ownerSub))
+    return send(ws, { t: 'err', text: '방장(Google 로그인 계정)만 바꿀 수 있습니다.' });
   switch (m.t) {
     case 'msg': {
       const text = cleanText(m.text, LIMITS.text);
@@ -766,6 +848,21 @@ function sharePage(r) {
 }
 const server = http.createServer((req, res) => {
   const u = req.url.split('?')[0];
+  const json = (code, o, hdr) => { res.writeHead(code, Object.assign({ 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }, hdr || {})); res.end(JSON.stringify(o)); };
+  const cookie = (v, age) => COOKIE_NAME + '=' + v + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + age + (COOKIE_SECURE || req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : '');
+  if (u === '/auth/config' && req.method === 'GET') return json(200, { clientId: GOOGLE_CLIENT_ID });
+  if (u === '/auth/me' && req.method === 'GET') { const me = readSession(req.headers.cookie); return json(200, { user: me ? { name: me.name, picture: me.pic } : null }); }
+  if (u === '/auth/logout' && req.method === 'POST') { if (!sameOrigin(req)) return json(403, { error: 'origin' }); return json(200, { ok: true }, { 'set-cookie': cookie('', 0) }); }
+  if (u === '/auth/google' && req.method === 'POST') {
+    if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' });
+    if (authLimited(req.socket.remoteAddress || '')) return json(429, { error: '잠시 뒤 다시 시도하세요.' });
+    return readBody(req, 8192).then(async b => {
+      let cred = ''; try { cred = JSON.parse(b).credential; } catch (e) {}
+      const g = await verifyGoogleIdToken(cred);
+      const user = { sub: g.sub, name: cleanText(g.name, 16).replace(/\s+/g, ' ') || '사용자', pic: g.pic };
+      json(200, { user: { name: user.name, picture: user.pic } }, { 'set-cookie': cookie(signSession(user), SESSION_DAYS * 86400) });
+    }).catch(e => json(401, { error: e.message === 'too large' ? '요청이 너무 큽니다.' : e.message }));
+  }
   const sm = /^\/s\/([0-9a-f]{12})$/.exec(u);
   if (sm) {
     const r = shares.get(sm[1]);
@@ -784,9 +881,9 @@ const server = http.createServer((req, res) => {
   }
   res.writeHead(404); res.end('not found');
 });
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
-wss.on('connection', ws => {
-  ws.meta = null; ws.hits = [];
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024, verifyClient: info => sameOrigin(info.req) });
+wss.on('connection', (ws, req) => {
+  ws.meta = null; ws.hits = []; ws.user = readSession(req && req.headers ? req.headers.cookie : "");
   ws.on('message', raw => { let m; try { m = JSON.parse(raw); } catch (e) { return; } handle(ws, m); });
   ws.on('close', () => leave(ws));
   ws.on('error', () => {});
