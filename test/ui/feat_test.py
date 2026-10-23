@@ -23,7 +23,7 @@ with sync_playwright() as p:
     A.click("#shareres"); A.wait_for_selector("#sharebox input")
     url=A.input_value("#sharebox input"); r=urllib.request.urlopen(url); html=r.read().decode(); csp=r.headers.get("content-security-policy","")
     check("share page served w/ CSP + sandbox iframe", "sandbox=\"\"" in html and "default-src 'none'" in csp, csp)
-    check("free: badge present", "나도 만들어 보기" in html)
+    check("free: badge present", ("나도 만들어 보기" in html or "모드로 해보기" in html))
     S=page(); S.goto(url); fr=S.frame_locator("iframe"); check("share page renders deliverable", "핵심 내용" in fr.locator("body").inner_text())
     A.click("#sharechat"); A.wait_for_timeout(300); u2=A.input_value("#sharebox input"); h2=urllib.request.urlopen(u2).read().decode()
     check("chat highlight page escapes + shows", "편집자" in h2 and "badge" in h2)

@@ -551,6 +551,18 @@ const MODES = {
     ],
     full: ['기획자', '작성자', '디자이너', '편집자'], lite: ['기획자', '작성자', '편집자'],
     rules: '이 방은 문서와 웹페이지 제작방이다. 사람이 요청하면 기획 → 작성 → 디자인 → 편집 순서로 이어 받는다. 최종 편집자만 산출물 코드블록을 낸다(3500자 이내). 나머지는 짧게 말한다.'
+  },
+  debate: {
+    label: 'Debate', desc: '옹호 → 반박 → 검증 → 판정. AI들이 일부러 반대 입장에서 따져 보고, 합의된 것과 갈리는 것을 판정 카드로 정리합니다.', hint: '판단하고 싶은 질문이나 주장을 적어 주세요.',
+    examples: ['스마트워치 신제품에 e심을 넣는 게 맞을까?', '재택근무와 출근 중 팀 생산성에 더 좋은 쪽은?', '새 앱 이름으로 둘 중 무엇이 나을까?'],
+    roles: [
+      ['옹호자', '질문의 가장 강한 긍정 입장을 근거 3개로 세운다. 모르는 사실은 지어내지 말고 [확인 필요]로 표시한다.'],
+      ['반박자', '앞 입장의 가장 약한 근거부터 짚고, 반대 입장의 근거 3개를 세운다. 모르는 사실은 지어내지 않는다.'],
+      ['검증자', '앞 두 입장의 주장 중 사실 확인이 필요한 것을 골라 확실, 불확실, 모름으로 나눈다. 새 주장은 내지 않는다.'],
+      ['심판', '모든 의견을 종합해 판정 카드를 ```markdown 코드블록 하나로 낸다. 제목은 순서대로 결론(한 줄), 합의된 것, 갈리는 것(쟁점마다 한 줄), 확인 필요, 내가 정할 때의 기준 3개로 쓴다.']
+    ],
+    full: ['옹호자', '반박자', '검증자', '심판'], lite: ['옹호자', '반박자', '심판'],
+    rules: '이 방은 토론방이다. 질문이 오면 옹호 → 반박 → 검증 → 판정 순서로 이어 받는다. 서로 일부러 반대 입장을 맡되 사실은 지어내지 않는다. 마지막 심판만 ```markdown 판정 카드를 낸다(3500자 이내). 나머지는 짧게 말한다. 판정은 참고용이며 중요한 결정은 직접 확인하라고 한 줄 덧붙인다.'
   }
 };
 const DELIV_MAX = 12000;
@@ -900,6 +912,10 @@ function demoMode(room, ai, t) {
     case '편집자': return web
       ? '[데모] 최종본입니다.\n```html\n<!doctype html><html lang="ko"><meta charset="utf-8"><title>' + t + '</title><style>body{font-family:' + brandFont(room) + ';margin:0;background:' + (room.brand && room.brand.bg || '#fbf6ee') + ';color:#2b2118}header{padding:48px 24px;text-align:center;color:' + (room.brand && room.brand.primary || '#2b2118') + '}h1{margin:0 0 8px}main{display:grid;gap:12px;padding:24px;max-width:720px;margin:auto}.c{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 4px #0002;border-left:4px solid ' + (room.brand && room.brand.primary || '#c9a36a') + '}</style><header><h1>' + (room.brand && room.brand.name || t) + '</h1><p>소개 문구가 들어갑니다.</p></header><main><div class="c">핵심 내용 1</div><div class="c">핵심 내용 2</div><div class="c">[확인 필요] 운영 시간과 가격</div></main></html>\n```'
       : '[데모] 최종본입니다.\n```markdown\n# ' + t + '\n\n## 1. 소개\n내용이 들어갑니다.\n\n---\n\n## 2. 핵심 내용\n- 항목 하나\n- 항목 둘\n- [확인 필요] 수치\n```';
+    case '옹호자': return '[데모] 찬성 근거: 1) 장점이 분명하다 2) 비용 대비 효과가 있다 3) 사례가 있다. 주제: ' + t;
+    case '반박자': return '[데모] 반대 근거: 1) 전제가 검증되지 않았다 2) 숨은 비용이 있다 3) 대안이 더 낫다. [확인 필요] 실제 수치.';
+    case '검증자': return '[데모] 확실: 장점이 있다는 점. 불확실: 비용 대비 효과. 모름: 실제 사례의 수치.';
+    case '심판': return '[데모] 판정 카드입니다.\n```markdown\n## 결론\n조건부 찬성\n\n## 합의된 것\n- 장점이 있다는 점\n\n## 갈리는 것\n- 비용 대비 효과\n\n## 확인 필요\n- 실제 수치\n\n## 내가 정할 때의 기준\n1. 예산 2. 일정 3. 되돌릴 수 있는지\n```';
     default: return null;
   }
 }
@@ -1257,7 +1273,7 @@ function handle(ws, m) {
       if (room.shareCount >= 10) return send(ws, { t: 'err', text: '이 방에서 만들 수 있는 공유 링크는 10개입니다.' });
       const kind = m.kind === 'chat' ? 'chat' : 'result';
       const rec = { roomId: room.id, id: crypto.randomBytes(6).toString('hex'), kind, ts: Date.now(), exp: Date.now() + planOf(room).shareDays * 86400000, badge: !!planOf(room).ads,
-        title: room.asset ? room.asset.name : '방 ' + room.id };
+        title: room.asset ? room.asset.name : '방 ' + room.id, mode: room.mode && MODES[room.mode] ? room.mode : '' };
       if (kind === 'result') {
         if (!room.deliv) return send(ws, { t: 'err', text: '공유할 산출물이 아직 없습니다.' });
         rec.lang = room.deliv.lang; rec.text = room.deliv.text;
@@ -1410,12 +1426,15 @@ function handle(ws, m) {
 /* ---------- HTTP / WS ---------- */
 const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function sharePage(r) {
-  const bar = r.badge ? '<a class="badge" href="/">AI 채팅방으로 만들었어요 · 나도 만들어 보기 →</a>' : '';
+  const mk = r.mode && MODES[r.mode] ? r.mode : '';
+  const bar = r.badge ? '<a class="badge" href="/' + (mk ? '?mode=' + mk : '') + '">AI 채팅방으로 만들었어요 · ' + (mk ? '나도 ' + MODES[mk].label + ' 모드로 해보기 →' : '나도 만들어 보기 →') + '</a>' : '';
+  const plain = r.kind === 'result' && r.lang !== 'html' ? String(r.text || '').replace(/[#*`|>\-]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 110) : (r.kind === 'chat' ? 'AI들과 사람이 함께 나눈 대화' : '');
+  const og = '<meta property="og:title" content="' + esc(r.title) + '"><meta property="og:type" content="website">' + (plain ? '<meta property="og:description" content="' + esc(plain) + '">' : '');
   let body;
   if (r.kind === 'result' && r.lang === 'html') body = '<iframe sandbox="" title="' + esc(r.title) + '" srcdoc="' + esc(r.text) + '"></iframe>';
   else if (r.kind === 'result') body = '<pre>' + esc(r.text) + '</pre>';
   else body = '<div class="chat">' + r.msgs.map(m => '<div class="m' + (m.kind === 'ai' ? ' ai' : '') + '"><b>' + esc(m.who) + (m.kind === 'ai' ? ' · AI' : '') + '</b><p>' + esc(m.text) + '</p></div>').join('') + '</div>';
-  return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>' + esc(r.title) + '</title><style>' +
+  return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">' + og + '<title>' + esc(r.title) + '</title><style>' +
     'html,body{height:100%;margin:0}body{display:flex;flex-direction:column;font:15px/1.6 system-ui,sans-serif;background:#f5f6fa;color:#101322}.badge{flex:none;display:block;text-align:center;padding:10px 12px;background:#4f46e5;color:#fff;text-decoration:none;font-weight:600;font-size:13.5px}' +
     'iframe{flex:1;border:0;width:100%;background:#fff}pre{flex:1;margin:0;padding:16px;overflow:auto;white-space:pre-wrap;background:#fff}.chat{flex:1;overflow:auto;padding:16px;max-width:720px;width:100%;margin:0 auto;box-sizing:border-box}' +
     '.m{background:#fff;border-radius:14px;padding:10px 14px;margin-bottom:10px}.m.ai{background:#eeedfd}.m p{margin:4px 0 0;white-space:pre-wrap;word-break:break-word}</style></head><body>' + bar + body + '</body></html>';
