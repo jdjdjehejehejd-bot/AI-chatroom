@@ -208,7 +208,7 @@ label.lb { display:block; font-size:12px; font-weight:700; margin:14px 0 6px; co
 #side { flex:1; min-height:0; overflow-y:auto; padding:14px 16px calc(18px + env(safe-area-inset-bottom,0px)); }
 .pn { display:none; }
 #info[data-tab="ai"] .pn[data-panel="ai"], #info[data-tab="settings"] .pn[data-panel="settings"],
-#info[data-tab="doc"] .pn[data-panel="doc"], #info[data-tab="deliv"] .pn[data-panel="deliv"], #info[data-tab="assets"] .pn[data-panel="assets"] { display:block; }
+#info[data-tab="tools"] .pn[data-panel="tools"], #info[data-tab="doc"] .pn[data-panel="doc"], #info[data-tab="deliv"] .pn[data-panel="deliv"], #info[data-tab="assets"] .pn[data-panel="assets"] { display:block; }
 .pn h3 { margin:0 0 10px; font:600 15px/1.3 var(--display); }
 .pn section + section { margin-top:20px; padding-top:18px; border-top:1px solid var(--line); }
 .ai-item { display:flex; align-items:center; gap:10px; padding:8px 0; }
@@ -424,6 +424,7 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
 .cc.plus .pl { width:34px; height:34px; border-radius:50%; font-size:16px; }
 .cc.plus { padding-right:16px; }
 .cc.plus small { grid-row:1 / span 2; align-self:center; font-size:12px; color:var(--muted); font-weight:500; }
+#toolbox .pfact{flex-wrap:wrap}#toolbox .pfact .btn{flex:0 0 auto}
 </style>
 </head>
 <body>
@@ -529,6 +530,7 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
       <button type="button" data-go="doc">문서</button>
       <button type="button" data-go="deliv">산출물</button>
       <button type="button" data-go="assets">에셋</button>
+      <button type="button" data-go="tools">도구</button>
     </nav>
     <div id="side">
       <div class="pn" data-panel="ai">
@@ -580,7 +582,7 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
             <legend>AI 발언 방식</legend>
             <label class="pol"><input type="radio" name="policy" value="mention" checked><span><b>@멘션했을 때만</b><span>부른 AI만 답합니다. AI가 다른 AI를 @멘션하면 대화가 이어집니다.</span></span></label>
             <label class="pol"><input type="radio" name="policy" value="round"><span><b>사람이 말할 때마다 순서대로</b><span>모든 AI가 한 번씩 정해진 순서로 답합니다.</span></span></label>
-            <label class="pol"><input type="radio" name="policy" value="free"><span><b>AI끼리 자유롭게 이어서</b><span>AI들이 서로 이어 말하고, 연속 발언 한도에서 멈춥니다.</span></span></label>
+            <label class="pol"><input type="radio" name="policy" value="free"><span><b>AI가 알아서 판단해 말하기</b><span>부르지 않아도 AI가 대화를 보고 말할지 [PASS]할지 스스로 정합니다. 뮤트한 AI는 빠지고, 연속 발언 한도에서 멈춥니다. 판단 호출도 예산을 씁니다.</span></span></label>
           </fieldset>
         </section>
         <section>
@@ -621,6 +623,22 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
         <section>
           <h3>이 방의 사용량</h3>
           <div id="stats"></div>
+        </section>
+      </div>
+      <div class="pn" data-panel="tools">
+        <section>
+          <h3>창작·개발 도구</h3>
+          <p class="hint" style="margin:0 0 10px">모두 이 브라우저 안에서만 동작하고 AI 호출 예산을 쓰지 않아요.</p>
+          <label for="toolsel" class="sr">도구 선택</label>
+          <select class="field" id="toolsel">
+            <option value="json">JSON 정리·검증</option>
+            <option value="regex">정규식 테스트</option>
+            <option value="enc">Base64 · URL 인코딩</option>
+            <option value="color">색상 · 대비 · 팔레트</option>
+            <option value="count">글자수 · 토큰 추정</option>
+            <option value="spark">창작 카드 (주제 뽑기)</option>
+          </select>
+          <div id="toolbox" style="margin-top:12px"></div>
         </section>
       </div>
       <div class="pn" data-panel="doc">
@@ -722,8 +740,8 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
     make: { label: "Make", desc: "기획 → 작성 → 편집", flow: ["기획자", "작성자", "(디자이너)", "편집자"] }
   };
   var jmode = "", deliv = null, dview = "preview";
-  var dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typingWho = "", msgIndex = {}, lastTap = { id: 0, t: 0 };
-  var POLNAME = { mention: "@멘션했을 때만", round: "순서대로", free: "AI끼리 자유롭게" };
+  var aidms = [], peekOpen = -1, dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typingWho = "", msgIndex = {}, lastTap = { id: 0, t: 0 };
+  var POLNAME = { mention: "@멘션했을 때만", round: "순서대로", free: "AI가 알아서 판단" };
   var LIVE = ["anthropic", "openai", "openrouter", "groq", "google", "mistral", "nvidia"];
 
   function mk(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -964,7 +982,7 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
     var box = $("stories"); box.textContent = "";
     s.ais.forEach(function (ai) {
       var b = mk("button", "cc c" + colorOf(ai.name) + (typingWho === ai.name ? " live" : "")); b.type = "button"; b.setAttribute("aria-label", ai.name + " 캐스트 카드"); b.dataset.ai = ai.id;
-      b.appendChild(avatarFor(ai)); b.appendChild(mk("b", "", ai.name)); var sm = mk("small"); ccStatus(sm, typingWho === ai.name); b.appendChild(sm);
+      b.appendChild(avatarFor(ai)); b.appendChild(mk("b", "", ai.name)); var sm = mk("small"); ccStatus(sm, typingWho === ai.name); if (ai.muted) { sm.textContent = "🔇 뮤트"; b.style.opacity = ".6"; } b.appendChild(sm);
       b.addEventListener("click", function () { openProfile(ai.id); }); box.appendChild(b);
     });
     s.humans.forEach(function (n) {
@@ -1003,7 +1021,8 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
     var dmb = mk("button", "btn primary sm", "귓속말 보내기"); dmb.type = "button"; dmb.id = "pfdm"; dmb.addEventListener("click", function () { closeProfile(); openDM(ai.id); });
     var mb = mk("button", "btn sm", "@멘션"); mb.type = "button"; mb.addEventListener("click", function () { closeProfile(); insertMention(ai.name); });
     var rb = mk("button", "btn sm", "퇴장"); rb.type = "button"; rb.addEventListener("click", function () { closeProfile(); send({ t: "removeAI", id: ai.id }); });
-    act.appendChild(dmb); act.appendChild(mb); act.appendChild(rb); body.appendChild(act);
+    var mu = mk("button", "btn sm", ai.muted ? "뮤트 해제" : "뮤트"); mu.type = "button"; mu.id = "pfmute"; mu.addEventListener("click", function () { closeProfile(); send({ t: "mute", aiId: ai.id, muted: !ai.muted }); });
+    act.appendChild(dmb); act.appendChild(mb); act.appendChild(mu); act.appendChild(rb); body.appendChild(act);
     var posts = Object.keys(msgIndex).map(function (k) { return msgIndex[k]; }).filter(function (m) { return m.kind === "ai" && m.who === ai.name; }).slice(-3).reverse();
     if (posts.length) { var pp = mk("div", "pfposts"); pp.appendChild(mk("h4", "", "최근 대사")); posts.forEach(function (m) { pp.appendChild(mk("div", "pfpost", m.text.replace(/```[\s\S]*?```/g, "[코드블록]").slice(0, 160))); }); body.appendChild(pp); }
     box.appendChild(body);
@@ -1023,12 +1042,39 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
       r.appendChild(avatarFor(ai)); r.appendChild(t); r.appendChild(mk("span", "u")); r.addEventListener("click", function () { openDM(ai.id); }); box.appendChild(r);
     });
     if (!any) box.appendChild(mk("div", "dmnote", "방에 AI가 없습니다. AI를 초대하면 둘이서만 말할 수 있어요."));
+    if (aidms.length) {
+      var hd = mk("div", "eyebrow", "AI끼리 몰래 나눈 대화 · 엿보기"); hd.style.cssText = "margin:18px 4px 8px"; box.appendChild(hd);
+      aidms.forEach(function (t, i) {
+        var l = t.msgs[t.msgs.length - 1];
+        var r = mk("button", "inrow peek"); r.type = "button"; r.dataset.peek = String(i);
+        var av = mk("div", "av", "👀"); av.style.background = "var(--h-sf)";
+        var tt = mk("div", "t"); tt.appendChild(mk("b", "", t.a + " ⇄ " + t.b)); tt.appendChild(mk("small", "", l ? l.from + ": " + l.text : ""));
+        r.appendChild(av); r.appendChild(tt); r.addEventListener("click", function () { openPeek(i); }); box.appendChild(r);
+      });
+    }
     $("dmbtn").classList.toggle("on", Object.keys(dmUnread).some(function (k) { return dmUnread[k]; }));
+  }
+  function openPeek(i) {
+    peekOpen = i; delete dmUnread.peek; dmOpen = ""; $("inbox").hidden = false; $("dm").hidden = false; $("dmcomposer").hidden = true;
+    var who = $("dmwho"); who.textContent = ""; who.onclick = null;
+    var t = aidms[i] || { a: "", b: "" }; var tt = mk("div"); var b1 = mk("b", "", t.a + " ⇄ " + t.b); b1.style.cssText = "display:block;font:600 16px/1.2 var(--display)";
+    var s1 = mk("span", "", "엿보는 중 · 두 AI는 사람이 보는 걸 알아요"); s1.style.cssText = "font-size:12px;color:var(--muted)"; tt.appendChild(b1); tt.appendChild(s1); who.appendChild(tt);
+    renderPeek(); renderInbox();
+  }
+  function renderPeek() {
+    var t = aidms[peekOpen]; var log = $("dmlog"); if (!t) return; log.textContent = "";
+    t.msgs.forEach(function (m) {
+      var ai = (meta && meta.ais || []).filter(function (a) { return a.name === m.from; })[0] || { name: m.from };
+      var row = mk("div", "row first last c" + colorOf(m.from)), col = mk("div", "col"); var nm = mk("div", "name", m.from + " → " + m.to); nm.style.margin = "0 2px 3px";
+      var b = mk("div", "bubble"); b.textContent = m.text; col.appendChild(nm); col.appendChild(b); col.appendChild(mk("div", "time", fmtTime(m.ts)));
+      var av = avatarFor(ai); av.style.width = "28px"; av.style.height = "28px"; av.style.fontSize = "11px"; row.appendChild(av); row.appendChild(col); log.appendChild(row);
+    });
+    log.scrollTop = log.scrollHeight;
   }
   function openInbox() { renderInbox(); $("dm").hidden = true; dmOpen = ""; $("inbox").hidden = false; }
   function openDM(id) {
     var ai = aiById(id); if (!ai) return;
-    dmOpen = id; delete dmUnread[id]; $("inbox").hidden = false; $("dm").hidden = false;
+    dmOpen = id; peekOpen = -1; $("dmcomposer").hidden = false; delete dmUnread[id]; $("inbox").hidden = false; $("dm").hidden = false;
     var who = $("dmwho"); who.textContent = ""; who.className = "c" + colorOf(ai.name);
     var av = avatarFor(ai); av.style.width = "40px"; av.style.height = "40px"; av.style.fontSize = "17px";
     var t = mk("div"); t.style.cssText = "min-width:0"; var b1 = mk("b", "", ai.name); b1.style.cssText = "display:block;font:600 17px/1.2 var(--display)"; var s1 = mk("span", "", "귓속말 · 둘만 보는 대화"); s1.style.cssText = "display:block;font-size:11.5px;color:var(--muted)";
@@ -1066,7 +1112,7 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
   $("dmtext").addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); dmSendNow(); } });
   $("dmbtn").addEventListener("click", openInbox);
   $("inboxback").addEventListener("click", function () { $("inbox").hidden = true; $("dm").hidden = true; dmOpen = ""; });
-  $("dmback").addEventListener("click", function () { $("dm").hidden = true; dmOpen = ""; renderInbox(); });
+  $("dmback").addEventListener("click", function () { $("dm").hidden = true; dmOpen = ""; peekOpen = -1; $("dmcomposer").hidden = false; renderInbox(); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") { if (!$("pfwrap").hidden) closeProfile(); else if (!$("dm").hidden) { $("dm").hidden = true; dmOpen = ""; renderInbox(); } else if (!$("inbox").hidden) $("inbox").hidden = true; } });
   function renderBody(el, text) {
     var re = /```([\w+-]*)\n([\s\S]*?)```/g, i = 0, m, any = false;
@@ -1198,7 +1244,10 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
       nm.appendChild(mk("small", "", via + ai.persona));
       var rm = mk("button", "btn sm", "내보내기"); rm.type = "button"; rm.setAttribute("aria-label", ai.name + " 내보내기");
       rm.addEventListener("click", function () { send({ t: "removeAI", id: ai.id }); });
-      row.appendChild(av); row.appendChild(nm); row.appendChild(rm); box.appendChild(row);
+      var mt = mk("button", "btn sm", ai.muted ? "뮤트 해제" : "뮤트"); mt.type = "button"; mt.dataset.mute = ai.id; mt.setAttribute("aria-pressed", ai.muted ? "true" : "false");
+      mt.addEventListener("click", function () { send({ t: "mute", aiId: ai.id, muted: !ai.muted }); });
+      if (ai.muted) row.style.opacity = ".6";
+      row.appendChild(av); row.appendChild(nm); row.appendChild(mt); row.appendChild(rm); box.appendChild(row);
     });
     var chips = $("chips"); chips.textContent = "";
     if (!s.mode) s.ais.forEach(function (ai) {
@@ -1382,12 +1431,96 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeInfo(); });
   document.querySelectorAll("#seg button").forEach(function (b) { b.addEventListener("click", function () { setTab(b.dataset.go); }); });
 
+  /* ---- 내장 도구 (전부 브라우저 안에서만 실행) ---- */
+  var TOOLS = {
+    json: function (box) {
+      var ta = tArea(box, "JSON을 붙여 넣으세요", 7), out = tArea(box, "결과", 7, true);
+      var row = mk("div", "pfact"); row.style.marginTop = "8px";
+      function run(ind) { try { var v = JSON.parse(ta.value); out.value = JSON.stringify(v, null, ind); out.style.borderColor = ""; } catch (e) { out.value = "오류: " + e.message; out.style.borderColor = "var(--err-tx)"; } }
+      row.appendChild(tBtn("정리(들여쓰기)", function () { run(2); })); row.appendChild(tBtn("압축", function () { run(0); })); box.insertBefore(row, out);
+      tOut(box, out);
+    },
+    regex: function (box) {
+      var pat = tInput(box, "정규식 (예: (\\d+)-(\\w+))"), fl = tInput(box, "플래그 (기본 g)"); fl.value = "g";
+      var ta = tArea(box, "테스트할 글", 5), out = tArea(box, "일치 결과", 6, true);
+      function run() {
+        if (!pat.value) { out.value = ""; return; }
+        if (ta.value.length > 5000) { out.value = "글이 너무 깁니다(5000자 이하)."; return; }
+        try {
+          var re = new RegExp(pat.value, fl.value.replace(/[^dgimsuy]/g, "")), res = [], m, n = 0;
+          if (!re.global) { m = re.exec(ta.value); if (m) res.push(m); } else while ((m = re.exec(ta.value)) && n++ < 200) { res.push(m); if (m[0] === "") re.lastIndex++; }
+          out.value = res.length ? res.length + "개 일치\n" + res.map(function (r, i) { return (i + 1) + ". “" + r[0] + "” @" + r.index + (r.length > 1 ? "  그룹: " + r.slice(1).map(function (g) { return g === undefined ? "∅" : "“" + g + "”"; }).join(", ") : ""); }).join("\n") : "일치 없음";
+        } catch (e) { out.value = "정규식 오류: " + e.message; }
+      }
+      [pat, fl, ta].forEach(function (el) { el.addEventListener("input", run); }); tOut(box, out);
+    },
+    enc: function (box) {
+      var ta = tArea(box, "변환할 글", 5), out = tArea(box, "결과", 5, true);
+      function b64e(t) { var b = new TextEncoder().encode(t), s = ""; b.forEach(function (c) { s += String.fromCharCode(c); }); return btoa(s); }
+      function b64d(t) { var s = atob(t.replace(/\s/g, "")), b = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return new TextDecoder().decode(b); }
+      var row = mk("div", "pfact"); row.style.marginTop = "8px";
+      [["Base64 인코딩", b64e], ["Base64 디코딩", b64d], ["URL 인코딩", encodeURIComponent], ["URL 디코딩", decodeURIComponent]].forEach(function (x) {
+        row.appendChild(tBtn(x[0], function () { try { out.value = x[1](ta.value); } catch (e) { out.value = "변환 오류: " + e.message; } }));
+      });
+      box.insertBefore(row, out); tOut(box, out);
+    },
+    color: function (box) {
+      var inp = tInput(box, "#4F46E5"); inp.value = "#4F46E5";
+      var out = mk("div"); out.id = "colorout"; box.appendChild(out);
+      function lum(r, g, b) { return [r, g, b].map(function (v) { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }).reduce(function (a, v, i) { return a + v * [.2126, .7152, .0722][i]; }, 0); }
+      function toRgb(h) { var m = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(h.trim()); if (!m) return null; var x = m[1]; if (x.length === 3) x = x.replace(/./g, "$&$&"); return [parseInt(x.slice(0, 2), 16), parseInt(x.slice(2, 4), 16), parseInt(x.slice(4, 6), 16)]; }
+      function hsl(r, g, b) { r /= 255; g /= 255; b /= 255; var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, h = 0, s = 0, d = mx - mn; if (d) { s = d / (1 - Math.abs(2 * l - 1)); h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360; } return [h, s, l]; }
+      function hex(h, s, l) { var c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2, r = 0, g = 0, b = 0; if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; } else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; } return "#" + [r, g, b].map(function (v) { return ("0" + Math.round((v + m) * 255).toString(16)).slice(-2); }).join("").toUpperCase(); }
+      function run() {
+        out.textContent = ""; var c = toRgb(inp.value); if (!c) { out.appendChild(mk("div", "hint", "#RRGGBB 형식으로 입력하세요.")); return; }
+        var L = lum(c[0], c[1], c[2]), cw = 1.05 / (L + .05), cb = (L + .05) / .05;
+        out.appendChild(mk("div", "hint", "흰 글씨 대비 " + cw.toFixed(2) + ":1 · 검정 글씨 대비 " + cb.toFixed(2) + ":1 · " + (Math.max(cw, cb) >= 4.5 ? "본문 글씨 기준(AA) 통과" : "본문 글씨 기준(AA) 미달")));
+        var h = hsl(c[0], c[1], c[2]), sw = mk("div"); sw.style.cssText = "display:flex;gap:6px;margin-top:10px;flex-wrap:wrap";
+        [["기준", h[0]], ["보색", h[0] + 180], ["유사1", h[0] + 30], ["유사2", h[0] - 30], ["삼각1", h[0] + 120], ["삼각2", h[0] + 240]].forEach(function (x) {
+          var hh = ((x[1] % 360) + 360) % 360, hx = x[0] === "기준" ? inp.value.toUpperCase() : hex(hh, h[1], h[2]);
+          var b = mk("button", "btn sm", x[0] + " " + hx); b.type = "button"; b.style.cssText = "border-left:14px solid " + hx; b.addEventListener("click", function () { copyText(hx); });
+          sw.appendChild(b);
+        });
+        out.appendChild(sw); out.appendChild(mk("div", "hint", "누르면 색상 코드가 복사돼요."));
+      }
+      inp.addEventListener("input", run); run();
+    },
+    count: function (box) {
+      var ta = tArea(box, "글을 붙여 넣으세요", 7), out = mk("div", "hint"); out.style.marginTop = "10px"; box.appendChild(out);
+      function run() {
+        var t = ta.value, ko = (t.match(/[ㄱ-ㆎ가-힣]/g) || []).length, cjk = (t.match(/[一-鿿぀-ヿ]/g) || []).length, rest = t.length - ko - cjk;
+        var tok = Math.ceil(rest / 4 + ko * 0.9 + cjk * 1.1);
+        out.textContent = "글자 " + t.length + " · 공백 제외 " + t.replace(/\s/g, "").length + " · 단어 " + (t.trim() ? t.trim().split(/\s+/).length : 0) + " · 줄 " + (t ? t.split("\n").length : 0) + " · 바이트 " + new TextEncoder().encode(t).length + "\n토큰(아주 대략) ≈ " + tok + " — 모델마다 달라요. 긴 글은 요약해서 보내면 호출 비용이 줄어요.";
+        out.style.whiteSpace = "pre-wrap";
+      }
+      ta.addEventListener("input", run); run();
+    },
+    spark: function (box) {
+      var A = ["고장 난 시계탑", "마지막 버스", "비 오는 옥상", "잃어버린 레시피", "야간 편의점", "느린 우주선", "말하는 우산", "폐교의 도서관", "새벽 3시의 라디오", "사라진 지도"];
+      var B = ["미스터리", "코미디", "SF", "로맨스", "다큐처럼", "동화", "누아르", "일상 힐링", "역사 패러디", "공포(순한 맛)"];
+      var C = ["대사 없이 표현", "주인공이 둘", "반전 하나", "3줄 요약 가능하게", "숫자 7을 꼭 포함", "시점을 바꿔서", "제한시간 24시간", "예산 0원", "한 장소에서만", "AI가 조연"];
+      var out = mk("div"); out.id = "sparkout"; box.appendChild(out);
+      function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+      var cur = "";
+      function run() { cur = "소재: " + pick(A) + "\n장르: " + pick(B) + "\n제약: " + pick(C); out.textContent = cur; out.style.cssText = "white-space:pre-wrap;padding:14px;border:1px solid var(--line2);border-radius:14px;background:var(--surface2);font-weight:600;line-height:1.7;margin-bottom:8px"; }
+      var row = mk("div", "pfact"); row.appendChild(tBtn("다시 뽑기", run)); row.appendChild(tBtn("채팅에 붙이기", function () { pasteToChat(cur); })); row.appendChild(tBtn("복사", function () { copyText(cur); })); box.appendChild(row); run();
+    }
+  };
+  function tArea(box, ph, rows, ro) { var t = mk("textarea", "field"); t.placeholder = ph; t.rows = rows; t.style.cssText = "margin-top:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12.5px;resize:vertical"; t.setAttribute("aria-label", ph); if (ro) t.readOnly = true; box.appendChild(t); return t; }
+  function tInput(box, ph) { var t = mk("input", "field"); t.placeholder = ph; t.style.marginTop = "8px"; t.setAttribute("aria-label", ph); box.appendChild(t); return t; }
+  function tBtn(label, fn) { var b = mk("button", "btn sm", label); b.type = "button"; b.addEventListener("click", fn); return b; }
+  function copyText(t) { try { navigator.clipboard.writeText(t).then(function () { toast("복사했어요"); }, function () { toast("복사하지 못했어요"); }); } catch (e) { toast("복사하지 못했어요"); } }
+  function pasteToChat(t) { var el = $("text"); el.value = (el.value ? el.value + "\n" : "") + t; el.dispatchEvent(new Event("input")); if (!wide()) closeInfo(); el.focus(); }
+  function tOut(box, out) { var row = mk("div", "pfact"); row.style.marginTop = "8px"; row.appendChild(tBtn("복사", function () { copyText(out.value); })); row.appendChild(tBtn("채팅에 붙이기", function () { if (out.value) pasteToChat(out.value); })); box.appendChild(row); }
+  function renderTool() { var box = $("toolbox"); box.textContent = ""; (TOOLS[$("toolsel").value] || TOOLS.json)(box); }
+  $("toolsel").addEventListener("change", renderTool); renderTool();
+
   function onMsg(m) {
     if (m.t === "state") {
       me = m.you; joined = true;
       $("entrypane").hidden = true; $("room").hidden = false; setView("main");
       $("log").textContent = ""; last = null; lastDay = ""; m.messages.forEach(addMessage);
-      $("doc").value = m.doc || ""; deliv = m.deliv || null; dmThreads = m.dms || {};
+      $("doc").value = m.doc || ""; deliv = m.deliv || null; dmThreads = m.dms || {}; aidms = m.aidms || [];
       if (wide()) $("shell").dataset.info = "1";
       renderMeta(m); renderRooms(); if (!matchMedia("(pointer:coarse)").matches) $("text").focus();
     } else if (m.t === "meta") { renderMeta(m); }
@@ -1404,6 +1537,11 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
       var dai = aiById(m.aiId);
       if (m.msg.kind === "ai") { if (dmOpen !== m.aiId) { dmUnread[m.aiId] = true; toast((dai ? dai.name : "AI") + "님이 귓속말을 보냈어요"); } }
       if (dmOpen === m.aiId) renderDM(); renderInbox();
+    }
+    else if (m.t === "aidms") {
+      var grew = JSON.stringify(m.list).length > JSON.stringify(aidms).length; aidms = m.list || [];
+      if (grew && peekOpen < 0) { dmUnread.peek = true; toast("AI끼리 몰래 쪽지를 주고받았어요 · 엿보기"); }
+      if (peekOpen >= 0) renderPeek(); renderInbox();
     }
     else if (m.t === "dmtyping") { dmTyping[m.aiId] = m.on; if (dmOpen === m.aiId) renderDM(); }
     else if (m.t === "react") {
