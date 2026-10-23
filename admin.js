@@ -8,7 +8,8 @@ h1{font-size:20px}input,button,select{font:inherit;padding:8px 10px;border:1px s
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}</style></head><body><main>
 <h1>신고 처리</h1>
 <div class="row"><input id="tok" type="password" placeholder="ADMIN_TOKEN" autocomplete="off" style="flex:1;min-width:200px"><select id="st"><option value="open">처리 대기</option><option value="all">전체</option></select><button class="p" id="go">불러오기</button></div>
-<p class="m" id="msg"></p><div id="list"></div></main>
+<p class="m" id="msg"></p><div id="list"></div>
+<h2 style="font-size:16px;margin-top:28px">사용 집계 <span class="m">(날짜별 횟수만 기록, 방·사용자·대화 내용 없음)</span></h2><button id="evgo">집계 보기</button><div id="ev" style="overflow-x:auto;margin-top:8px"></div></main>
 <script>
 var $=function(i){return document.getElementById(i)};try{$("tok").value=sessionStorage.getItem("adm")||""}catch(e){}
 function api(p,o){o=o||{};o.headers=Object.assign({authorization:"Bearer "+$("tok").value,"content-type":"application/json"},o.headers||{});return fetch(p,o)}
@@ -21,5 +22,6 @@ function load(){try{sessionStorage.setItem("adm",$("tok").value)}catch(e){}
    if(x.note){var n=document.createElement("div");n.className="m";n.textContent="신고자 메모: "+x.note;d.appendChild(n)}
    if(x.status==="open"){var row=document.createElement("div");row.className="row";[["resolved","조치 완료"],["dismissed","기각"]].forEach(function(s){var b=document.createElement("button");b.textContent=s[1];b.onclick=function(){api("/admin/reports/resolve",{method:"POST",body:JSON.stringify({id:x.id,status:s[0]})}).then(load)};row.appendChild(b)});d.appendChild(row)}
    box.appendChild(d)})})}
+$("evgo").onclick=function(){api("/admin/events").then(function(r){if(r.status===401){$("msg").textContent="토큰이 올바르지 않습니다.";return null}return r.json()}).then(function(j){if(!j)return;var days=Object.keys(j.events).sort().reverse().slice(0,14),names={};days.forEach(function(d){Object.keys(j.events[d]).forEach(function(k){names[k]=1})});var cols=Object.keys(names).sort(),t=document.createElement("table");t.style.cssText="border-collapse:collapse;font-size:12.5px";var h=t.insertRow();["날짜"].concat(cols).forEach(function(c){var th=document.createElement("th");th.textContent=c;th.style.cssText="text-align:left;padding:4px 8px;border-bottom:1px solid var(--line)";h.appendChild(th)});days.forEach(function(d){var r=t.insertRow();[d].concat(cols.map(function(c){return j.events[d][c]||0})).forEach(function(v){var td=r.insertCell();td.textContent=v;td.style.cssText="padding:4px 8px;border-bottom:1px solid var(--line)"})});$("ev").textContent="";$("ev").appendChild(t)})};
 $("go").onclick=load;$("st").onchange=load;if($("tok").value)load();
 </script></body></html>`;

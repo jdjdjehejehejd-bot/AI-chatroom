@@ -367,6 +367,9 @@ button.cc:active { transform:translate(2px,2px); box-shadow:0 0 0 var(--edge); }
 .dmeta .btn { margin-left:auto; }
 #dframe { width:100%; height:380px; border:1px solid var(--line2); border-radius:14px; background:#fff; display:block; }
 .dpre { max-height:420px; overflow:auto; white-space:pre-wrap; }
+.dnext { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; margin-top:12px; }
+.dnext small { color:var(--muted); width:100%; }
+#costhint { font-size:12px; color:var(--muted); padding:0 4px 4px; }
 .dact { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
 .mcard { display:flex; align-items:center; gap:10px; padding:10px 0; }
 .mcard + .mcard { border-top:1px solid var(--line); }
@@ -553,6 +556,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       <div id="log" role="log" aria-live="polite"></div>
       <div id="status"></div>
       <div id="composer">
+        <div id="costhint" hidden></div>
         <div id="chips"></div>
         <div id="send-row">
           <label for="text" class="sr">메시지 입력</label>
@@ -831,7 +835,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     brainstorm: { label: "Brainstorm", desc: "발산 → 비판 → 정리", flow: ["발산자", "비평가", "(조합가)", "정리자"] },
     make: { label: "Make", desc: "기획 → 작성 → 편집", flow: ["기획자", "작성자", "(디자이너)", "편집자"] }
   };
-  var jmode = "", deliv = null, dview = "preview";
+  var jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
   var aidms = [], peekOpen = -1, dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typingWho = "", msgIndex = {}, lastTap = { id: 0, t: 0 };
   var POLNAME = { mention: _t("@멘션했을 때만"), round: _t("순서대로"), free: _t("AI가 알아서 판단") };
   var LIVE = ["anthropic", "openai", "openrouter", "groq", "google", "mistral", "nvidia"];
@@ -938,7 +942,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     r.addEventListener("change", function () { jmode = r.value; $("jassetbox").hidden = inRoomUrl || jmode !== "asset"; showFlow(); });
   });
   function resetRoomState() {
-    meta = null; pipeDirty = false; deliv = null; dmThreads = {}; dmUnread = {}; dmOpen = ""; dmTyping = {}; typingWho = ""; msgIndex = {}; closeProfile(); $("inbox").hidden = true; $("dm").hidden = true; dview = "preview"; errAI = null; budgetAlert = false; joined = false; colors = {}; colorCount = 0; aiShown = 0; last = null; lastDay = ""; typRow = null; me = "";
+    meta = null; pipeDirty = false; deliv = null; dhist = []; viewVer = null; dmThreads = {}; dmUnread = {}; dmOpen = ""; dmTyping = {}; typingWho = ""; msgIndex = {}; closeProfile(); $("inbox").hidden = true; $("dm").hidden = true; dview = "preview"; errAI = null; budgetAlert = false; joined = false; colors = {}; colorCount = 0; aiShown = 0; last = null; lastDay = ""; typRow = null; me = "";
     $("log").textContent = ""; $("status").textContent = ""; $("text").value = ""; $("doc").value = ""; autosize(); closeInfo(); setTab("ai");
   }
   function goHome() {
@@ -1429,7 +1433,14 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       e.appendChild(open); e.appendChild(rm); box.appendChild(e);
     }
   }
+  function updateCost(b) {
+    var el = $("costhint"); if (!el) return;
+    if (!meta || !meta.mode || !b) { el.hidden = true; return; }
+    var n = (meta.pipeline || meta.mode.pipeline).length;
+    el.textContent = _t("요청 1건 예상: AI 호출 {n}회 · 남은 예산 {m}회", { n: n, m: Math.max(0, b.limit - b.used) }); el.hidden = false;
+  }
   function renderBudget(b) {
+    updateCost(b);
     $("budtxt").textContent = b.used + " / " + b.limit;
     $("barfill").style.width = Math.min(100, Math.round(b.used / b.limit * 100)) + "%";
     $("chipbud").classList.toggle("full", b.used >= b.limit);
@@ -1444,7 +1455,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     provChange();
   }
   function renderMeta(s) {
-    meta = s;
+    meta = s; updateCost(s.budget);
     var title = s.asset ? s.asset.name : _t("방 {id}", { id: s.id });
     $("rtitle").textContent = title; document.title = title + " · " + _t("AI 채팅방");
     $("rsub").textContent = _t("사람 {h} · AI {a} · {pol}", { h: s.humans.length, a: s.ais.length, pol: POLNAME[s.policy] });
@@ -1510,8 +1521,15 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       box.appendChild(mk("p", "hint", meta && meta.mode ? _t("AI들이 요청을 처리하면 최종 결과가 여기에 쌓입니다. 코드는 파일로, 웹페이지는 미리보기로 볼 수 있어요.") : _t("AI가 ``` 코드블록으로 결과를 내면 이곳에 표시됩니다. 모드를 적용하면 AI들이 순서대로 산출물을 만듭니다.")));
       return;
     }
-    var m = mk("div", "dmeta"), isHtml = deliv.lang === "html";
-    m.appendChild(mk("span", "pill", "v" + deliv.v)); m.appendChild(mk("span", "", deliv.by + " · " + deliv.lang + " · " + _t("{n}자", { n: deliv.text.length })));
+    var cur = viewVer && viewVer.v !== deliv.v ? viewVer : deliv, old = cur !== deliv;
+    var m = mk("div", "dmeta"), isHtml = cur.lang === "html";
+    if (dhist.length > 1) {
+      var sel = mk("select", "field"); sel.id = "dver"; sel.setAttribute("aria-label", _t("버전 선택")); sel.style.cssText = "width:auto;padding:2px 6px";
+      dhist.slice().reverse().forEach(function (h) { var o = mk("option", "", "v" + h.v + (h.v === deliv.v ? " " + _t("(최신)") : "") + (h.from ? " ↩v" + h.from : "")); o.value = h.v; if (h.v === cur.v) o.selected = true; sel.appendChild(o); });
+      sel.addEventListener("change", function () { var v = Number(sel.value); if (v === deliv.v) { viewVer = null; renderDeliv(); } else send({ t: "delver", v: v }); });
+      m.appendChild(sel);
+    } else m.appendChild(mk("span", "pill", "v" + cur.v));
+    m.appendChild(mk("span", "", cur.by + " · " + cur.lang + " · " + _t("{n}자", { n: cur.text.length })));
     if (isHtml) {
       var tg = mk("button", "btn sm", dview === "preview" ? _t("코드 보기") : _t("미리보기")); tg.type = "button"; tg.id = "dtoggle";
       tg.addEventListener("click", function () { dview = dview === "preview" ? "code" : "preview"; renderDeliv(); });
@@ -1519,19 +1537,36 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     }
     box.appendChild(m);
     if (isHtml && dview === "preview") {
-      var fr = document.createElement("iframe"); fr.id = "dframe"; fr.setAttribute("sandbox", ""); fr.setAttribute("title", _t("산출물 미리보기")); fr.srcdoc = deliv.text; box.appendChild(fr);
-    } else { var pre = mk("pre", "code mono dpre", deliv.text); pre.id = "dcode"; box.appendChild(pre); }
+      var fr = document.createElement("iframe"); fr.id = "dframe"; fr.setAttribute("sandbox", ""); fr.setAttribute("title", _t("산출물 미리보기")); fr.srcdoc = cur.text; box.appendChild(fr);
+    } else { var pre = mk("pre", "code mono dpre", cur.text); pre.id = "dcode"; box.appendChild(pre); }
     var act = mk("div", "dact");
     var cp = mk("button", "btn sm", _t("복사")); cp.type = "button"; cp.id = "dcopy";
-    cp.addEventListener("click", function () { try { navigator.clipboard.writeText(deliv.text).then(function () { toast(_t("복사했습니다.")); }, function () { toast(_t("복사하지 못했습니다.")); }); } catch (e) { toast(_t("복사하지 못했습니다.")); } });
+    cp.addEventListener("click", function () { try { navigator.clipboard.writeText(cur.text).then(function () { toast(_t("복사했습니다.")); }, function () { toast(_t("복사하지 못했습니다.")); }); } catch (e) { toast(_t("복사하지 못했습니다.")); } });
     var dl = mk("button", "btn sm primary", _t("파일로 저장")); dl.type = "button"; dl.id = "ddown";
     dl.addEventListener("click", function () {
       try {
-        var a = document.createElement("a"), u = URL.createObjectURL(new Blob([deliv.text], { type: "text/plain;charset=utf-8" }));
-        a.href = u; a.download = "result-v" + deliv.v + "." + (EXT[deliv.lang] || "txt"); document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
+        var a = document.createElement("a"), u = URL.createObjectURL(new Blob([cur.text], { type: "text/plain;charset=utf-8" }));
+        a.href = u; a.download = "result-v" + cur.v + "." + (EXT[deliv.lang] || "txt"); document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
       } catch (e) { toast(_t("저장하지 못했습니다. 복사해서 쓰세요.")); }
     });
-    act.appendChild(cp); act.appendChild(dl); box.appendChild(act);
+    act.appendChild(cp); act.appendChild(dl);
+    if (old) {
+      var rs = mk("button", "btn sm", _t("이 버전으로 되돌리기")); rs.type = "button"; rs.id = "drestore";
+      rs.addEventListener("click", function () { send({ t: "delrestore", v: cur.v }); });
+      act.appendChild(rs);
+    }
+    box.appendChild(act);
+    var NEXT = {
+      brainstorm: ["고른 아이디어를 실행 계획으로 정리해줘", "각 아이디어의 위험과 반대 의견을 더 따져줘"],
+      make: ["출처·수치·사실 확인이 필요한 부분을 표시해줘", "발표용 한 장 요약으로 줄여줘"],
+      code: ["이 코드의 테스트 케이스를 추가해줘", "엣지 케이스와 오류 처리를 점검해줘"]
+    };
+    var nx = meta && meta.mode && NEXT[meta.mode.id];
+    if (nx && !old) {
+      var nb = mk("div", "dnext"); nb.appendChild(mk("small", "", _t("한 단계 더 완성하기")));
+      nx.forEach(function (q) { var b = mk("button", "btn sm", _t(q)); b.type = "button"; b.addEventListener("click", function () { $("text").value = _t(q); autosize(); $("text").focus(); setView("main"); }); nb.appendChild(b); });
+      box.appendChild(nb);
+    }
   }
   function saveJson(obj, fname) {
     try {
@@ -1823,7 +1858,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       me = m.you; joined = true;
       $("entrypane").hidden = true; $("room").hidden = false; setView("main");
       $("log").textContent = ""; last = null; lastDay = ""; m.messages.forEach(addMessage);
-      $("doc").value = m.doc || ""; deliv = m.deliv || null; dmThreads = m.dms || {}; aidms = m.aidms || []; credits = m.credits || credits; youOwner = m.youOwner !== false; renderCredits(); renderPub(); loadMyRooms();
+      $("doc").value = m.doc || ""; deliv = m.deliv || null; dhist = m.dhist || []; viewVer = null; dmThreads = m.dms || {}; aidms = m.aidms || []; credits = m.credits || credits; youOwner = m.youOwner !== false; renderCredits(); renderPub(); loadMyRooms();
       if (wide()) $("shell").dataset.info = "1";
       renderBlocked(m.blocked); renderMeta(m); renderMemory(m.memory); renderRooms(); if (!matchMedia("(pointer:coarse)").matches) $("text").focus();
     } else if (m.t === "meta") { renderMeta(m); }
@@ -1867,8 +1902,9 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       var nm = String(m.asset.name || "asset").replace(/[^\w가-힣-]+/g, "_").slice(0, 30) || "asset";
       saveJson(m.asset, nm + ".aichat.json"); toast(_t("에셋 파일을 저장했습니다."));
     }
+    else if (m.t === "delver") { viewVer = m.item; renderDeliv(); }
     else if (m.t === "deliv") {
-      deliv = m.deliv; renderDeliv();
+      deliv = m.deliv; dhist = m.hist || []; viewVer = null; renderDeliv();
       if (deliv) {
         var visible = $("shell").dataset.info === "1" && $("info").dataset.tab === "deliv";
         if (!visible) { document.querySelector('#seg [data-go="deliv"]').classList.add("new"); toast(_t("산출물이 갱신됐습니다 (v{v})", { v: deliv.v })); }

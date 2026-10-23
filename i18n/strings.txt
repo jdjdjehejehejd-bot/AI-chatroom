@@ -603,3 +603,16 @@ API 키는 공백 없이, 제공사를 직접 골랐을 때만 입력할 수 있
 방장 계정 플랜이 "{label}"(으)로 바뀌었습니다. || The room owner’s account plan changed to "{label}". || ルームオーナーのアカウントプランが「{label}」に変わりました。 || 房主的账号套餐已变更为“{label}”。 || El plan de la cuenta del anfitrión cambió a "{label}".
 이 네트워크에서 연결이 너무 많습니다. 잠시 뒤 다시 시도하세요. || Too many connections from this network. Please try again shortly. || このネットワークからの接続が多すぎます。しばらくしてからもう一度お試しください。 || 此网络的连接过多，请稍后再试。 || Demasiadas conexiones desde esta red. Inténtalo de nuevo en breve.
 시스템 || System || システム || 系统 || Sistema
+버전 선택 || Select version || バージョンを選択 || 选择版本 || Elegir versión
+(최신) || (latest) || （最新） || （最新） || (última)
+이 버전으로 되돌리기 || Restore this version || このバージョンに戻す || 恢复到此版本 || Restaurar esta versión
+한 단계 더 완성하기 || Take it one step further || もう一歩仕上げる || 再完善一步 || Llévalo un paso más allá
+고른 아이디어를 실행 계획으로 정리해줘 || Turn the ideas we picked into an action plan. || 選んだアイデアを実行計画にまとめて。 || 把选中的创意整理成执行计划。 || Convierte las ideas elegidas en un plan de acción.
+각 아이디어의 위험과 반대 의견을 더 따져줘 || Look harder at the risks and counterarguments for each idea. || 各アイデアのリスクと反対意見をもっと検討して。 || 再深入分析每个创意的风险和反对意见。 || Analiza más a fondo los riesgos y las objeciones de cada idea.
+출처·수치·사실 확인이 필요한 부분을 표시해줘 || Mark the parts that need sources, figures or fact-checking. || 出典・数値・事実確認が必要な部分を示して。 || 标出需要来源、数据或事实核查的部分。 || Marca las partes que necesitan fuentes, cifras o verificación de datos.
+발표용 한 장 요약으로 줄여줘 || Condense it into a one-page summary for a presentation. || 発表用の1枚の要約に短くして。 || 压缩成一页演示用摘要。 || Resúmelo en una página para presentar.
+이 코드의 테스트 케이스를 추가해줘 || Add test cases for this code. || このコードのテストケースを追加して。 || 为这段代码添加测试用例。 || Añade casos de prueba para este código.
+엣지 케이스와 오류 처리를 점검해줘 || Check the edge cases and error handling. || エッジケースとエラー処理を点検して。 || 检查边界情况和错误处理。 || Revisa los casos límite y el manejo de errores.
+요청 1건 예상: AI 호출 {n}회 · 남은 예산 {m}회 || Estimated per request: {n} AI calls · {m} left in budget || 1リクエストの目安：AI呼び出し{n}回・残り予算{m}回 || 每次请求预计：AI 调用 {n} 次 · 剩余预算 {m} 次 || Estimado por petición: {n} llamadas a IA · quedan {m} en el presupuesto
+이번 실행: AI 호출 {n}회 · 남은 예산 {m}회 || This run: {n} AI calls · {m} left in budget || 今回の実行：AI呼び出し{n}回・残り予算{m}回 || 本次运行：AI 调用 {n} 次 · 剩余预算 {m} 次 || Esta ejecución: {n} llamadas a IA · quedan {m} en el presupuesto
+{name} 님이 산출물 v{a}을(를) 되돌려 v{b}으로 저장했습니다. || {name} restored deliverable v{a} and saved it as v{b}. || {name}さんが成果物v{a}を戻してv{b}として保存しました。 || {name} 将成果 v{a} 恢复并保存为 v{b}。 || {name} restauró el entregable v{a} y lo guardó como v{b}.

@@ -273,6 +273,16 @@ function refreshPlan(room) {
 /* ---------- 에셋 마켓: 사용자가 만든 방 구성을 게시하고 설치한다 ---------- */
 const TERMS_VERSION = legal.TERMS_VERSION;
 const reports = store.read('reports') || [];
+/* 익명 집계 이벤트: 날짜별 횟수만 센다. 방 번호·사용자·대화 내용은 기록하지 않는다. */
+const events = store.read('events') || {};
+let eventsDirty = false;
+function track(name) {
+  const day = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+  const d = events[day] || (events[day] = {});
+  d[name] = (d[name] || 0) + 1; eventsDirty = true;
+  const keys = Object.keys(events).sort();
+  while (keys.length > 90) delete events[keys.shift()];
+}
 let reportsDirty = false;
 const REPORT_KEEP_MS = 180 * 86400000;
 const REPORT_REASONS = ['spam', 'abuse', 'sexual', 'violence', 'illegal', 'privacy', 'other'];
@@ -395,7 +405,7 @@ function exportAccount(sub) {
 function serializeRoom(room) {
   return {
     v: 1, id: room.id, asset: room.asset, rules: room.rules, policy: room.policy, maxStreak: room.maxStreak, mode: room.mode, pipeline: room.pipeline, pipelineDefault: room.pipelineDefault,
-    deliv: room.deliv, library: room.library, brand: room.brand, refunds: room.refunds, shareCount: room.shareCount, stats: room.stats, plan: room.plan, devPlan: !!room.devPlan, budget: room.budget,
+    deliv: room.deliv, delivHist: room.delivHist || [], library: room.library, brand: room.brand, refunds: room.refunds, shareCount: room.shareCount, stats: room.stats, plan: room.plan, devPlan: !!room.devPlan, budget: room.budget,
     doc: room.doc, memory: room.memory || '', memoryAt: room.memoryAt || 0, ownerSub: room.ownerSub, ownerName: room.ownerName, seq: room.seq, freeUsed: room.freeUsed || 0,
     members: room.members || {}, banned: room.banned || [], created: room.created || Date.now(), lastActive: room.lastActive || Date.now(),
     messages: room.messages.slice(-LIMITS.history),
@@ -405,7 +415,7 @@ function serializeRoom(room) {
 }
 function reviveRoom(d) {
   const room = newRoom(d.id);
-  for (const k of ['asset', 'rules', 'policy', 'maxStreak', 'mode', 'pipeline', 'pipelineDefault', 'deliv', 'library', 'brand', 'refunds', 'shareCount', 'stats', 'plan', 'devPlan', 'budget', 'doc', 'memory', 'memoryAt', 'ownerSub', 'ownerName', 'seq', 'freeUsed', 'members', 'banned', 'created', 'lastActive', 'messages'])
+  for (const k of ['asset', 'rules', 'policy', 'maxStreak', 'mode', 'pipeline', 'pipelineDefault', 'deliv', 'delivHist', 'library', 'brand', 'refunds', 'shareCount', 'stats', 'plan', 'devPlan', 'budget', 'doc', 'memory', 'memoryAt', 'ownerSub', 'ownerName', 'seq', 'freeUsed', 'members', 'banned', 'created', 'lastActive', 'messages'])
     if (d[k] !== undefined) room[k] = d[k];
   room.keyLost = (d.ais || []).filter(a => a.needsKey).map(a => a.name);
   room.ais = (d.ais || []).map(a => ({ id: a.id, name: a.name, persona: a.persona, provider: a.provider === 'default' || !a.needsKey ? a.provider : 'default', model: a.needsKey ? '' : a.model, muted: !!a.muted }));
@@ -439,6 +449,7 @@ function flushStore() {
   for (const id of dirty) { const r = rooms.get(id); if (r) saveRoom(r); }
   dirty.clear();
   if (reportsDirty && store.enabled) { try { const cut = Date.now() - REPORT_KEEP_MS; for (let i = reports.length - 1; i >= 0; i--) if (reports[i].ts < cut) reports.splice(i, 1); store.write('reports', reports); reportsDirty = false; } catch (e) { console.error('신고 저장 실패:', e.message); } }
+  if (eventsDirty && store.enabled) { try { store.write('events', events); eventsDirty = false; } catch (e) { console.error('이벤트 저장 실패:', e.message); } }
   if (galleryDirty && store.enabled) { try { store.write('gallery', gallery); galleryDirty = false; } catch (e) { console.error('마켓 저장 실패:', e.message); } }
   if (accountsDirty && store.enabled) { try { store.write('accounts', accounts); store.write('deleted', deletedSubs); accountsDirty = false; } catch (e) { console.error('계정 저장 실패:', e.message); } }
 }
@@ -486,7 +497,7 @@ function newRoom(id) {
   return {
     id, asset: null, rules: '', clients: new Set(), ais: [], messages: [], seq: 0,
     policy: 'mention', maxStreak: 4, streak: 0, lastAI: null, gen: 0,
-    ownerSub: '', ownerName: '', mode: null, pipeline: null, pipelineDefault: null, deliv: null, library: [], brand: null, dms: new Map(), aidms: new Map(), shareCount: 0, refunds: 0, runCalls: 0, stats: { runs: 0, calls: 0, byAI: {} }, plan: 'free', budget: { used: 0, limit: PLANS.free.budgetDefault }, doc: '', cleanup: null, members: {}, banned: [], created: Date.now(), lastActive: Date.now(), memory: ''
+    ownerSub: '', ownerName: '', mode: null, pipeline: null, pipelineDefault: null, deliv: null, delivHist: [], library: [], brand: null, dms: new Map(), aidms: new Map(), shareCount: 0, refunds: 0, runCalls: 0, stats: { runs: 0, calls: 0, byAI: {} }, plan: 'free', budget: { used: 0, limit: PLANS.free.budgetDefault }, doc: '', cleanup: null, members: {}, banned: [], created: Date.now(), lastActive: Date.now(), memory: ''
   };
 }
 
@@ -565,7 +576,8 @@ function applyMode(room, id) {
   const a = modeAsset(id, room);
   if (!a) return false;
   applyAsset(room, a);
-  room.mode = id; room.pipeline = a.pipeline; room.pipelineDefault = a.pipeline; room.deliv = null;
+  room.mode = id; room.pipeline = a.pipeline; room.pipelineDefault = a.pipeline; room.deliv = null; room.delivHist = [];
+  track('mode_applied');
   return true;
 }
 function harvestDeliverable(room, ai, text) {
@@ -575,8 +587,15 @@ function harvestDeliverable(room, ai, text) {
   while ((m = re.exec(text))) last = m;
   if (!last || !last[2].trim()) return;
   room.deliv = { lang: (last[1] || 'text').toLowerCase().slice(0, 12), text: last[2].trim().slice(0, DELIV_MAX), by: ai.name, v: ((room.deliv && room.deliv.v) || 0) + 1, ts: Date.now() };
-  broadcast(room, { t: 'deliv', deliv: room.deliv });
+  pushHist(room); track('deliverable_saved');
+  broadcast(room, { t: 'deliv', deliv: room.deliv, hist: histMeta(room) });
 }
+/* 산출물 버전 기록: 최근 {HIST_MAX}개를 방에 보관한다. */
+const HIST_MAX = 8;
+function pushHist(room) {
+  room.delivHist = (room.delivHist || []).concat([Object.assign({}, room.deliv)]).slice(-HIST_MAX);
+}
+function histMeta(room) { return (room.delivHist || []).map(h => ({ v: h.v, by: h.by, lang: h.lang, len: h.text.length, ts: h.ts, from: h.from || 0 })); }
 
 /* ---------- 에셋: 사용자가 올리는 방 구성(AI 목록, 발언 방식, 시작 문서, 규칙 문구) ---------- */
 function validateAsset(d) {
@@ -936,7 +955,7 @@ function harvestDoc(room, ai, text) {
 async function orchestrate(room, first, sub) {
   const gen = ++room.gen;
   const order = first.slice(), forced = new Set(first), mutedNoted = new Set();
-  room.runCalls = 0; room.stats.runs++;
+  room.runCalls = 0; room.stats.runs++; if (room.mode) track('run_started');
   room.streak = 0;
   let passes = 0, dmTurns = 0;
   while (gen === room.gen) {
@@ -955,12 +974,12 @@ async function orchestrate(room, first, sub) {
       break;
     }
     if (room.budget.used >= room.budget.limit) {
-      system(room, '이 방의 AI 호출 예산(' + room.budget.limit + '회)을 모두 사용했습니다.', 'BUDGET_EXHAUSTED');
+      system(room, '이 방의 AI 호출 예산(' + room.budget.limit + '회)을 모두 사용했습니다.', 'BUDGET_EXHAUSTED'); track('limit_reached');
       break;
     }
     if (sub && !charge(sub)) {
       const c = creditInfo(sub);
-      system(room, '요청한 분의 오늘 AI 호출 크레딧(' + c.limit + '회)을 모두 썼습니다. 한국 시간 자정에 다시 채워집니다.' + (c.plan === 'free' ? ' 플러스는 하루 ' + DAILY.plus + '회입니다.' : ''), 'CREDITS_EXHAUSTED');
+      system(room, '요청한 분의 오늘 AI 호출 크레딧(' + c.limit + '회)을 모두 썼습니다. 한국 시간 자정에 다시 채워집니다.' + (c.plan === 'free' ? ' 플러스는 하루 ' + DAILY.plus + '회입니다.' : ''), 'CREDITS_EXHAUSTED'); track('limit_reached');
       sendCredits(room, sub);
       break;
     }
@@ -1005,7 +1024,13 @@ async function orchestrate(room, first, sub) {
     room.streak++;
     if (room.policy !== 'round') for (const m of mentioned(room, text, ai)) { if (!order.includes(m)) order.push(m); forced.add(m); }
   }
-  if (gen === room.gen) { broadcast(room, { t: 'typing', who: null }); maybeSummarize(room, sub); }
+  if (gen === room.gen) {
+    if (room.mode && room.runCalls > 0) {
+      track('run_completed');
+      system(room, '이번 실행: AI 호출 ' + room.runCalls + '회 · 남은 예산 ' + Math.max(0, room.budget.limit - room.budget.used) + '회', 'RUN_RECEIPT');
+    }
+    broadcast(room, { t: 'typing', who: null }); maybeSummarize(room, sub);
+  }
 }
 
 /* ---------- 접속 처리 ---------- */
@@ -1029,7 +1054,7 @@ function join(ws, m) {
   if (!name) return send(ws, { t: 'err', text: '이름을 입력하세요.' });
   let room = getRoom(id), assetErr = '', justCreated = false;
   if (!room) {
-    justCreated = true;
+    justCreated = true; track('room_created');
     if (rooms.size >= LIMITS.rooms) return send(ws, { t: 'err', text: '서버가 가득 찼습니다.' });
     room = newRoom(id);
     rooms.set(id, room);
@@ -1053,7 +1078,7 @@ function join(ws, m) {
   if (ws.user) { acct(ws.user.sub, ws.user.name); room.members[ws.user.sub] = name; if (Object.keys(room.members).length > 30) delete room.members[Object.keys(room.members)[0]]; }
   room.clients.add(ws);
   if (room.cleanup) { clearTimeout(room.cleanup); room.cleanup = null; }
-  send(ws, Object.assign(meta(room), { t: 'state', you: name, messages: room.messages.slice(-100).filter(x => !blockedBy(ws, x)).map(pub), doc: room.doc, deliv: room.deliv, dms: dmsFor(room, ws.meta.key), aidms: aidmsView(room), blocked: blockedList(ws), memory: room.memory || '', credits: ws.user ? creditInfo(ws.user.sub) : null, user: ws.user ? { name: ws.user.name, picture: ws.user.pic } : null, youOwner: !room.ownerSub || !!(ws.user && ws.user.sub === room.ownerSub) }));
+  send(ws, Object.assign(meta(room), { t: 'state', you: name, messages: room.messages.slice(-100).filter(x => !blockedBy(ws, x)).map(pub), doc: room.doc, deliv: room.deliv, dhist: histMeta(room), dms: dmsFor(room, ws.meta.key), aidms: aidmsView(room), blocked: blockedList(ws), memory: room.memory || '', credits: ws.user ? creditInfo(ws.user.sub) : null, user: ws.user ? { name: ws.user.name, picture: ws.user.pic } : null, youOwner: !room.ownerSub || !!(ws.user && ws.user.sub === room.ownerSub) }));
   if (assetErr) send(ws, { t: 'err', text: '에셋을 적용하지 못했습니다: ' + assetErr });
   system(room, name + ' 님이 입장했습니다.', 'MEMBER_JOIN');
   if (room.keyLost && room.keyLost.length) { system(room, '개인 API 키는 서버에 저장하지 않아서 ' + room.keyLost.join(', ') + '의 키를 다시 입력해야 합니다. 그때까지 서버 기본 모델로 말합니다.', 'KEY_LOST'); room.keyLost = []; }
@@ -1197,7 +1222,7 @@ function handle(ws, m) {
         if (!rec.msgs.length) return send(ws, { t: 'err', text: '공유할 대화가 아직 없습니다.' });
       }
       if (shares.size >= SHARE_MAX) { const old = [...shares.keys()][0]; shares.delete(old); }
-      shares.set(rec.id, rec); room.shareCount++;
+      shares.set(rec.id, rec); room.shareCount++; track('share_created');
       send(ws, { t: 'shared', url: '/s/' + rec.id, kind, days: planOf(room).shareDays, badge: rec.badge });
       return broadcast(room, meta(room));
     }
@@ -1224,8 +1249,20 @@ function handle(ws, m) {
       if (!applyMode(room, String(m.id))) return send(ws, { t: 'err', text: '알 수 없는 모드입니다.' });
       system(room, name + ' 님이 ' + MODES[room.mode].label + ' 모드를 적용했습니다.', 'ASSET_APPLIED');
       broadcast(room, { t: 'doc', text: room.doc, by: name });
-      broadcast(room, { t: 'deliv', deliv: null });
+      broadcast(room, { t: 'deliv', deliv: null, hist: [] });
       return broadcast(room, meta(room));
+    }
+    case 'delver': {
+      const h = (room.delivHist || []).find(x => x.v === Number(m.v));
+      return h ? send(ws, { t: 'delver', item: h }) : undefined;
+    }
+    case 'delrestore': {
+      const h = (room.delivHist || []).find(x => x.v === Number(m.v));
+      if (!h || !room.deliv) return;
+      room.deliv = { lang: h.lang, text: h.text, by: h.by, v: room.deliv.v + 1, ts: Date.now(), from: h.v };
+      pushHist(room); track('deliverable_restored');
+      system(room, name + ' 님이 산출물 v' + h.v + '을(를) 되돌려 v' + room.deliv.v + '으로 저장했습니다.', 'DELIV_RESTORED');
+      return broadcast(room, { t: 'deliv', deliv: room.deliv, hist: histMeta(room) });
     }
     case 'addAI': {
       const an = cleanText(m.name, 12), persona = cleanText(m.persona, LIMITS.persona);
@@ -1242,7 +1279,7 @@ function handle(ws, m) {
       if (apiKey && (/\s/.test(apiKey) || provider === 'default' || provider === 'demo' || provider === 'free')) {
         return send(ws, { t: 'err', text: 'API 키는 공백 없이, 제공사를 직접 골랐을 때만 입력할 수 있습니다.' });
       }
-      room.ais.push(newAI({ name: an, persona, provider, model, apiKey }));
+      room.ais.push(newAI({ name: an, persona, provider, model, apiKey })); track('ai_invited');
       const via = provider === 'default' ? '' : ' (' + provider + (model ? '/' + model : '') + ')';
       system(room, name + ' 님이 AI "' + an + '"' + via + '을(를) 초대했습니다.', 'AI_ADDED');
       return broadcast(room, meta(room));
@@ -1409,6 +1446,11 @@ const server = http.createServer((req, res) => {
     if (!tok || got.length !== tok.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(tok))) return json(401, { error: 'unauthorized' });
     const q = new URL(req.url, 'http://x').searchParams, st = q.get('status') || 'open';
     return json(200, { reports: reports.filter(r => st === 'all' || r.status === st).slice(-200).reverse() });
+  }
+  if (u === '/admin/events' && req.method === 'GET') {
+    const tok = (process.env.ADMIN_TOKEN || ''), got = String(req.headers.authorization || '').replace(/^Bearer /, '');
+    if (!tok || got.length !== tok.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(tok))) return json(401, { error: 'unauthorized' });
+    return json(200, { events });
   }
   if (u === '/admin/reports/resolve' && req.method === 'POST') {
     const tok = (process.env.ADMIN_TOKEN || ''), got = String(req.headers.authorization || '').replace(/^Bearer /, '');
