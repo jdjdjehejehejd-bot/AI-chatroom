@@ -1,0 +1,42 @@
+const ROOT=require('path').resolve(__dirname,'..');
+const {spawn}=require('child_process'),fs=require('fs'),os=require('os'),path=require('path');const WS=require('ws');
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));const res=[];const check=(n,c,d)=>{res.push(c);console.log((c?'PASS ':'FAIL ')+n+(c?'':' :: '+d))};
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'aichat-'));
+const start=()=>spawn('node',['server.js'],{cwd:ROOT,env:Object.assign({},process.env,{PORT:'3308',DATA_DIR:dir,ALLOW_DEV_PLAN:'1',DEMO_DELAY_MS:'20',SESSION_SECRET:'ps'}),stdio:'ignore'});
+const cl=(room,name,key)=>new Promise(r=>{const ws=new WS('ws://127.0.0.1:3308/ws');const ev=[];ws.on('message',d=>ev.push(JSON.parse(d)));ws.on('open',()=>{ws.send(JSON.stringify({t:'join',consent:true,room,name,key}));setTimeout(()=>r({ws,ev}),400)})});
+(async()=>{
+ let sv=start();await sleep(800);
+ let A=await cl('persist1','Ben','keyaaaaaaaa1');const s=o=>A.ws.send(JSON.stringify(o));
+ s({t:'plan',id:'plus'});await sleep(150);
+ s({t:'addAI',name:'비밀AI',persona:'테스터',provider:'openai',model:'m',apiKey:'sk-SECRETKEY123456'});s({t:'addAI',name:'평범AI',persona:'평범'});await sleep(300);
+ s({t:'msg',text:'@평범AI 저장 테스트 메시지'});await sleep(800);
+ s({t:'doc',text:'공유 문서 내용'});
+ const meta0=[...A.ev].reverse().find(e=>e.t==='meta');const ai0=meta0.ais.find(a=>a.name==='평범AI');
+ s({t:'dm',aiId:ai0.id,text:'비공개 DM 저장'});await sleep(800);
+ await sleep(3500);
+ const f=path.join(dir,'rooms','persist1.json');
+ check('room file written',fs.existsSync(f));
+ const raw=fs.existsSync(f)?fs.readFileSync(f,'utf8'):'';
+ check('API key never written to disk',!raw.includes('SECRETKEY'));
+ sv.kill('SIGTERM');await sleep(500);
+ sv=start();await sleep(800);
+ A=await cl('persist1','Ben','keyaaaaaaaa1');
+ const st=A.ev.find(e=>e.t==='state');
+ check('messages restored',st&&st.messages.some(m=>m.text.includes('저장 테스트')));
+ check('doc restored',st&&st.doc==='공유 문서 내용');
+ check('AIs restored (both), plan restored',st&&st.ais.length===2&&st.plan.id==='plus',JSON.stringify(st&&st.ais));
+ check('own-key AI downgraded to default provider',st.ais.find(a=>a.name==='비밀AI').ownKey===false);
+ check('key-lost notice shown',A.ev.some(e=>e.t==='msg'&&e.msg.code==='KEY_LOST'&&e.msg.text.includes('비밀AI')));
+ check('DM thread restored for same key',Object.values(st.dms).flat().some(m=>(m.text||'').includes('비공개 DM 저장')));
+ const B=await cl('persist1','Mia','keybbbbbbbb2');check('other key does not see DM',Object.keys(B.ev.find(e=>e.t==='state').dms).length===0);
+ // new AI id doesn't collide
+ A.ws.send(JSON.stringify({t:'addAI',name:'새AI',persona:'새'}));await sleep(300);
+ const m2=[...A.ev].reverse().find(e=>e.t==='meta');check('ids unique after restore',new Set(m2.ais.map(a=>a.id)).size===m2.ais.length);
+ // retention purge
+ sv.kill('SIGTERM');await sleep(400);
+ const old=JSON.parse(fs.readFileSync(f,'utf8'));old.id='oldroom1';old.plan='free';old.lastActive=Date.now()-9*86400000;fs.mkdirSync(path.join(dir,'rooms'),{recursive:true});fs.writeFileSync(path.join(dir,'rooms','oldroom1.json'),JSON.stringify(old));
+ const old2=Object.assign({},old,{id:'oldplus1',plan:'plus'});fs.writeFileSync(path.join(dir,'rooms','oldplus1.json'),JSON.stringify(old2));
+ sv=start();await sleep(900);
+ check('free room older than 7d purged, plus room kept',!fs.existsSync(path.join(dir,'rooms','oldroom1.json'))&&fs.existsSync(path.join(dir,'rooms','oldplus1.json')));
+ console.log(res.every(Boolean)?'ALL OK':'SOME FAILED');sv.kill();fs.rmSync(dir,{recursive:true,force:true});process.exit(0);
+})();

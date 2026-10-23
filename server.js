@@ -19,6 +19,15 @@ const PORT = Number(process.env.PORT || 3000);
 const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
 const GOOGLE_JWKS_URL = process.env.GOOGLE_JWKS_URL || 'https://www.googleapis.com/oauth2/v3/certs';
 const COOKIE_SECURE = process.env.COOKIE_SECURE === '1';
+/* 운영 환경 판단: NODE_ENV=production 이거나 PUBLIC_URL이 https이면 운영으로 보고 설정 누락을 엄격히 점검한다. */
+const PRODUCTION = process.env.NODE_ENV === 'production' || /^https:\/\//i.test(process.env.PUBLIC_URL || '');
+if (PRODUCTION && !process.env.SESSION_SECRET && process.env.ALLOW_EPHEMERAL_SECRET !== '1') {
+  console.error('운영 환경인데 SESSION_SECRET이 없습니다. 재시작마다 세션과 DM 키가 바뀌므로 시작하지 않습니다. 긴 무작위 문자열을 SESSION_SECRET에 설정하세요. (임시 실행만 하려면 ALLOW_EPHEMERAL_SECRET=1)');
+  process.exit(1);
+}
+if (PRODUCTION && !process.env.DATA_DIR) console.warn('경고: DATA_DIR이 없어 방·계정이 재시작하면 사라집니다. 영구 디스크 경로를 지정하세요.');
+if (/^https:\/\//i.test(process.env.PUBLIC_URL || '') && !COOKIE_SECURE) console.warn('경고: PUBLIC_URL이 https인데 COOKIE_SECURE=1이 아닙니다. 프록시가 x-forwarded-proto를 주지 않으면 쿠키에 Secure가 붙지 않습니다.');
+if (PRODUCTION && !process.env.ADMIN_TOKEN) console.warn('경고: ADMIN_TOKEN이 없어 /admin(신고 처리·집계)을 쓸 수 없습니다.');
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 if (GOOGLE_CLIENT_ID && !process.env.SESSION_SECRET) console.warn('SESSION_SECRET이 없어 서버를 재시작하면 로그인 세션이 모두 풀립니다.');
 const SESSION_DAYS = 30, COOKIE_NAME = 'aichat_session';
@@ -197,7 +206,7 @@ const FREE_BACKENDS = [
 try {
   const extra = JSON.parse(process.env.FREE_EXTRA_BACKENDS || '[]');
   (Array.isArray(extra) ? extra : []).forEach(e => {
-    if (e && /^[a-z0-9_-]{2,20}$/.test(e.id) && /^https?:\/\//.test(e.base) && Array.isArray(e.models) && e.models.length && !FREE_BACKENDS.some(b => b.id === e.id)) {
+    if (e && /^[a-z0-9_-]{2,20}$/.test(e.id) && /^https?:\/\//.test(e.base) && (!PRODUCTION || /^https:\/\//.test(e.base) || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(e.base)) && Array.isArray(e.models) && e.models.length && !FREE_BACKENDS.some(b => b.id === e.id)) {
       FREE_BACKENDS.push({ id: e.id, key: e.key ? String(e.key) : '', keyEnv: '', noKey: !e.key, base: String(e.base),
         models: e.models.map(String), cap: Number(e.cap) > 0 ? Number(e.cap) : 100 });
     }
@@ -276,10 +285,10 @@ const reports = store.read('reports') || [];
 /* 익명 집계 이벤트: 날짜별 횟수만 센다. 방 번호·사용자·대화 내용은 기록하지 않는다. */
 const events = store.read('events') || {};
 let eventsDirty = false;
-function track(name) {
+function track(name, n) {
   const day = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
   const d = events[day] || (events[day] = {});
-  d[name] = (d[name] || 0) + 1; eventsDirty = true;
+  d[name] = (d[name] || 0) + (n || 1); eventsDirty = true;
   const keys = Object.keys(events).sort();
   while (keys.length > 90) delete events[keys.shift()];
 }
@@ -387,7 +396,7 @@ function deleteAccount(sub) {
   for (const rp of reports) if (rp.reporter === sub) { rp.reporter = ''; rp.reporterName = ''; reportsDirty = true; }
   for (const a of Object.values(accounts)) if (a.blocked && a.blocked[sub]) delete a.blocked[sub];
   delete accounts[sub]; deletedSubs[sub] = Date.now(); accountsDirty = true;
-  for (const [k, v] of shares) if (v.roomId && ids.has(v.roomId) && rooms.get(v.roomId) === undefined) shares.delete(k);
+  for (const [k, v] of shares) if (v.roomId && ids.has(v.roomId) && rooms.get(v.roomId) === undefined) { shares.delete(k); sharesDirty = true; }
   flushStore();
 }
 function exportAccount(sub) {
@@ -449,6 +458,7 @@ function flushStore() {
   for (const id of dirty) { const r = rooms.get(id); if (r) saveRoom(r); }
   dirty.clear();
   if (reportsDirty && store.enabled) { try { const cut = Date.now() - REPORT_KEEP_MS; for (let i = reports.length - 1; i >= 0; i--) if (reports[i].ts < cut) reports.splice(i, 1); store.write('reports', reports); reportsDirty = false; } catch (e) { console.error('신고 저장 실패:', e.message); } }
+  if (sharesDirty && store.enabled) { try { for (const [k, v] of shares) if (v.exp < Date.now()) shares.delete(k); store.write('shares', Object.fromEntries(shares)); sharesDirty = false; } catch (e) { console.error('공유 링크 저장 실패:', e.message); } }
   if (eventsDirty && store.enabled) { try { store.write('events', events); eventsDirty = false; } catch (e) { console.error('이벤트 저장 실패:', e.message); } }
   if (galleryDirty && store.enabled) { try { store.write('gallery', gallery); galleryDirty = false; } catch (e) { console.error('마켓 저장 실패:', e.message); } }
   if (accountsDirty && store.enabled) { try { store.write('accounts', accounts); store.write('deleted', deletedSubs); accountsDirty = false; } catch (e) { console.error('계정 저장 실패:', e.message); } }
@@ -469,7 +479,9 @@ if (store.enabled) { setInterval(flushStore, 3000).unref(); setInterval(purgeOld
 process.on('SIGTERM', () => { flushStore(); process.exit(0); });
 process.on('SIGINT', () => { flushStore(); process.exit(0); });
 let aiCounter = 0;
-const shares = new Map(), SHARE_MAX = 200;
+const SHARE_MAX = 200;
+const shares = new Map(Object.entries(store.read('shares') || {}).filter(([, v]) => v && v.exp > Date.now()));
+let sharesDirty = false;
 
 /* ---------- 유틸 ---------- */
 function send(ws, obj) { if (ws.readyState === 1) ws.send(JSON.stringify(obj)); }
@@ -933,7 +945,15 @@ async function maybeSummarize(room, sub) {
   } catch (e) { /* 요약 실패는 조용히 넘기고 다음 기회에 다시 시도 */ }
   finally { room.summarizing = false; }
 }
+/* 제공사별 호출 성공/실패 횟수와 누적 지연(ms)을 익명 집계로 남긴다. 모델 이름·키·내용은 기록하지 않는다. */
 async function generate(room, ai, dm) {
+  const prov = String(resolve(ai, room).provider || '');
+  if (!/^[a-z0-9_-]{1,20}$/.test(prov) || prov === 'demo') return generateRaw(room, ai, dm);
+  const t0 = Date.now();
+  try { const r = await generateRaw(room, ai, dm); track('call_ok.' + prov); track('ms.' + prov, Date.now() - t0); return r; }
+  catch (e) { track('call_err.' + prov); track('ms.' + prov, Date.now() - t0); throw e; }
+}
+async function generateRaw(room, ai, dm) {
   const cfg = resolve(ai, room);
   if (cfg.provider === 'free') return callFree(room, ai, dm);
   if (cfg.provider === 'anthropic') return callAnthropic(room, ai, cfg, dm);
@@ -1222,7 +1242,7 @@ function handle(ws, m) {
         if (!rec.msgs.length) return send(ws, { t: 'err', text: '공유할 대화가 아직 없습니다.' });
       }
       if (shares.size >= SHARE_MAX) { const old = [...shares.keys()][0]; shares.delete(old); }
-      shares.set(rec.id, rec); room.shareCount++; track('share_created');
+      shares.set(rec.id, rec); sharesDirty = true; room.shareCount++; track('share_created');
       send(ws, { t: 'shared', url: '/s/' + rec.id, kind, days: planOf(room).shareDays, badge: rec.badge });
       return broadcast(room, meta(room));
     }

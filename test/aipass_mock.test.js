@@ -1,0 +1,26 @@
+const ROOT=require('path').resolve(__dirname,'..');
+const http=require('http'),{spawn}=require('child_process');const WS=require('ws');
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));const res=[];const check=(n,c,d)=>{res.push(c);console.log((c?'PASS ':'FAIL ')+n+(c?'':' :: '+d))};
+const log=[];let mode='pass';
+const mock=http.createServer((q,r)=>{let b='';q.on('data',c=>b+=c);q.on('end',()=>{const j=JSON.parse(b||'{}');log.push(JSON.stringify(j.messages));const c=mode==='pass'?'[PASS]':'좋아요\n[DM @둘째] 비밀인데 이거 어떻게 생각해?';r.setHeader('content-type','application/json');r.end(JSON.stringify({choices:[{message:{content:c}}],usage:{}}))})});
+(async()=>{
+ await new Promise(r=>mock.listen(4207,'127.0.0.1',r));
+ const sv=spawn('node',['server.js'],{cwd:ROOT,env:Object.assign({},process.env,{PORT:3107,ALLOW_DEV_PLAN:'1',OPENAI_API_KEY:'k',OPENAI_BASE_URL:'http://127.0.0.1:4207/v1',DEMO_DELAY_MS:'20'}),stdio:'ignore'});
+ await sleep(700);
+ const ws=new WS('ws://127.0.0.1:3107/ws');const ev=[];ws.on('message',d=>ev.push(JSON.parse(d)));await new Promise(r=>ws.on('open',r));
+ const s=o=>ws.send(JSON.stringify(o));s({t:'join',consent:true,room:'passmock',name:'Ben'});await sleep(300);
+ s({t:'plan',id:'plus'});s({t:'config',policy:'free'});
+ s({t:'addAI',name:'첫째',persona:'a',provider:'openai',model:'m'});s({t:'addAI',name:'둘째',persona:'b',provider:'openai',model:'m'});await sleep(300);
+ s({t:'msg',text:'아무나'});await sleep(1500);
+ check('all-PASS run: no AI message, no error, stops',!ev.some(e=>e.t==='msg'&&(e.msg.kind==='ai'||e.msg.code==='AI_ERROR')),JSON.stringify(ev.filter(e=>e.t==='msg').slice(-2)));
+ check('prompt offers [PASS] + DM syntax',log[0].includes('[PASS]')&&log[0].includes('[DM @'));
+ check('stopped after one pass each (2 calls)',log.length===2,log.length);
+ mode='dm';log.length=0;
+ s({t:'msg',text:'@첫째 말해봐'});await sleep(1500);
+ check('mentioned AI prompt has NO pass option',!log[0].includes('[PASS]를')&&!log[0].includes('정확히 [PASS]'),log[0].slice(0,200));
+ const pub=ev.filter(e=>e.t==='msg'&&e.msg.kind==='ai');
+ check('public part kept, DM stripped',pub.length>=1&&pub.every(e=>!e.msg.text.includes('[DM')));
+ check('recipient prompt contains the AI note',log.some(l=>l.includes('비밀인데 이거')&&l.includes('쪽지')),log.length);
+ const ad=ev.filter(e=>e.t==='aidms').pop();check('peek list has thread',ad&&ad.list.length===1);
+ console.log(res.every(Boolean)?'ALL OK':'SOME FAILED');sv.kill();mock.close();process.exit(0);
+})();

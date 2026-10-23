@@ -4,9 +4,13 @@
   "private": true,
   "description": "사람과 여러 AI가 함께 쓰는 자유 채팅방 프로토타입",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node test/run.js",
+    "i18n": "python3 scripts/build-i18n.py"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "ws": "^8.18.0"
   }

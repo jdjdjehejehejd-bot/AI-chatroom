@@ -1,0 +1,22 @@
+const ROOT=require('path').resolve(__dirname,'..');
+const { spawn } = require('child_process'); const WS = require('ws');
+const sleep = ms => new Promise(r => setTimeout(r, ms)); let okAll = true;
+const check = (n, c, d) => { if (!c) okAll = false; console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + d)); };
+(async () => {
+  const sv = spawn('node', [ROOT+'/server.js'], { env: Object.assign({}, process.env, { PORT: 3401, DEMO_DELAY_MS: 10, GROQ_API_KEY: 'gk', ANTHROPIC_API_KEY: 'ak', ANTHROPIC_BASE_URL: 'http://127.0.0.1:1' }), stdio: 'ignore' });
+  await sleep(600);
+  const ws = new WS('ws://127.0.0.1:3401/ws'); const ev = []; ws.on('message', d => ev.push(JSON.parse(d)));
+  await new Promise(r => ws.on('open', r)); ws.send(JSON.stringify({ t: 'join', room: 'gate1', name: 'Ben' })); await sleep(300);
+  ws.send(JSON.stringify({ t: 'config', budgetLimit: 60 })); await sleep(200);
+  check('free budget cap 50 enforced', ev.some(e => e.t === 'err' && e.text.includes('최대 50회')), JSON.stringify(ev.filter(e => e.t === 'err')));
+  ws.send(JSON.stringify({ t: 'addAI', name: '그록', persona: 'p', provider: 'groq', model: 'openai/gpt-oss-120b' })); await sleep(200);
+  ws.send(JSON.stringify({ t: 'msg', text: '@그록 안녕' })); await sleep(500);
+  check('free plan blocks server-key groq', ev.some(e => e.t === 'msg' && e.msg.code === 'AI_ERROR' && e.msg.text.includes('무료 플랜')), JSON.stringify(ev.filter(e => e.t === 'msg').map(e => e.msg.text).slice(-2)));
+  ws.send(JSON.stringify({ t: 'addAI', name: '기본', persona: 'p', provider: 'default' })); await sleep(200);
+  ws.send(JSON.stringify({ t: 'msg', text: '@기본 안녕' })); await sleep(700);
+  const last = ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').map(e => e.msg.text);
+  check('default in free plan ignores ANTHROPIC key (falls to free pool/groq not anthropic)', !ev.some(e => e.t === 'msg' && /Anthropic|fetch failed/.test(e.msg.text || '')), JSON.stringify(ev.filter(e => e.t === 'msg').map(e => e.msg.text).slice(-2)));
+  ws.send(JSON.stringify({ t: 'plan', id: 'plus' })); await sleep(200);
+  check('plan switch refused when dev switch off', ev.some(e => e.t === 'err' && e.text.includes('준비 중')));
+  sv.kill(); console.log(okAll ? 'ALL OK' : 'SOME FAILED'); process.exit(0);
+})();

@@ -1,0 +1,25 @@
+name: test
+on:
+  push: { branches: [main] }
+  pull_request:
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    strategy: { matrix: { node: [20, 22] } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ matrix.node }}", cache: npm }
+      - run: npm ci
+      - run: npm test
+      - name: 번역 파일이 최신인지 확인
+        run: python3 scripts/build-i18n.py && git diff --exit-code public/i18n.js
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: pip install playwright && playwright install --with-deps chromium
+      - run: bash test/ui/run.sh
