@@ -8,6 +8,7 @@
 const http = require('http');
 const crypto = require('crypto');
 const { createStore } = require('./store');
+const legal = require('./legal');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
@@ -23,7 +24,7 @@ const SESSION_DAYS = 30, COOKIE_NAME = 'aichat_session';
 const b64u = b => Buffer.from(b).toString('base64url');
 const hmac = (k, d) => crypto.createHmac('sha256', k).update(d).digest();
 function signSession(u) {
-  const body = b64u(JSON.stringify({ sub: u.sub, name: u.name, pic: u.pic || '', exp: Date.now() + SESSION_DAYS * 86400000 }));
+  const body = b64u(JSON.stringify({ sub: u.sub, name: u.name, pic: u.pic || '', iat: Date.now(), exp: Date.now() + SESSION_DAYS * 86400000 }));
   return body + '.' + b64u(hmac(SESSION_SECRET, body));
 }
 function readSession(cookieHeader) {
@@ -36,6 +37,7 @@ function readSession(cookieHeader) {
   try {
     const u = JSON.parse(Buffer.from(body, 'base64url').toString());
     if (!u || typeof u.sub !== 'string' || !u.sub || u.exp < Date.now()) return null;
+    if (deletedSubs[u.sub] && (u.iat || 0) <= deletedSubs[u.sub]) return null; /* 삭제한 계정의 옛 세션은 모두 무효 */
     return { sub: u.sub, name: String(u.name || '').slice(0, 16), pic: /^https:\/\//.test(u.pic || '') ? String(u.pic).slice(0, 300) : '' };
   } catch (e) { return null; }
 }
@@ -214,6 +216,7 @@ const store = createStore(process.env.DATA_DIR || '');
 const KEEP_DAYS = { free: Number(process.env.ROOM_KEEP_DAYS_FREE || 7), plus: Number(process.env.ROOM_KEEP_DAYS_PLUS || 365) };
 const dirty = new Set();
 const accounts = store.read('accounts') || {};
+const deletedSubs = store.read('deleted') || {};
 let accountsDirty = false;
 function acct(sub, name) {
   let a = accounts[sub];
@@ -257,6 +260,11 @@ function refreshPlan(room) {
   return was !== np;
 }
 /* ---------- 에셋 마켓: 사용자가 만든 방 구성을 게시하고 설치한다 ---------- */
+const TERMS_VERSION = legal.TERMS_VERSION;
+const reports = store.read('reports') || [];
+let reportsDirty = false;
+const REPORT_KEEP_MS = 180 * 86400000;
+const REPORT_REASONS = ['spam', 'abuse', 'sexual', 'violence', 'illegal', 'privacy', 'other'];
 const gallery = (store.read('gallery') || { items: {} });
 let galleryDirty = false;
 const GAL_LIMIT = { free: 1, plus: 10 };
@@ -330,12 +338,55 @@ function galleryRoute(req, res, u, json) {
   }
   return false;
 }
+/* ---------- 계정·데이터 삭제와 내보내기 ---------- */
+function deleteAccount(sub) {
+  const myKey = dmKeyFor(sub), ids = new Set(Object.keys((accounts[sub] || { rooms: {} }).rooms));
+  for (const r of rooms.values()) if (r.ownerSub === sub || (r.members && r.members[sub])) ids.add(r.id);
+  for (const id of ids) {
+    const r = getRoom(id); if (!r) continue;
+    if (r.ownerSub === sub) {
+      for (const c of [...r.clients]) { try { send(c, { t: 'err', code: 'ROOM_DELETED', text: '방장이 계정을 삭제해 이 방이 삭제되었습니다.' }); c.close(); } catch (e) {} }
+      if (r.cleanup) clearTimeout(r.cleanup);
+      rooms.delete(id); dirty.delete(id); store.remove('rooms/' + id);
+      for (const a of Object.values(accounts)) if (a.rooms && a.rooms[id]) delete a.rooms[id];
+      continue;
+    }
+    const name = (r.members || {})[sub];
+    for (const m of r.messages) if (m._sub === sub) { m.who = '탈퇴한 사용자'; m.text = '[삭제된 메시지]'; delete m._sub; if (m.hearts) m.hearts = []; }
+    for (const k of [...r.dms.keys()]) if (k.startsWith(myKey + '|')) r.dms.delete(k);
+    if (name) for (const m of r.messages) if (m.hearts) m.hearts = m.hearts.filter(h => h !== name);
+    delete r.members[sub]; r.banned = (r.banned || []).filter(b => b !== sub);
+    dirty.add(id); saveRoom(r);
+  }
+  for (const [id, it] of Object.entries(gallery.items)) {
+    if (it.authorSub === sub) delete gallery.items[id];
+    else { it.likes = it.likes.filter(x => x !== sub); it.installers = it.installers.filter(x => x !== sub); it.reports = it.reports.filter(x => x !== sub); }
+  }
+  galleryDirty = true;
+  for (const rp of reports) if (rp.reporter === sub) { rp.reporter = ''; rp.reporterName = ''; reportsDirty = true; }
+  for (const a of Object.values(accounts)) if (a.blocked && a.blocked[sub]) delete a.blocked[sub];
+  delete accounts[sub]; deletedSubs[sub] = Date.now(); accountsDirty = true;
+  for (const [k, v] of shares) if (v.roomId && ids.has(v.roomId) && rooms.get(v.roomId) === undefined) shares.delete(k);
+  flushStore();
+}
+function exportAccount(sub) {
+  const a = accounts[sub] || {}, myKey = dmKeyFor(sub), out = { exportedAt: new Date().toISOString(), account: { name: a.name, plan: a.plan, created: a.created ? new Date(a.created).toISOString() : '', consentAt: a.consentAt ? new Date(a.consentAt).toISOString() : '', blocked: Object.values(a.blocked || {}) }, rooms: [], published: [] };
+  for (const id of Object.keys(a.rooms || {})) {
+    const r = getRoom(id); if (!r) continue;
+    const own = r.ownerSub === sub;
+    out.rooms.push({ id, title: titleOf(r), owner: own, doc: own ? r.doc : undefined, memory: own ? r.memory : undefined, deliverable: own && r.deliv ? { lang: r.deliv.lang, text: r.deliv.text } : undefined,
+      myMessages: r.messages.filter(m => m._sub === sub).map(m => ({ at: new Date(m.ts).toISOString(), text: m.text })),
+      myWhispers: [...r.dms].filter(([k]) => k.startsWith(myKey + '|')).map(([k, t]) => ({ ai: (r.ais.find(x => x.id === t.aiId) || {}).name || t.aiId, messages: t.msgs.map(m => ({ from: m.kind === 'ai' ? 'AI' : '나', text: m.text, at: new Date(m.ts).toISOString() })) })) });
+  }
+  for (const it of Object.values(gallery.items)) if (it.authorSub === sub) out.published.push({ name: it.asset.name, desc: it.desc, asset: it.asset });
+  return out;
+}
 function serializeRoom(room) {
   return {
     v: 1, id: room.id, asset: room.asset, rules: room.rules, policy: room.policy, maxStreak: room.maxStreak, mode: room.mode, pipeline: room.pipeline, pipelineDefault: room.pipelineDefault,
     deliv: room.deliv, library: room.library, brand: room.brand, refunds: room.refunds, shareCount: room.shareCount, stats: room.stats, plan: room.plan, devPlan: !!room.devPlan, budget: room.budget,
     doc: room.doc, memory: room.memory || '', memoryAt: room.memoryAt || 0, ownerSub: room.ownerSub, ownerName: room.ownerName, seq: room.seq, freeUsed: room.freeUsed || 0,
-    members: room.members || {}, created: room.created || Date.now(), lastActive: room.lastActive || Date.now(),
+    members: room.members || {}, banned: room.banned || [], created: room.created || Date.now(), lastActive: room.lastActive || Date.now(),
     messages: room.messages.slice(-LIMITS.history),
     ais: room.ais.map(a => ({ id: a.id, name: a.name, persona: a.persona, provider: a.provider, model: a.model, muted: !!a.muted, needsKey: !!a.apiKey })),
     dms: [...room.dms].map(([k, t]) => [k, t]), aidms: [...room.aidms]
@@ -343,7 +394,7 @@ function serializeRoom(room) {
 }
 function reviveRoom(d) {
   const room = newRoom(d.id);
-  for (const k of ['asset', 'rules', 'policy', 'maxStreak', 'mode', 'pipeline', 'pipelineDefault', 'deliv', 'library', 'brand', 'refunds', 'shareCount', 'stats', 'plan', 'devPlan', 'budget', 'doc', 'memory', 'memoryAt', 'ownerSub', 'ownerName', 'seq', 'freeUsed', 'members', 'created', 'lastActive', 'messages'])
+  for (const k of ['asset', 'rules', 'policy', 'maxStreak', 'mode', 'pipeline', 'pipelineDefault', 'deliv', 'library', 'brand', 'refunds', 'shareCount', 'stats', 'plan', 'devPlan', 'budget', 'doc', 'memory', 'memoryAt', 'ownerSub', 'ownerName', 'seq', 'freeUsed', 'members', 'banned', 'created', 'lastActive', 'messages'])
     if (d[k] !== undefined) room[k] = d[k];
   room.keyLost = (d.ais || []).filter(a => a.needsKey).map(a => a.name);
   room.ais = (d.ais || []).map(a => ({ id: a.id, name: a.name, persona: a.persona, provider: a.provider === 'default' || !a.needsKey ? a.provider : 'default', model: a.needsKey ? '' : a.model, muted: !!a.muted }));
@@ -376,8 +427,9 @@ function getRoom(id) {
 function flushStore() {
   for (const id of dirty) { const r = rooms.get(id); if (r) saveRoom(r); }
   dirty.clear();
+  if (reportsDirty && store.enabled) { try { const cut = Date.now() - REPORT_KEEP_MS; for (let i = reports.length - 1; i >= 0; i--) if (reports[i].ts < cut) reports.splice(i, 1); store.write('reports', reports); reportsDirty = false; } catch (e) { console.error('신고 저장 실패:', e.message); } }
   if (galleryDirty && store.enabled) { try { store.write('gallery', gallery); galleryDirty = false; } catch (e) { console.error('마켓 저장 실패:', e.message); } }
-  if (accountsDirty && store.enabled) { try { store.write('accounts', accounts); accountsDirty = false; } catch (e) { console.error('계정 저장 실패:', e.message); } }
+  if (accountsDirty && store.enabled) { try { store.write('accounts', accounts); store.write('deleted', deletedSubs); accountsDirty = false; } catch (e) { console.error('계정 저장 실패:', e.message); } }
 }
 function purgeOld() {
   if (!store.enabled) return;
@@ -423,7 +475,7 @@ function newRoom(id) {
   return {
     id, asset: null, rules: '', clients: new Set(), ais: [], messages: [], seq: 0,
     policy: 'mention', maxStreak: 4, streak: 0, lastAI: null, gen: 0,
-    ownerSub: '', ownerName: '', mode: null, pipeline: null, pipelineDefault: null, deliv: null, library: [], brand: null, dms: new Map(), aidms: new Map(), shareCount: 0, refunds: 0, runCalls: 0, stats: { runs: 0, calls: 0, byAI: {} }, plan: 'free', budget: { used: 0, limit: PLANS.free.budgetDefault }, doc: '', cleanup: null, members: {}, created: Date.now(), lastActive: Date.now(), memory: ''
+    ownerSub: '', ownerName: '', mode: null, pipeline: null, pipelineDefault: null, deliv: null, library: [], brand: null, dms: new Map(), aidms: new Map(), shareCount: 0, refunds: 0, runCalls: 0, stats: { runs: 0, calls: 0, byAI: {} }, plan: 'free', budget: { used: 0, limit: PLANS.free.budgetDefault }, doc: '', cleanup: null, members: {}, banned: [], created: Date.now(), lastActive: Date.now(), memory: ''
   };
 }
 
@@ -562,12 +614,28 @@ function meta(room) {
     ais: room.ais.map(a => ({ id: a.id, name: a.name, persona: a.persona, provider: a.provider, model: a.model, ownKey: !!a.apiKey, muted: !!a.muted }))
   };
 }
-function addMsg(room, kind, who, text, code, extra) {
+/* 신고·차단: 차단한 사람의 메시지는 차단한 쪽에만 전달하지 않는다. 작성자 계정 ID(_sub)는 클라이언트에 보내지 않는다 */
+const pub = m => { if (!m._sub) return m; const { _sub, ...rest } = m; return rest; };
+function blockedBy(c, msg) {
+  if (msg.kind !== 'human') return false;
+  const bl = c.user && accounts[c.user.sub] && accounts[c.user.sub].blocked;
+  if (bl && msg._sub && bl[msg._sub]) return true;
+  return !!(c.blockedNames && c.blockedNames.has(msg.who));
+}
+function blockedList(ws) {
+  const out = new Set(ws.blockedNames || []);
+  if (ws.user && accounts[ws.user.sub] && accounts[ws.user.sub].blocked) Object.values(accounts[ws.user.sub].blocked).forEach(n => out.add(n));
+  return [...out];
+}
+function addMsg(room, kind, who, text, code, extra, sub) {
   const msg = { id: ++room.seq, kind, who, text, ts: Date.now() };
   if (code) { msg.code = code; if (extra) msg.extra = extra; }
+  if (sub) msg._sub = sub;
   room.messages.push(msg);
   if (room.messages.length > LIMITS.history) room.messages.shift();
-  broadcast(room, { t: 'msg', msg });
+  if (store.enabled) { room.lastActive = Date.now(); dirty.add(room.id); }
+  const str = JSON.stringify({ t: 'msg', msg: pub(msg) });
+  for (const c of room.clients) if (c.readyState === 1 && !blockedBy(c, msg)) c.send(str);
   return msg;
 }
 function system(room, text, code, extra) { return addMsg(room, 'system', '시스템', text, code, extra); }
@@ -940,6 +1008,10 @@ function rate(ws) {
 function join(ws, m) {
   if (ws.meta) return;
   if (loginRequired() && !ws.user) return send(ws, { t: 'err', code: 'LOGIN_REQUIRED', text: '로그인한 뒤에 시작할 수 있습니다.' });
+  if (ws.user) {
+    const a = acct(ws.user.sub, ws.user.name);
+    if (!a.consentAt) { if (m.consent !== true) return send(ws, { t: 'err', code: 'CONSENT_REQUIRED', text: '이용약관과 개인정보처리방침에 동의해야 시작할 수 있습니다.' }); a.consentAt = Date.now(); a.consentVer = TERMS_VERSION; accountsDirty = true; }
+  }
   const id = String(m.room || '');
   if (!/^[a-z0-9]{3,12}$/.test(id)) return send(ws, { t: 'err', text: '방 코드는 영문 소문자/숫자 3~12자여야 합니다.' });
   let name = cleanText(m.name, 16).replace(/\s+/g, ' ');
@@ -960,6 +1032,7 @@ function join(ws, m) {
     }
   }
   if (room.clients.size >= LIMITS.humans) return send(ws, { t: 'err', text: '방이 가득 찼습니다.' });
+  if ((room.banned || []).includes(ws.user ? ws.user.sub : 'name:' + name)) return send(ws, { t: 'err', code: 'KICKED', text: '이 방에서 내보내져 입장할 수 없습니다.' });
   const taken = new Set([...room.clients].map(c => c.meta.name).concat(room.ais.map(a => a.name)));
   const base = name; let k = 2;
   while (taken.has(name)) name = base + k++;
@@ -969,7 +1042,7 @@ function join(ws, m) {
   if (ws.user) { acct(ws.user.sub, ws.user.name); room.members[ws.user.sub] = name; if (Object.keys(room.members).length > 30) delete room.members[Object.keys(room.members)[0]]; }
   room.clients.add(ws);
   if (room.cleanup) { clearTimeout(room.cleanup); room.cleanup = null; }
-  send(ws, Object.assign(meta(room), { t: 'state', you: name, messages: room.messages.slice(-100), doc: room.doc, deliv: room.deliv, dms: dmsFor(room, ws.meta.key), aidms: aidmsView(room), memory: room.memory || '', credits: ws.user ? creditInfo(ws.user.sub) : null, user: ws.user ? { name: ws.user.name, picture: ws.user.pic } : null, youOwner: !room.ownerSub || !!(ws.user && ws.user.sub === room.ownerSub) }));
+  send(ws, Object.assign(meta(room), { t: 'state', you: name, messages: room.messages.slice(-100).filter(x => !blockedBy(ws, x)).map(pub), doc: room.doc, deliv: room.deliv, dms: dmsFor(room, ws.meta.key), aidms: aidmsView(room), blocked: blockedList(ws), memory: room.memory || '', credits: ws.user ? creditInfo(ws.user.sub) : null, user: ws.user ? { name: ws.user.name, picture: ws.user.pic } : null, youOwner: !room.ownerSub || !!(ws.user && ws.user.sub === room.ownerSub) }));
   if (assetErr) send(ws, { t: 'err', text: '에셋을 적용하지 못했습니다: ' + assetErr });
   system(room, name + ' 님이 입장했습니다.', 'MEMBER_JOIN');
   if (room.keyLost && room.keyLost.length) { system(room, '개인 API 키는 서버에 저장하지 않아서 ' + room.keyLost.join(', ') + '의 키를 다시 입력해야 합니다. 그때까지 서버 기본 모델로 말합니다.', 'KEY_LOST'); room.keyLost = []; }
@@ -994,14 +1067,14 @@ function handle(ws, m) {
   if (!ws.meta) return;
   const room = ws.meta.room, name = ws.meta.name;
   if (!rate(ws)) return send(ws, { t: 'err', text: '너무 빠르게 보내고 있습니다. 잠시 후 다시 시도하세요.' });
-  const OWNER_ONLY = ['memory', 'mute', 'config', 'plan', 'asset', 'brand', 'pipeline', 'applyLib', 'delLib', 'mode', 'addAI', 'removeAI', 'share'];
+  const OWNER_ONLY = ['kick', 'memory', 'mute', 'config', 'plan', 'asset', 'brand', 'pipeline', 'applyLib', 'delLib', 'mode', 'addAI', 'removeAI', 'share'];
   if (room.ownerSub && OWNER_ONLY.includes(m.t) && !(ws.user && ws.user.sub === room.ownerSub))
     return send(ws, { t: 'err', text: '방장(Google 로그인 계정)만 바꿀 수 있습니다.' });
   switch (m.t) {
     case 'msg': {
       const text = cleanText(m.text, LIMITS.text);
       if (!text) return;
-      addMsg(room, 'human', name, text);
+      addMsg(room, 'human', name, text, undefined, undefined, ws.user ? ws.user.sub : '');
       if (!room.ais.length) return;
       const first = firstFor(room, text);
       if (first.length || room.policy === 'free') orchestrate(room, first, ws.user ? ws.user.sub : '');
@@ -1103,7 +1176,7 @@ function handle(ws, m) {
     case 'share': {
       if (room.shareCount >= 10) return send(ws, { t: 'err', text: '이 방에서 만들 수 있는 공유 링크는 10개입니다.' });
       const kind = m.kind === 'chat' ? 'chat' : 'result';
-      const rec = { id: crypto.randomBytes(6).toString('hex'), kind, ts: Date.now(), exp: Date.now() + planOf(room).shareDays * 86400000, badge: !!planOf(room).ads,
+      const rec = { roomId: room.id, id: crypto.randomBytes(6).toString('hex'), kind, ts: Date.now(), exp: Date.now() + planOf(room).shareDays * 86400000, badge: !!planOf(room).ads,
         title: room.asset ? room.asset.name : '방 ' + room.id };
       if (kind === 'result') {
         if (!room.deliv) return send(ws, { t: 'err', text: '공유할 산출물이 아직 없습니다.' });
@@ -1178,6 +1251,47 @@ function handle(ws, m) {
       system(room, name + ' 님이 ' + ai.name + '을(를) ' + (ai.muted ? '뮤트했습니다. 단체방에서 말하지 않습니다(귓속말은 가능).' : '뮤트 해제했습니다.'), 'AI_MUTE');
       return broadcast(room, meta(room));
     }
+    case 'report': {
+      const msg = room.messages.find(x => x.id === Number(m.id));
+      if (!msg || msg.kind === 'system') return send(ws, { t: 'err', text: '신고할 메시지를 찾지 못했습니다.' });
+      const reason = REPORT_REASONS.includes(m.reason) ? m.reason : 'other';
+      const me = ws.user ? ws.user.sub : 'anon:' + name;
+      if (reports.some(r => r.roomId === room.id && r.msgId === msg.id && r.reporter === me)) return send(ws, { t: 'reported', id: msg.id, dup: true });
+      reports.push({ id: crypto.randomBytes(5).toString('hex'), ts: Date.now(), roomId: room.id, msgId: msg.id, kind: msg.kind, who: msg.who, whoSub: msg._sub || '', text: msg.text.slice(0, 600), aiId: msg.kind === 'ai' ? (room.ais.find(a => a.name === msg.who) || {}).id || '' : '',
+        reason, note: cleanText(m.note, 200), reporter: me, reporterName: name, status: 'open' });
+      if (reports.length > 5000) reports.shift();
+      reportsDirty = true;
+      return send(ws, { t: 'reported', id: msg.id });
+    }
+    case 'block': {
+      const target = cleanText(m.name, 16);
+      if (!target || target === name) return;
+      const peer = [...room.clients].find(c => c.meta.name === target);
+      const msgSub = (room.messages.find(x => x.kind === 'human' && x.who === target && x._sub) || {})._sub;
+      const tsub = (peer && peer.user && peer.user.sub) || msgSub || '';
+      if (ws.user && tsub) { const a = acct(ws.user.sub, ws.user.name); a.blocked = a.blocked || {}; if (Object.keys(a.blocked).length >= 200) return send(ws, { t: 'err', text: '차단 목록이 가득 찼습니다.' }); a.blocked[tsub] = target; accountsDirty = true; }
+      else { ws.blockedNames = ws.blockedNames || new Set(); ws.blockedNames.add(target); }
+      return send(ws, { t: 'blocked', name: target, list: blockedList(ws) });
+    }
+    case 'unblock': {
+      const target = cleanText(m.name, 16);
+      if (ws.user && accounts[ws.user.sub] && accounts[ws.user.sub].blocked) { const b = accounts[ws.user.sub].blocked; for (const k of Object.keys(b)) if (b[k] === target) { delete b[k]; accountsDirty = true; } }
+      if (ws.blockedNames) ws.blockedNames.delete(target);
+      return send(ws, { t: 'blocked', name: '', list: blockedList(ws) });
+    }
+    case 'kick': {
+      if (!room.ownerSub) return send(ws, { t: 'err', text: '로그인한 사람이 만든 방에서만 강퇴할 수 있습니다.' });
+      const target = cleanText(m.name, 16), peer = [...room.clients].find(c => c.meta.name === target);
+      if (!peer || peer === ws) return send(ws, { t: 'err', text: '강퇴할 참가자를 찾지 못했습니다.' });
+      room.banned = room.banned || [];
+      const key = peer.user ? peer.user.sub : 'name:' + target;
+      if (!room.banned.includes(key)) room.banned.push(key);
+      if (room.banned.length > 100) room.banned.shift();
+      send(peer, { t: 'err', code: 'KICKED', text: '방장이 이 방에서 내보냈습니다.' });
+      system(room, name + ' 님이 ' + target + ' 님을 내보냈습니다.', 'MEMBER_KICKED');
+      try { peer.close(); } catch (e) {}
+      return;
+    }
     case 'memory': {
       room.memory = cleanText(m.text, 900); room.memoryAt = room.messages.length ? room.messages[room.messages.length - 1].id : 0;
       return broadcast(room, { t: 'memory', text: room.memory, by: name });
@@ -1213,10 +1327,35 @@ const server = http.createServer((req, res) => {
   if (u === '/auth/config' && req.method === 'GET') return json(200, { clientId: GOOGLE_CLIENT_ID, github: !!(GH_ID && GH_SECRET), email: emailEnabled(), required: loginRequired() });
   if (u === '/auth/me' && req.method === 'GET') {
     const me = readSession(req.headers.cookie), g = ghOf(me);
-    return json(200, { user: me ? { name: me.name, picture: me.pic, provider: me.sub.split(':')[0] } : null, github: g ? { login: g.login } : null, credits: me ? creditInfo(me.sub) : null });
+    return json(200, { user: me ? { name: me.name, picture: me.pic, provider: me.sub.split(':')[0], consent: !!(accounts[me.sub] && accounts[me.sub].consentAt) } : null, github: g ? { login: g.login } : null, credits: me ? creditInfo(me.sub) : null });
   }
   if (u === '/auth/logout' && req.method === 'POST') { if (!sameOrigin(req)) return json(403, { error: 'origin' }); res.setHeader('set-cookie', [ck(COOKIE_NAME, '', 0), ck(GH_COOKIE, '', 0)]); return json(200, { ok: true }); }
   if (galleryRoute(req, res, u, json)) return;
+  if (u === '/healthz') return json(200, { ok: true, rooms: rooms.size, persist: store.enabled });
+  if ((u === '/privacy' || u === '/terms' || u === '/delete-account') && req.method === 'GET') {
+    const html = u === '/privacy' ? legal.privacy() : u === '/terms' ? legal.terms() : legal.deleteAccount();
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" });
+    return res.end(html);
+  }
+  if (u === '/auth/delete' && req.method === 'POST') {
+    if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' });
+    const me = readSession(req.headers.cookie);
+    if (!me) return json(401, { error: '먼저 로그인하세요.' });
+    return readBody(req, 512).then(b => {
+      let j = {}; try { j = JSON.parse(b); } catch (e) {}
+      if (String(j.confirm || '').trim() !== '삭제') return json(400, { error: '확인 칸에 "삭제"라고 입력하세요.' });
+      deleteAccount(me.sub);
+      res.setHeader('set-cookie', [ck(COOKIE_NAME, '', 0), ck(GH_COOKIE, '', 0)]);
+      json(200, { ok: true });
+    }).catch(() => json(400, { error: '요청이 올바르지 않습니다.' }));
+  }
+  if (u === '/api/export' && req.method === 'GET') {
+    const me = readSession(req.headers.cookie);
+    if (!me) return json(401, { error: '로그인이 필요합니다.' });
+    const body = JSON.stringify(exportAccount(me.sub), null, 2);
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-disposition': 'attachment; filename="my-data.json"', 'cache-control': 'no-store' });
+    return res.end(body);
+  }
   if (u === '/api/myrooms' && req.method === 'GET') {
     const me = readSession(req.headers.cookie);
     if (!me) return json(401, { error: '로그인이 필요합니다.' });
@@ -1224,6 +1363,17 @@ const server = http.createServer((req, res) => {
     const list = Object.entries(a ? a.rooms : {}).map(([id, r]) => { const live = rooms.get(id); return { id, title: live ? titleOf(live) : r.title, mode: live ? live.mode || '' : r.mode, ais: live ? live.ais.length : r.ais, ts: live ? live.lastActive : r.ts, owner: r.owner, online: live ? live.clients.size : 0 }; })
       .sort((x, y) => y.ts - x.ts).slice(0, 40);
     return json(200, { rooms: list, keepDays: KEEP_DAYS[planOfAccount(me.sub)] || KEEP_DAYS.free });
+  }
+  if (u === '/admin/reports' && req.method === 'GET') {
+    const tok = (process.env.ADMIN_TOKEN || ''), got = String(req.headers.authorization || '').replace(/^Bearer /, '');
+    if (!tok || got.length !== tok.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(tok))) return json(401, { error: 'unauthorized' });
+    const q = new URL(req.url, 'http://x').searchParams, st = q.get('status') || 'open';
+    return json(200, { reports: reports.filter(r => st === 'all' || r.status === st).slice(-200).reverse() });
+  }
+  if (u === '/admin/reports/resolve' && req.method === 'POST') {
+    const tok = (process.env.ADMIN_TOKEN || ''), got = String(req.headers.authorization || '').replace(/^Bearer /, '');
+    if (!tok || got.length !== tok.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(tok))) return json(401, { error: 'unauthorized' });
+    return readBody(req, 1024).then(b => { const j = JSON.parse(b || '{}'), r = reports.find(x => x.id === j.id); if (!r) return json(404, { error: 'not found' }); r.status = j.status === 'dismissed' ? 'dismissed' : 'actioned'; r.resolvedAt = Date.now(); reportsDirty = true; json(200, { ok: true }); }).catch(() => json(400, { error: 'bad request' }));
   }
   if (u === '/admin/plan' && req.method === 'POST') {
     const tok = (process.env.ADMIN_TOKEN || '');

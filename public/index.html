@@ -430,6 +430,21 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
 #emform .field{max-width:280px}
 a.btn{display:inline-flex;align-items:center;text-decoration:none}
 #joinform.gated #jgo{opacity:.45}
+.consent{display:flex;gap:8px;align-items:flex-start;margin-top:18px;font-size:13px;color:var(--muted);line-height:1.5}
+.consent input{margin-top:3px;flex:none}.consent a,.legalfoot a{color:var(--accent-text);text-decoration:underline}
+.legalfoot{margin-top:16px;font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
+.mm{position:absolute;opacity:0;border:0;background:transparent;color:var(--muted);font-size:16px;line-height:1;padding:4px 6px;border-radius:8px;cursor:pointer}
+.row:hover .mm,.mm:focus,.row.mmon .mm{opacity:1}
+@media (pointer:coarse){.mm{opacity:.55}}
+.col{position:relative}.row .col .mm{top:0;right:-30px}.row.mine .col .mm{right:auto;left:-30px}
+#sheetbg{position:fixed;inset:0;background:rgba(10,12,20,.5);z-index:60;display:flex;align-items:flex-end;justify-content:center}
+#sheet{background:var(--surface);color:var(--ink);border:1px solid var(--edge);border-radius:16px 16px 0 0;width:min(440px,100%);padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow-lg)}
+@media (min-width:600px){#sheetbg{align-items:center}#sheet{border-radius:16px}}
+#sheet h4{margin:0 0 4px;font-size:15px}#sheet p{margin:0 0 10px;font-size:12.5px;color:var(--muted)}
+#sheet button.opt{display:block;width:100%;text-align:left;padding:12px 10px;border:0;border-top:1px solid var(--line);background:transparent;color:var(--ink);font:inherit;font-size:14px;cursor:pointer;border-radius:0}
+#sheet button.opt:hover,#sheet button.opt:focus{background:var(--accent-soft)}
+#sheet button.opt.danger{color:var(--err-tx)}
+.blkrow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;font-size:14px}
 #joinform.gated #jmodes,#joinform.gated label.lb,#joinform.gated #jname{opacity:.5;pointer-events:none}
 #market{position:fixed;inset:0;z-index:70;background:var(--bg);display:flex;flex-direction:column}
 .mkhead{flex:none;display:flex;align-items:center;gap:10px;padding:calc(8px + env(safe-area-inset-top,0px)) 12px 8px 8px;background:var(--surface);border-bottom:1px solid var(--line)}
@@ -510,8 +525,10 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
           <div class="err" id="jerr" role="alert" hidden></div>
         </div>
         <p class="err" id="gatemsg" hidden style="margin-top:16px">로그인한 뒤에 시작할 수 있어요. 위에서 로그인 방법을 골라 주세요.</p>
-        <button class="btn primary lg" id="jgo" type="submit" style="margin-top:20px">방 만들고 입장</button>
+        <label class="consent"><input type="checkbox" id="jconsent"><span>만 14세 이상이며 <a href="/terms" target="_blank" rel="noopener">이용약관</a>과 <a href="/privacy" target="_blank" rel="noopener">개인정보처리방침</a>에 동의합니다. AI 답변은 부정확할 수 있고, 대화는 연결한 AI 서비스 제공자에게 전달됩니다.</span></label>
+        <button class="btn primary lg" id="jgo" type="submit" style="margin-top:14px">방 만들고 입장</button>
         <div class="err" id="jerr2" role="alert" hidden></div>
+        <div class="legalfoot"><a href="/terms" target="_blank" rel="noopener">이용약관</a><a href="/privacy" target="_blank" rel="noopener">개인정보처리방침</a><a href="/delete-account" target="_blank" rel="noopener">계정·데이터 삭제</a></div>
       </form>
     </section>
 
@@ -614,6 +631,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       </div>
       <div class="pn" data-panel="settings">
         <section><h3>계정</h3><div id="acct"></div></section>
+        <section><h3>차단한 사용자</h3><div id="blklist"></div><p class="hint" style="margin-top:8px">메시지의 ⋯ 버튼으로 신고·차단할 수 있어요. 차단하면 그 사람의 메시지가 나에게만 숨겨집니다.</p></section>
         <section>
           <fieldset>
             <legend>AI 발언 방식</legend>
@@ -812,6 +830,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 
   function mk(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function rand(n) { var s = "", c = "abcdefghjkmnpqrstuvwxyz23456789"; for (var i = 0; i < n; i++) s += c[Math.floor(Math.random() * c.length)]; return s; }
+  function alert_(t) { toast(t); }
   function toast(t) { var el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.hidden = true; }, 3500); }
   function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
   function colorOf(name) { if (!(name in colors)) colors[name] = colorCount++ % 6; return colors[name]; }
@@ -939,6 +958,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     $("gbox").hidden = !any;
     var gate = !!(authCfg.required && !authUser); $("joinform").classList.toggle("gated", gate); $("gatemsg").hidden = !gate; $("jgo").setAttribute("aria-disabled", gate ? "true" : "false");
     $("glogin").hidden = !!authUser;
+    if (authUser && authUser.consent) $("jconsent").checked = true;
     $("gwho").hidden = !authUser;
     $("gbtn").hidden = !authCfg.clientId; $("ghbtn").hidden = !authCfg.github; $("embtn").hidden = !authCfg.email;
     if (authUser) {
@@ -950,7 +970,11 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       sec.textContent = "";
       if (!any) sec.appendChild(mk("p", "hint", "이 서버에는 로그인이 설정되어 있지 않아요."));
       else if (!authUser) sec.appendChild(mk("p", "hint", "로그인하면 방장 권한, 귓속말 기록, GitHub 내보내기를 쓸 수 있어요. 방 입장 화면에서 로그인하세요."));
-      else { sec.appendChild(mk("div", "", authUser.name + " · " + (PROV[authUser.provider] || "계정"))); var w = mk("div"); w.style.marginTop = "8px"; ghButtons(w); sec.appendChild(w); }
+      else { sec.appendChild(mk("div", "", authUser.name + " · " + (PROV[authUser.provider] || "계정"))); var w = mk("div"); w.style.marginTop = "8px"; ghButtons(w); sec.appendChild(w);
+        var dz = mk("div"); dz.style.cssText = "margin-top:12px;display:flex;gap:8px;flex-wrap:wrap";
+        var ex = mk("a", "btn sm", "내 데이터 내려받기"); ex.href = "/api/export"; ex.setAttribute("download", "my-data.json"); dz.appendChild(ex);
+        var dl = mk("a", "btn sm", "계정·데이터 삭제"); dl.href = "/delete-account"; dl.target = "_blank"; dl.rel = "noopener"; dz.appendChild(dl);
+        sec.appendChild(dz); }
     }
     renderGist();
   }
@@ -1038,15 +1062,17 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   $("jsample").addEventListener("click", function () { assetJoinErr(""); pendingAsset = validateAsset(SAMPLE_TEXT).asset; showJoinAsset(); });
   $("jclear").addEventListener("click", function () { pendingAsset = null; assetJoinErr(""); showJoinAsset(); });
   showJoinAsset();
+  $("jconsent").checked = store("consent") === "1";
 
   function go() {
     var name = $("jname").value.trim();
     if (!name) { joinErr("이름을 입력하세요."); return; }
-    store("nick", name);
+    if (!$("jconsent").checked && !(authUser && authUser.consent)) { joinErr("이용약관과 개인정보처리방침에 동의해 주세요."); return; }
+    store("consent", "1"); store("nick", name);
     if (!inRoomUrl) { roomId = rand(6); try { history.replaceState(null, "", "?room=" + roomId); } catch (e) {} }
     $("jgo").disabled = true; joinErr("");
     ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
-    ws.onopen = function () { var j = { t: "join", room: roomId, name: name, key: dmKey() }; if (!inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; } send(j); };
+    ws.onopen = function () { var j = { t: "join", room: roomId, name: name, key: dmKey(), consent: true }; if (!inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; } send(j); };
     ws.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (x) { return; } onMsg(m); };
     ws.onclose = function () { if (joined) toast("연결이 끊어졌습니다. 새로고침하세요."); else $("jgo").disabled = false; };
     ws.onerror = function () { joinErr("서버에 연결하지 못했습니다."); $("jgo").disabled = false; };
@@ -1269,6 +1295,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       col.appendChild(heartChip(m));
       col.appendChild(mk("div", "time", fmtTime(ts)));
       b.addEventListener("click", function () { tapHeart(m, b); });
+      if (!mine && m.id) { var mmb = mk("button", "mm", "⋯"); mmb.type = "button"; mmb.setAttribute("aria-label", "신고·차단 메뉴"); mmb.addEventListener("click", function (e) { e.stopPropagation(); openMsgMenu(m, row); }); col.appendChild(mmb); }
       if (ai) {
         av.style.cursor = "pointer"; av.addEventListener("click", function () { var a = aiByName(m.who); if (a) openProfile(a.id); });
         var nmEl = col.querySelector(".name span"); if (nmEl) { nmEl.style.cursor = "pointer"; nmEl.addEventListener("click", function () { var a = aiByName(m.who); if (a) openProfile(a.id); }); }
@@ -1281,6 +1308,39 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     }
     log.scrollTop = log.scrollHeight;
   }
+  /* 신고·차단·강퇴 */
+  var REASONS = [["spam", "스팸·광고"], ["abuse", "욕설·괴롭힘"], ["sexual", "성적인 내용"], ["violence", "폭력·위험한 내용"], ["illegal", "불법 정보"], ["privacy", "개인정보 노출"], ["other", "기타"]];
+  function closeSheet() { var b = $("sheetbg"); if (b) b.remove(); document.querySelectorAll(".row.mmon").forEach(function (r) { r.classList.remove("mmon"); }); }
+  function openSheet(title, sub, opts) {
+    closeSheet();
+    var bg = mk("div"); bg.id = "sheetbg"; var sh = mk("div"); sh.id = "sheet"; sh.setAttribute("role", "dialog"); sh.setAttribute("aria-modal", "true");
+    sh.appendChild(mk("h4", "", title)); if (sub) sh.appendChild(mk("p", "", sub));
+    opts.forEach(function (o) { var b = mk("button", "opt" + (o.danger ? " danger" : ""), o.label); b.type = "button"; b.addEventListener("click", function () { closeSheet(); o.run(); }); sh.appendChild(b); });
+    var c = mk("button", "opt", "취소"); c.type = "button"; c.addEventListener("click", closeSheet); sh.appendChild(c);
+    bg.appendChild(sh); bg.addEventListener("click", function (e) { if (e.target === bg) closeSheet(); });
+    document.addEventListener("keydown", function esc(e) { if (e.key === "Escape") { closeSheet(); document.removeEventListener("keydown", esc); } });
+    document.body.appendChild(bg); var f = sh.querySelector("button"); if (f) f.focus();
+  }
+  function openMsgMenu(m, row) {
+    row.classList.add("mmon");
+    var human = m.kind === "human", opts = [];
+    opts.push({ label: "이 메시지 신고", run: function () {
+      openSheet("신고 사유", "운영자가 확인합니다. 신고한 메시지는 내 화면에서 숨겨져요.", REASONS.map(function (r) { return { label: r[1], run: function () { send({ t: "report", id: m.id, reason: r[0] }); } }; }));
+    } });
+    if (human) opts.push({ label: m.who + " 님 차단", danger: true, run: function () { send({ t: "block", name: m.who }); } });
+    if (human && youOwner && joined && authUser) opts.push({ label: m.who + " 님 강퇴", danger: true, run: function () {
+      openSheet(m.who + " 님을 강퇴할까요?", "이 방에 다시 들어올 수 없게 됩니다.", [{ label: "강퇴하기", danger: true, run: function () { send({ t: "kick", name: m.who }); } }]);
+    } });
+    openSheet(m.who + (m.kind === "ai" ? " (AI)" : ""), "", opts);
+  }
+  function hideMsgLocal(id) { var r = document.querySelector('#log .row[data-id="' + id + '"]'); if (r) r.remove(); delete msgIndex[id]; }
+  function dropFromLog(name) { Object.keys(msgIndex).forEach(function (k) { var x = msgIndex[k]; if (x.kind === "human" && x.who === name) hideMsgLocal(k); }); }
+  function renderBlocked(list) {
+    var box = $("blklist"); if (!box) return; box.textContent = ""; blocked = list || [];
+    if (!blocked.length) { box.appendChild(mk("p", "hint", "차단한 사용자가 없어요.")); return; }
+    blocked.forEach(function (n) { var r = mk("div", "blkrow"); r.appendChild(mk("span", "", n)); var b = mk("button", "btn sm", "차단 해제"); b.type = "button"; b.addEventListener("click", function () { send({ t: "unblock", name: n }); }); r.appendChild(b); box.appendChild(r); });
+  }
+  var blocked = [];
   function insertAd(ad) {
     var row = mk("div", "adrow"); row.appendChild(mk("b", "", "광고"));
     if (ad.url) { var a = mk("a", "", ad.text); a.href = ad.url; a.target = "_blank"; a.rel = "noopener noreferrer sponsored"; row.appendChild(a); }
@@ -1724,7 +1784,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       $("log").textContent = ""; last = null; lastDay = ""; m.messages.forEach(addMessage);
       $("doc").value = m.doc || ""; deliv = m.deliv || null; dmThreads = m.dms || {}; aidms = m.aidms || []; credits = m.credits || credits; youOwner = m.youOwner !== false; renderCredits(); renderPub(); loadMyRooms();
       if (wide()) $("shell").dataset.info = "1";
-      renderMeta(m); renderMemory(m.memory); renderRooms(); if (!matchMedia("(pointer:coarse)").matches) $("text").focus();
+      renderBlocked(m.blocked); renderMeta(m); renderMemory(m.memory); renderRooms(); if (!matchMedia("(pointer:coarse)").matches) $("text").focus();
     } else if (m.t === "meta") { renderMeta(m); }
     else if (m.t === "msg") {
       dropTyping(); addMessage(m.msg);
@@ -1773,7 +1833,13 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       }
     }
     else if (m.t === "doc") { if (document.activeElement !== $("doc")) $("doc").value = m.text; }
-    else if (m.t === "err") { if (!joined) { joinErr(m.text); $("jgo").disabled = false; } else toast(m.text); }
+    else if (m.t === "reported") { hideMsgLocal(m.id); toast("신고했어요. 검토 후 조치합니다."); }
+    else if (m.t === "blocked") { renderBlocked(m.list); if (m.name) { dropFromLog(m.name); toast(m.name + " 님을 차단했어요"); } else toast("차단을 해제했어요. 다시 입장하면 이전 메시지가 보여요."); }
+    else if (m.t === "err") {
+      if (m.code === "KICKED" || m.code === "ROOM_DELETED") { joined = false; try { history.replaceState(null, "", location.pathname); } catch (e) {} alert_(m.text); setTimeout(function () { location.href = location.pathname; }, 1200); return; }
+      if (m.code === "CONSENT_REQUIRED") { $("jconsent").checked = false; }
+      if (!joined) { joinErr(m.text); $("jgo").disabled = false; } else toast(m.text);
+    }
   }
 
   /* 입력 */

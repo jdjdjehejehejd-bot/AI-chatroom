@@ -10,7 +10,14 @@ function createStore(dir) {
   const file = n => path.join(dir, safe(n) + '.json');
   return {
     enabled: true,
-    read(name) { try { return JSON.parse(fs.readFileSync(file(name), 'utf8')); } catch (e) { return null; } },
+    read(name) {
+      let raw;
+      try { raw = fs.readFileSync(file(name), 'utf8'); } catch (e) { return null; }
+      try { return JSON.parse(raw); } catch (e) {
+        try { fs.renameSync(file(name), file(name) + '.corrupt-' + Date.now()); console.error('손상된 저장 파일을 따로 보관했습니다:', name); } catch (e2) {}
+        return null;
+      }
+    },
     write(name, obj) {
       const f = file(name), tmp = f + '.' + process.pid + '.tmp';
       fs.mkdirSync(path.dirname(f), { recursive: true });
