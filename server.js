@@ -98,6 +98,9 @@ const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 const RESEND_KEY = (process.env.RESEND_API_KEY || '').trim(), MAIL_FROM = process.env.MAIL_FROM || '';
 const RESEND_URL = process.env.RESEND_URL || 'https://api.resend.com/emails';
 const EMAIL_DEV_LOG = process.env.EMAIL_DEV_LOG === '1';
+function providersOn() { return !!(GOOGLE_CLIENT_ID || (GH_ID && GH_SECRET) || emailEnabled()); }
+/* 로그인 provider가 하나라도 켜져 있으면 입장에 로그인이 필요하다. REQUIRE_LOGIN=0으로 끌 수 있다 */
+const loginRequired = () => providersOn() && process.env.REQUIRE_LOGIN !== '0';
 const emailEnabled = () => !!((RESEND_KEY && MAIL_FROM) || EMAIL_DEV_LOG);
 const getCookie = (h, n) => { const m = new RegExp('(?:^|;\\s*)' + n + '=([^;]+)').exec(h || ''); return m ? m[1] : ''; };
 const GH_COOKIE = 'aichat_gh', OAUTH_COOKIE = 'aichat_oauth';
@@ -715,6 +718,7 @@ function rate(ws) {
 }
 function join(ws, m) {
   if (ws.meta) return;
+  if (loginRequired() && !ws.user) return send(ws, { t: 'err', code: 'LOGIN_REQUIRED', text: '로그인한 뒤에 시작할 수 있습니다.' });
   const id = String(m.room || '');
   if (!/^[a-z0-9]{3,12}$/.test(id)) return send(ws, { t: 'err', text: '방 코드는 영문 소문자/숫자 3~12자여야 합니다.' });
   let name = cleanText(m.name, 16).replace(/\s+/g, ' ');
@@ -976,7 +980,7 @@ const server = http.createServer((req, res) => {
   const ck = (n, v, age) => n + '=' + v + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + age + secure;
   const base = () => PUBLIC_URL || ((req.headers['x-forwarded-proto'] === 'https' || COOKIE_SECURE ? 'https' : 'http') + '://' + req.headers.host);
   const ghOf = me => { if (!me) return null; const o = openGH(getCookie(req.headers.cookie, GH_COOKIE), me.sub); return o ? o : null; };
-  if (u === '/auth/config' && req.method === 'GET') return json(200, { clientId: GOOGLE_CLIENT_ID, github: !!(GH_ID && GH_SECRET), email: emailEnabled() });
+  if (u === '/auth/config' && req.method === 'GET') return json(200, { clientId: GOOGLE_CLIENT_ID, github: !!(GH_ID && GH_SECRET), email: emailEnabled(), required: loginRequired() });
   if (u === '/auth/me' && req.method === 'GET') {
     const me = readSession(req.headers.cookie), g = ghOf(me);
     return json(200, { user: me ? { name: me.name, picture: me.pic, provider: me.sub.split(':')[0] } : null, github: g ? { login: g.login } : null });

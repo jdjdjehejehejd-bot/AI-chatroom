@@ -429,6 +429,8 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
 #ghstate{display:inline-flex;align-items:center;gap:8px}
 #emform .field{max-width:280px}
 a.btn{display:inline-flex;align-items:center;text-decoration:none}
+#joinform.gated #jgo{opacity:.45}
+#joinform.gated #jmodes,#joinform.gated label.lb,#joinform.gated #jname{opacity:.5;pointer-events:none}
 </style>
 </head>
 <body>
@@ -488,6 +490,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
           </div>
           <div class="err" id="jerr" role="alert" hidden></div>
         </div>
+        <p class="err" id="gatemsg" hidden style="margin-top:16px">로그인한 뒤에 시작할 수 있어요. 위에서 로그인 방법을 골라 주세요.</p>
         <button class="btn primary lg" id="jgo" type="submit" style="margin-top:20px">방 만들고 입장</button>
         <div class="err" id="jerr2" role="alert" hidden></div>
       </form>
@@ -891,6 +894,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   function renderAuth() {
     var any = authCfg.clientId || authCfg.github || authCfg.email;
     $("gbox").hidden = !any;
+    var gate = !!(authCfg.required && !authUser); $("joinform").classList.toggle("gated", gate); $("gatemsg").hidden = !gate; $("jgo").setAttribute("aria-disabled", gate ? "true" : "false");
     $("glogin").hidden = !!authUser;
     $("gwho").hidden = !authUser;
     $("gbtn").hidden = !authCfg.clientId; $("ghbtn").hidden = !authCfg.github; $("embtn").hidden = !authCfg.email;
@@ -1004,7 +1008,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     ws.onclose = function () { if (joined) toast("연결이 끊어졌습니다. 새로고침하세요."); else $("jgo").disabled = false; };
     ws.onerror = function () { joinErr("서버에 연결하지 못했습니다."); $("jgo").disabled = false; };
   }
-  $("joinform").addEventListener("submit", function (e) { e.preventDefault(); go(); });
+  $("joinform").addEventListener("submit", function (e) { e.preventDefault(); if (authCfg.required && !authUser) { joinErr("로그인한 뒤에 시작할 수 있어요."); return; } go(); });
 
   /* 메시지 렌더 (같은 사람이 연속으로 보낸 말은 묶는다) */
   function fmtTime(ts) { var d = new Date(ts); return (d.getHours() < 10 ? "0" : "") + d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes(); }
