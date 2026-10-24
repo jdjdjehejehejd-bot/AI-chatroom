@@ -662,7 +662,10 @@
 ["비워 두면 정해진 역할 없이 스스로 말투를 만들어요. 예: 모든 말을 영어로 옮겨주는 AI", "Leave blank and the AI builds its own voice with no set role. e.g. an AI that translates everything into English", "空欄ならAIは役割なしで自分の話し方を作ります。例：すべてを英語に訳すAI", "留空则 AI 没有固定角色，自己形成说话方式。例如：把所有话翻成英文的 AI", "En blanco, la IA crea su propia voz sin rol fijo. Ej.: una IA que traduce todo al inglés"],
 ["자유 AI", "Free AI", "自由AI", "自由 AI", "IA libre"],
 ["자유 AI · 정해진 역할 없이 대화하며 스스로 말투와 관계를 만듭니다.", "Free AI · no set role; it develops its own voice and relationships as it talks.", "自由AI・決まった役割なしで、会話しながら自分の話し方や関係を作ります。", "自由 AI · 没有固定角色，在对话中形成自己的说话方式和关系。", "IA libre · sin rol fijo; desarrolla su propia voz y relaciones al conversar."],
-["AI를 직접 초대 (역할을 비우면 자유 AI)", "Invite AIs yourself (leave the role blank for a free AI)", "AIを自分で招待（役割を空欄にすると自由AI）", "自己邀请 AI（角色留空即为自由 AI）", "Invita IA tú mismo (rol en blanco = IA libre)"]
+["AI를 직접 초대 (역할을 비우면 자유 AI)", "Invite AIs yourself (leave the role blank for a free AI)", "AIを自分で招待（役割を空欄にすると自由AI）", "自己邀请 AI（角色留空即为自由 AI）", "Invita IA tú mismo (rol en blanco = IA libre)"],
+["이 결과가 쓸 만했나요?", "Was this result useful?", "この結果は役に立ちましたか？", "这个结果有用吗？", "¿Te resultó útil este resultado?"],
+["{n}점", "{n} out of 5", "{n}点", "{n} 分", "{n} de 5"],
+["평가해 주셔서 고마워요.", "Thanks for rating.", "評価ありがとうございます。", "感谢你的评分。", "Gracias por valorar."]
 ];
   function pick() {
     var c = null, q = /[?&]lang=([a-z]{2})/.exec(location.search);

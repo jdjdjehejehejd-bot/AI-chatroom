@@ -130,7 +130,7 @@ label.lb { display:block; font-size:12px; font-weight:700; margin:14px 0 6px; co
 .loaded { padding:12px; border-radius:12px; border:1px solid var(--accent); background:var(--accent-soft); }
 .loaded b { display:block; }
 .loaded small { display:block; color:var(--muted); font-size:12px; }
-.ainotes{margin:-4px 0 10px 44px;padding:8px 10px;border-radius:10px;background:var(--panel2,rgba(127,127,127,.1));font-size:12.5px}.ainotes ul{margin:6px 0;padding-left:18px}.cast { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.drate{display:flex;align-items:center;gap:6px;margin:8px 0;flex-wrap:wrap}.drate small{margin-right:4px;color:var(--muted)}.ainotes{margin:-4px 0 10px 44px;padding:8px 10px;border-radius:10px;background:var(--panel2,rgba(127,127,127,.1));font-size:12.5px}.ainotes ul{margin:6px 0;padding-left:18px}.cast { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .cm { display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:2px 10px 2px 3px; border-radius:999px; background:var(--sf, var(--h-sf)); color:var(--tx, var(--ink)); }
 .cm .av { width:20px; height:20px; font-size:10px; }
 .err { margin-top:10px; padding:9px 12px; border-radius:10px; background:var(--err-sf); color:var(--err-tx); font-size:13px; }
@@ -846,7 +846,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     ROLE_KO.forEach(function (k) { var d = _t(k); if (d === k) return; var from = toLocal ? k : d, to = toLocal ? d : k; text = text.replace(new RegExp("@" + escRe(from) + "(?![\\p{L}\\p{N}_])", "gu"), "@" + to); });
     return text;
   }
-  var notesOpen = {}, jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
+  var rateDone = {}, notesOpen = {}, jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
   var aidms = [], peekOpen = -1, dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typingWho = "", msgIndex = {}, lastTap = { id: 0, t: 0 };
   var POLNAME = { mention: _t("@멘션했을 때만"), round: _t("순서대로"), free: _t("AI가 알아서 판단") };
   var LIVE = ["anthropic", "openai", "openrouter", "groq", "google", "mistral", "nvidia"];
@@ -1583,10 +1583,10 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     } else { var pre = mk("pre", "code mono dpre", cur.text); pre.id = "dcode"; box.appendChild(pre); }
     var act = mk("div", "dact");
     var cp = mk("button", "btn sm", _t("복사")); cp.type = "button"; cp.id = "dcopy";
-    cp.addEventListener("click", function () { send({ t: "kpi", n: "deliv_copy" }); try { navigator.clipboard.writeText(cur.text).then(function () { toast(_t("복사했습니다.")); }, function () { toast(_t("복사하지 못했습니다.")); }); } catch (e) { toast(_t("복사하지 못했습니다.")); } });
+    cp.addEventListener("click", function () { var kv = cur.v, fail = function () { send({ t: "kpi", n: "copy_failed", v: kv }); toast(_t("복사하지 못했습니다.")); }; try { navigator.clipboard.writeText(cur.text).then(function () { send({ t: "kpi", n: "copy_success", v: kv }); toast(_t("복사했습니다.")); }, fail); } catch (e) { fail(); } });
     var dl = mk("button", "btn sm primary", _t("파일로 저장")); dl.type = "button"; dl.id = "ddown";
     dl.addEventListener("click", function () {
-      send({ t: "kpi", n: "deliv_download" });
+      send({ t: "kpi", n: "download_clicked", v: cur.v });
       try {
         var a = document.createElement("a"), u = URL.createObjectURL(new Blob([cur.text], { type: "text/plain;charset=utf-8" }));
         a.href = u; a.download = "result-v" + cur.v + "." + (EXT[deliv.lang] || "txt"); document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
@@ -1599,6 +1599,17 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       act.appendChild(rs);
     }
     box.appendChild(act);
+    if (!old) {
+      var rt = mk("div", "drate"); rt.appendChild(mk("small", "", _t("이 결과가 쓸 만했나요?")));
+      var rated = rateDone[cur.v];
+      [1, 2, 3, 4, 5].forEach(function (n) {
+        var b = mk("button", "btn sm", String(n)); b.type = "button"; b.dataset.rate = String(n); b.disabled = !!rated; b.setAttribute("aria-label", _t("{n}점", { n: n }));
+        if (rated === n) b.classList.add("primary");
+        b.addEventListener("click", function () { rateDone[cur.v] = n; send({ t: "kpi", n: "rate", v: cur.v, r: n }); toast(_t("평가해 주셔서 고마워요.")); renderDeliv(); });
+        rt.appendChild(b);
+      });
+      box.appendChild(rt);
+    }
     var NEXT = {
       brainstorm: ["고른 아이디어를 실행 계획으로 정리해줘", "각 아이디어의 위험과 반대 의견을 더 따져줘"],
       make: ["출처·수치·사실 확인이 필요한 부분을 표시해줘", "발표용 한 장 요약으로 줄여줘"],

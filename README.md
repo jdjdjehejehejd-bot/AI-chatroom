@@ -203,7 +203,7 @@ npm start          # http://localhost:3000
 - `DATA_DIR`·`ADMIN_TOKEN`이 없거나, https인데 `COOKIE_SECURE=1`이 아니면 시작 로그에 경고한다.
 - `FREE_EXTRA_BACKENDS`의 원격 `http://` 주소는 운영에서 무시한다(https 또는 localhost만 허용).
 
-**깔때기·재방문 지표**: `first_human_msg`, `first_ai_reply`, `first_deliverable`, `first_share`(방 단위로 한 번씩), `deliv_copy`, `deliv_download`, `room_return.d1/d2_7/d8p`(방 나이별, 하루 한 번). 해석과 한계는 `docs/VALIDATION.md`.
+**KPI 계측(익명)**: 깔때기(`first_human_msg`·`first_ai_reply`·`first_deliverable`·`first_share`), 복사 성공(`copy_success`)·복사 실패·다운로드 클릭(저장 성공 아님), 채택(`deliv_adopted`, 버전당 한 번), 유용성 1~5점(`rating.N`), 방 재방문(`room_return.*`)을 흐름(free/모드)별로 센다. 같은 버전의 같은 행동은 한 번만 받고, 없는 버전·허용되지 않은 이름은 버린다. 비용 상태는 `no_real_calls`/`fully_priced`/`incomplete`로 구분한다. 정의와 한계는 `docs/VALIDATION.md`.
 
 **제공사 호출 지표**: 제공사별 성공·실패 횟수와 누적 지연(ms)을 익명 집계(`call_ok.<제공사>`, `call_err.<제공사>`, `ms.<제공사>`)로 남긴다. 평균 지연 = `ms ÷ (ok+err)`. 모델 이름·키·내용은 기록하지 않는다. 
 **토큰·비용 계측**: 제공사 응답의 `usage`만 기록한다(`tok_in.<제공사>`, `tok_out.<제공사>`). usage가 없는 호출은 추정하지 않고 `tok_missing`으로 센다. 비용은 운영자가 `MODEL_PRICES`(JSON, 100만 토큰당 USD, 키 `제공사/모델`)와 `MODEL_PRICES_VERSION`(가격 확인 날짜·출처)을 넣은 모델만 `cost_micro`(마이크로달러)로 계산하고, 나머지는 `cost_unpriced`로 센다. 단가는 코드에 넣지 않았다. 한계: 실패한 호출은 보통 usage가 없어 비용이 과소 집계되며, 실제 제공사 응답으로는 아직 검증하지 않았다(`scripts/smoke-providers.js`로 확인 필요). 실행 영수증과 정보 패널 통계에도 제공사 보고 기준 토큰이 표시된다.

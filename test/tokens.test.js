@@ -30,7 +30,7 @@ const run = async (port, room) => { const A = await cl(port, room); if (!process
     check('events: cost only when priced (4 calls x (11*2+7*4)=200 micro-USD)', sum(e, 'cost_micro.openai') === 200 && !sum(e, 'cost_unpriced.openai'), JSON.stringify(e.events));
     check('events: pricing metadata exposed', e.pricing.configured === 1 && e.pricing.version === 'test-v1', JSON.stringify(e.pricing));
     const kp = await kpiOf(3341);
-    check('admin kpi: priced run cost = $0.0002, complete', kp.cost.usd === 0.0002 && kp.cost.costComplete === true && kp.cost.unpricedCalls === 0, JSON.stringify(kp.cost));
+    check('admin kpi: priced run cost = $0.0002, complete', kp.cost.usd === 0.0002 && kp.cost.status === 'fully_priced' && kp.cost.unpricedCalls === 0, JSON.stringify(kp.cost));
     check('no prompt/model/key in events', !/m1|tk1|웹페이지|"k"/.test(JSON.stringify(e.events)));
     A.ws.close();
   });
@@ -39,7 +39,7 @@ const run = async (port, room) => { const A = await cl(port, room); if (!process
     const A = await run(3342, 'tk2'); const e = await events(3342);
     check('unpriced model: tokens kept, cost marked unpriced', sum(e, 'tok_in.openai') === 44 && !sum(e, 'cost_micro.openai') && sum(e, 'cost_unpriced.openai') === 4, JSON.stringify(e.events));
     const kp2 = await kpiOf(3342);
-    check('admin kpi: unpriced calls flagged as incomplete cost', kp2.cost.costComplete === false && kp2.cost.unpricedCalls === 4, JSON.stringify(kp2.cost));
+    check('admin kpi: unpriced calls flagged as incomplete cost', kp2.cost.status === 'incomplete' && kp2.cost.unpricedCalls === 4, JSON.stringify(kp2.cost));
     A.ws.close();
   });
   // 3) usage 없음 → 추정하지 않고 집계 불가
@@ -50,6 +50,8 @@ const run = async (port, room) => { const A = await cl(port, room); if (!process
     check('no usage: receipt omits tokens (no guessing)', rc && !/토큰/.test(rc.msg.text), rc && rc.msg.text);
     const meta = await freshMeta(3343, 'tk3'); const e = await events(3343);
     check('no usage: counted as missing', meta.stats.tokMissing === 4 && meta.stats.tokIn === 0 && sum(e, 'tok_missing.openai') === 4 && !sum(e, 'tok_in.openai'), JSON.stringify([meta.stats, e.events]));
+    const kp3 = await kpiOf(3343);
+    check('admin kpi: missing usage -> incomplete (never fully priced)', kp3.cost.status === 'incomplete' && kp3.cost.tokMissingCalls === 4, JSON.stringify(kp3.cost));
     A.ws.close();
   });
   // 4) Anthropic 형식

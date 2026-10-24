@@ -293,32 +293,62 @@ function track(name, n) {
   const keys = Object.keys(events).sort();
   while (keys.length > 90) delete events[keys.shift()];
 }
-/* 익명 깔때기: 방 단위로 단계마다 한 번만 센다(사용자 식별자 없음). 방 생성 → 첫 메시지 → 첫 AI 답변 → 첫 산출물 → 복사·저장·공유 */
+/* 익명 계측. 사용자·방 식별자와 내용은 기록하지 않는다. 흐름(flow) = 모드 이름, 모드가 없으면 free(에셋을 적용했으면 asset).
+   - 깔때기: 방 단위로 단계마다 한 번 (방 생성 → 첫 메시지 → 첫 AI 답변 → 첫 산출물 → 첫 공유)
+   - 행동: 복사 성공(copy_success)·복사 실패(copy_failed)·다운로드 클릭(download_clicked, 저장 성공 확인이 아님)은 산출물 버전당 한 번만 센다
+   - 채택(deliv_adopted): 한 산출물 버전에 복사 성공 또는 결과 공유가 처음 생긴 때 한 번. 다운로드 클릭은 채택으로 치지 않는다
+   - 유용성 평가(rating.1~5): 산출물 버전당 한 번 */
+const flowOf = room => room.mode || (room.asset ? 'asset' : 'free');
+const trackF = (name, room) => { track(name); track(name + '.' + flowOf(room)); };
 function funnel(room, step) {
   const st = room.stats; if (!st) return;
   if (st['f_' + step]) return;
-  st['f_' + step] = 1; track('first_' + step);
+  st['f_' + step] = 1; trackF('first_' + step, room);
 }
+const KPI_ACTIONS = new Set(['copy_success', 'copy_failed', 'download_clicked']);
+function onceForVersion(room, v, key) {
+  const seen = room.stats.seen || (room.stats.seen = []), k = v + ':' + key;
+  if (seen.includes(k)) return false;
+  seen.push(k); if (seen.length > 80) seen.shift();
+  return true;
+}
+function adopt(room, v) { if (onceForVersion(room, v, 'adopted')) trackF('deliv_adopted', room); }
+function kpiVersionOk(room, v) { return Number.isInteger(v) && room.deliv && (v === room.deliv.v || (room.delivHist || []).some(h => h.v === v)); }
+const FLOWS = ['free', 'asset', 'code', 'brainstorm', 'make', 'debate'];
 /* 보관 중인 전체 기간의 익명 이벤트를 합산해 핵심 지표를 계산한다. 분모가 0이면 null.
-   채택 행동 = 산출물 복사 + 저장 + 공유 생성(행동 수이며 방·사람 수가 아니다). 비용은 단가를 넣은 모델만이라 costComplete가 false면 과소 값이다. */
+   비용 상태: no_real_calls(실제 제공사 호출 0건, 비용 0이 아니라 "측정 데이터 없음") / fully_priced / incomplete(단가 없는 호출·토큰 미보고가 섞임, 과소 값).
+   실패한 호출의 비용은 제공사가 usage를 주지 않는 한 잡히지 않는다. */
 function computeKpi(ev) {
   const tot = {};
   for (const d of Object.values(ev)) for (const [k, v] of Object.entries(d)) tot[k] = (tot[k] || 0) + v;
   const pre = p => Object.entries(tot).filter(([k]) => k.startsWith(p)).reduce((a, [, v]) => a + v, 0);
   const g = k => tot[k] || 0, ratio = (a, b) => (b > 0 ? Math.round(a / b * 1000) / 1000 : null);
-  const adopted = g('deliv_copy') + g('deliv_download') + g('share_created');
+  const rate = (sfx) => { let rated = 0, useful = 0; for (let n = 1; n <= 5; n++) { const c = g('rating.' + n + sfx); rated += c; if (n >= 4) useful += c; } return { rated, useful, usefulRate: ratio(useful, rated) }; };
   const costUsd = pre('cost_micro.') / 1e6, unpriced = pre('cost_unpriced.'), missing = pre('tok_missing.');
+  const realCalls = pre('call_ok.') + pre('call_err.');
+  const costStatus = realCalls === 0 ? 'no_real_calls' : (unpriced === 0 && missing === 0 ? 'fully_priced' : 'incomplete');
+  const adopted = g('deliv_adopted'), rt = rate('');
+  const round4 = x => Math.round(x * 10000) / 10000;
+  const byFlow = {};
+  for (const f of FLOWS) {
+    const r = rate('.' + f);
+    byFlow[f] = { runs: g('run_started.' + f), completed: g('run_completed.' + f), completion: ratio(g('run_completed.' + f), g('run_started.' + f)), deliverableRooms: g('first_deliverable.' + f), versions: g('deliverable_saved.' + f),
+      copySuccess: g('copy_success.' + f), downloadClicked: g('download_clicked.' + f), shares: g('share_created.' + f), adopted: g('deliv_adopted.' + f), adoptedPerVersion: ratio(g('deliv_adopted.' + f), g('deliverable_saved.' + f)), rated: r.rated, usefulRate: r.usefulRate };
+  }
   return {
     funnel: { rooms: g('room_created'), humanMsg: g('first_human_msg'), aiReply: g('first_ai_reply'), deliverable: g('first_deliverable'), shared: g('first_share'),
       msgPerRoom: ratio(g('first_human_msg'), g('room_created')), replyPerMsg: ratio(g('first_ai_reply'), g('first_human_msg')), deliverablePerReply: ratio(g('first_deliverable'), g('first_ai_reply')) },
-    runCompletion: ratio(g('run_completed'), g('run_started')),
-    adoptedActions: adopted, adoptedPerDeliverableRoom: ratio(adopted, g('first_deliverable')),
+    runs: { started: g('run_started'), completed: g('run_completed'), completion: ratio(g('run_completed'), g('run_started')) },
+    deliverableVersions: g('deliverable_saved'),
+    actions: { copySuccess: g('copy_success'), copyFailed: g('copy_failed'), downloadClicked: g('download_clicked'), shares: g('share_created') },
+    adopted, adoptedPerVersion: ratio(adopted, g('deliverable_saved')),
+    ratings: rt,
     returns: { d1: g('room_return.d1'), d2_7: g('room_return.d2_7'), d8p: g('room_return.d8p') },
-    providerErrorRate: ratio(pre('call_err.'), pre('call_ok.') + pre('call_err.')),
-    cost: { usd: Math.round(costUsd * 10000) / 10000, perAdoptedUsd: adopted > 0 && costUsd > 0 ? Math.round(costUsd / adopted * 10000) / 10000 : null, unpricedCalls: unpriced, tokMissingCalls: missing, costComplete: unpriced === 0 && missing === 0 }
+    providerErrorRate: ratio(pre('call_err.'), realCalls),
+    cost: { status: costStatus, usd: round4(costUsd), perAdoptedUsd: adopted > 0 && costUsd > 0 ? round4(costUsd / adopted) : null, perUsefulUsd: rt.useful > 0 && costUsd > 0 ? round4(costUsd / rt.useful) : null, realCalls, unpricedCalls: unpriced, tokMissingCalls: missing },
+    byFlow
   };
 }
-const KPI_CLIENT = new Set(['deliv_copy', 'deliv_download']);
 let reportsDirty = false;
 const REPORT_KEEP_MS = 180 * 86400000;
 const REPORT_REASONS = ['spam', 'abuse', 'sexual', 'violence', 'illegal', 'privacy', 'other'];
@@ -638,7 +668,7 @@ function harvestDeliverable(room, ai, text) {
   if (!last || !last[2].trim()) return;
   if (!room.mode && last[2].trim().length < FREE_DELIV_MIN) return;   // 모드 없는 방은 짧은 예시 코드는 산출물로 치지 않는다
   room.deliv = { lang: (last[1] || 'text').toLowerCase().slice(0, 12), text: last[2].trim().slice(0, DELIV_MAX), by: ai.name, v: ((room.deliv && room.deliv.v) || 0) + 1, ts: Date.now() };
-  pushHist(room); track('deliverable_saved'); funnel(room, 'deliverable');
+  pushHist(room); trackF('deliverable_saved', room); funnel(room, 'deliverable');
   broadcast(room, { t: 'deliv', deliv: room.deliv, hist: histMeta(room) });
 }
 /* 산출물 버전 기록: 최근 {HIST_MAX}개를 방에 보관한다. */
@@ -1064,7 +1094,7 @@ function harvestDoc(room, ai, text) {
 async function orchestrate(room, first, sub) {
   const gen = ++room.gen;
   const order = first.slice(), forced = new Set(first), mutedNoted = new Set();
-  room.runCalls = 0; room.runTok = { in: 0, out: 0, missing: 0 }; room.stats.runs++; if (room.mode) track('run_started');
+  room.runCalls = 0; room.runTok = { in: 0, out: 0, missing: 0 }; room.stats.runs++; trackF('run_started', room);
   room.streak = 0;
   let passes = 0, dmTurns = 0;
   while (gen === room.gen) {
@@ -1136,8 +1166,8 @@ async function orchestrate(room, first, sub) {
     if (room.policy !== 'round') for (const m of mentioned(room, text, ai)) { if (!order.includes(m)) order.push(m); forced.add(m); }
   }
   if (gen === room.gen) {
+    if (room.runCalls > 0) trackF('run_completed', room);
     if (room.mode && room.runCalls > 0) {
-      track('run_completed');
       const tk = room.runTok && room.runTok.in + room.runTok.out > 0 ? ' · 토큰 입력 ' + room.runTok.in + '·출력 ' + room.runTok.out + '(제공사 보고 기준)' : '';
       system(room, '이번 실행: AI 호출 ' + room.runCalls + '회 · 남은 예산 ' + Math.max(0, room.budget.limit - room.budget.used) + '회' + tk, 'RUN_RECEIPT');
     }
@@ -1339,7 +1369,7 @@ function handle(ws, m) {
         if (!rec.msgs.length) return send(ws, { t: 'err', text: '공유할 대화가 아직 없습니다.' });
       }
       if (shares.size >= SHARE_MAX) { const old = [...shares.keys()][0]; shares.delete(old); }
-      shares.set(rec.id, rec); sharesDirty = true; room.shareCount++; track('share_created'); funnel(room, 'share');
+      shares.set(rec.id, rec); sharesDirty = true; room.shareCount++; trackF('share_created', room); funnel(room, 'share'); if (kind === 'result' && room.deliv) adopt(room, room.deliv.v);
       send(ws, { t: 'shared', url: '/s/' + rec.id, kind, days: planOf(room).shareDays, badge: rec.badge });
       return broadcast(room, meta(room));
     }
@@ -1402,7 +1432,18 @@ function handle(ws, m) {
       return broadcast(room, meta(room));
     }
     case 'kpi': {
-      if (KPI_CLIENT.has(m.n)) track(m.n);
+      /* 클라이언트가 보내는 행동 신호. 허용 목록·존재하는 산출물 버전·버전당 한 번만 받는다 */
+      const v = Number(m.v);
+      if (!kpiVersionOk(room, v)) return;
+      if (KPI_ACTIONS.has(m.n)) {
+        if (!onceForVersion(room, v, m.n)) return;
+        trackF(m.n, room);
+        if (m.n === 'copy_success') adopt(room, v);
+      } else if (m.n === 'rate') {
+        const r = Number(m.r);
+        if (!Number.isInteger(r) || r < 1 || r > 5 || !onceForVersion(room, v, 'rate')) return;
+        track('rating.' + r); track('rating.' + r + '.' + flowOf(room));
+      }
       return;
     }
     case 'clearNotes': {
