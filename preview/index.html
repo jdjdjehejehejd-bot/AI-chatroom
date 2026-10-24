@@ -672,7 +672,10 @@
 ["AI를 직접 초대 (역할을 비우면 자유 AI)", "Invite AIs yourself (leave the role blank for a free AI)", "AIを自分で招待（役割を空欄にすると自由AI）", "自己邀请 AI（角色留空即为自由 AI）", "Invita IA tú mismo (rol en blanco = IA libre)"],
 ["이 결과가 쓸 만했나요?", "Was this result useful?", "この結果は役に立ちましたか？", "这个结果有用吗？", "¿Te resultó útil este resultado?"],
 ["{n}점", "{n} out of 5", "{n}点", "{n} 分", "{n} de 5"],
-["평가해 주셔서 고마워요.", "Thanks for rating.", "評価ありがとうございます。", "感谢你的评分。", "Gracias por valorar."]
+["평가해 주셔서 고마워요.", "Thanks for rating.", "評価ありがとうございます。", "感谢你的评分。", "Gracias por valorar."],
+["설계 → 구현 → 리뷰 → 수정", "Design → Build → Review → Revise", "設計 → 実装 → レビュー → 修正", "设计 → 实现 → 评审 → 修改", "Diseño → Implementación → Revisión → Corrección"],
+["발산 → 비판 → 정리", "Diverge → Critique → Consolidate", "発散 → 批判 → 整理", "发散 → 批评 → 整理", "Divergir → Criticar → Consolidar"],
+["기획 → 작성 → 편집", "Plan → Write → Edit", "企画 → 執筆 → 編集", "策划 → 撰写 → 编辑", "Planificar → Redactar → Editar"]
 ];
   function pick() {
     var c = null, q = /[?&]lang=([a-z]{2})/.exec(location.search);
@@ -923,8 +926,8 @@ label.lb { display:block; font-size:12px; font-weight:700; margin:14px 0 6px; co
 #info header { flex:none; display:flex; align-items:center; gap:8px; padding:calc(10px + env(safe-area-inset-top,0px)) 8px 0 16px; }
 #info header b { flex:1; font:600 18px/1.3 var(--display); }
 #grab { display:none; }
-#seg { flex:none; display:flex; gap:4px; margin:10px 14px 0; padding:4px; background:var(--h-sf); border:1px solid var(--edge); border-radius:12px; }
-#seg button { flex:1; min-width:0; min-height:32px; border:none; border-radius:9px; background:transparent; font-size:12.5px; white-space:nowrap; color:var(--muted); font-weight:500; }
+#seg { flex:none; display:flex; overflow-x:auto; scrollbar-width:none; gap:4px; margin:10px 14px 0; padding:4px; background:var(--h-sf); border:1px solid var(--edge); border-radius:12px; }
+#seg button { flex:1 0 auto; padding:0 10px; min-height:32px; border:none; border-radius:9px; background:transparent; font-size:12.5px; white-space:nowrap; color:var(--muted); font-weight:500; }
 #seg button[aria-current="page"] { background:var(--ink); color:var(--surface); font-weight:700; }
 #side { flex:1; min-height:0; overflow-y:auto; padding:14px 16px calc(18px + env(safe-area-inset-bottom,0px)); }
 .pn { display:none; }
@@ -4256,7 +4259,7 @@ server.listen(PORT, () => {
     var box = $("modecards"); box.textContent = ""; $("modeconfirm").textContent = "";
     Object.keys(MODEINFO).forEach(function (id) {
       var i = MODEINFO[id], c = mk("div", "mcard"), t = mk("div");
-      t.appendChild(mk("b", "", i.label + (meta && meta.mode && meta.mode.id === id ? " " + _t("(적용 중)") : ""))); t.appendChild(mk("small", "", i.desc));
+      t.appendChild(mk("b", "", i.label + (meta && meta.mode && meta.mode.id === id ? " " + _t("(적용 중)") : ""))); t.appendChild(mk("small", "", _t(i.desc)));
       var b = mk("button", "btn sm", _t("적용")); b.type = "button"; b.setAttribute("data-mode", id);
       b.addEventListener("click", function () {
         var cf = $("modeconfirm"); cf.textContent = "";

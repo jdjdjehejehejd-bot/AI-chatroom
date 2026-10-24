@@ -665,7 +665,10 @@
 ["AI를 직접 초대 (역할을 비우면 자유 AI)", "Invite AIs yourself (leave the role blank for a free AI)", "AIを自分で招待（役割を空欄にすると自由AI）", "自己邀请 AI（角色留空即为自由 AI）", "Invita IA tú mismo (rol en blanco = IA libre)"],
 ["이 결과가 쓸 만했나요?", "Was this result useful?", "この結果は役に立ちましたか？", "这个结果有用吗？", "¿Te resultó útil este resultado?"],
 ["{n}점", "{n} out of 5", "{n}点", "{n} 分", "{n} de 5"],
-["평가해 주셔서 고마워요.", "Thanks for rating.", "評価ありがとうございます。", "感谢你的评分。", "Gracias por valorar."]
+["평가해 주셔서 고마워요.", "Thanks for rating.", "評価ありがとうございます。", "感谢你的评分。", "Gracias por valorar."],
+["설계 → 구현 → 리뷰 → 수정", "Design → Build → Review → Revise", "設計 → 実装 → レビュー → 修正", "设计 → 实现 → 评审 → 修改", "Diseño → Implementación → Revisión → Corrección"],
+["발산 → 비판 → 정리", "Diverge → Critique → Consolidate", "発散 → 批判 → 整理", "发散 → 批评 → 整理", "Divergir → Criticar → Consolidar"],
+["기획 → 작성 → 편집", "Plan → Write → Edit", "企画 → 執筆 → 編集", "策划 → 撰写 → 编辑", "Planificar → Redactar → Editar"]
 ];
   function pick() {
     var c = null, q = /[?&]lang=([a-z]{2})/.exec(location.search);
