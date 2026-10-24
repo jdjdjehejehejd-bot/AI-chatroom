@@ -293,6 +293,13 @@ function track(name, n) {
   const keys = Object.keys(events).sort();
   while (keys.length > 90) delete events[keys.shift()];
 }
+/* 익명 깔때기: 방 단위로 단계마다 한 번만 센다(사용자 식별자 없음). 방 생성 → 첫 메시지 → 첫 AI 답변 → 첫 산출물 → 복사·저장·공유 */
+function funnel(room, step) {
+  const st = room.stats; if (!st) return;
+  if (st['f_' + step]) return;
+  st['f_' + step] = 1; track('first_' + step);
+}
+const KPI_CLIENT = new Set(['deliv_copy', 'deliv_download']);
 let reportsDirty = false;
 const REPORT_KEEP_MS = 180 * 86400000;
 const REPORT_REASONS = ['spam', 'abuse', 'sexual', 'violence', 'illegal', 'privacy', 'other'];
@@ -612,7 +619,7 @@ function harvestDeliverable(room, ai, text) {
   if (!last || !last[2].trim()) return;
   if (!room.mode && last[2].trim().length < FREE_DELIV_MIN) return;   // 모드 없는 방은 짧은 예시 코드는 산출물로 치지 않는다
   room.deliv = { lang: (last[1] || 'text').toLowerCase().slice(0, 12), text: last[2].trim().slice(0, DELIV_MAX), by: ai.name, v: ((room.deliv && room.deliv.v) || 0) + 1, ts: Date.now() };
-  pushHist(room); track('deliverable_saved');
+  pushHist(room); track('deliverable_saved'); funnel(room, 'deliverable');
   broadcast(room, { t: 'deliv', deliv: room.deliv, hist: histMeta(room) });
 }
 /* 산출물 버전 기록: 최근 {HIST_MAX}개를 방에 보관한다. */
@@ -1101,6 +1108,7 @@ async function orchestrate(room, first, sub) {
     if (text || (!ex.dms.length && !hn.n)) {
       text = text || '(응답 없음)';
       addMsg(room, 'ai', ai.name, text);
+      funnel(room, 'ai_reply');
       harvestDoc(room, ai, text);
       harvestDeliverable(room, ai, text);
     }
@@ -1159,6 +1167,10 @@ function join(ws, m) {
   while (taken.has(name)) name = base + k++;
   ws.meta = { room, name, user: ws.user, key: ws.user ? dmKeyFor(ws.user.sub) : /^[A-Za-z0-9]{8,40}$/.test(String(m.key || '')) ? String(m.key) : crypto.randomBytes(8).toString('hex') };
   if (justCreated && ws.user) { room.ownerSub = ws.user.sub; room.ownerName = name; }
+  if (!justCreated && room.stats) {   // 방 재방문: 방 나이 구간별로 하루 한 번만 센다
+    const age = Math.floor((Date.now() - (room.created || Date.now())) / 86400000), today = kstDay();
+    if (age >= 1 && room.stats.retDay !== today) { room.stats.retDay = today; track('room_return.' + (age === 1 ? 'd1' : age <= 7 ? 'd2_7' : 'd8p')); }
+  }
   if (refreshPlan(room)) system(room, '방장 계정 플랜에 맞춰 방 플랜이 "' + planOf(room).label + '"(으)로 바뀌었습니다.', 'PLAN_CHANGED');
   if (ws.user) { acct(ws.user.sub, ws.user.name); room.members[ws.user.sub] = name; if (Object.keys(room.members).length > 30) delete room.members[Object.keys(room.members)[0]]; }
   room.clients.add(ws);
@@ -1196,6 +1208,7 @@ function handle(ws, m) {
       const text = cleanText(m.text, LIMITS.text);
       if (!text) return;
       addMsg(room, 'human', name, text, undefined, undefined, ws.user ? ws.user.sub : '');
+      funnel(room, 'human_msg');
       if (!room.ais.length) return;
       const first = firstFor(room, text);
       if (first.length || room.policy === 'free') orchestrate(room, first, ws.user ? ws.user.sub : '');
@@ -1307,7 +1320,7 @@ function handle(ws, m) {
         if (!rec.msgs.length) return send(ws, { t: 'err', text: '공유할 대화가 아직 없습니다.' });
       }
       if (shares.size >= SHARE_MAX) { const old = [...shares.keys()][0]; shares.delete(old); }
-      shares.set(rec.id, rec); sharesDirty = true; room.shareCount++; track('share_created');
+      shares.set(rec.id, rec); sharesDirty = true; room.shareCount++; track('share_created'); funnel(room, 'share');
       send(ws, { t: 'shared', url: '/s/' + rec.id, kind, days: planOf(room).shareDays, badge: rec.badge });
       return broadcast(room, meta(room));
     }
@@ -1368,6 +1381,10 @@ function handle(ws, m) {
       const via = provider === 'default' ? '' : ' (' + provider + (model ? '/' + model : '') + ')';
       system(room, name + ' 님이 AI "' + an + '"' + via + '을(를) 초대했습니다.', 'AI_ADDED');
       return broadcast(room, meta(room));
+    }
+    case 'kpi': {
+      if (KPI_CLIENT.has(m.n)) track(m.n);
+      return;
     }
     case 'clearNotes': {
       const ai = room.ais.find(a => a.id === m.id);

@@ -1583,9 +1583,10 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     } else { var pre = mk("pre", "code mono dpre", cur.text); pre.id = "dcode"; box.appendChild(pre); }
     var act = mk("div", "dact");
     var cp = mk("button", "btn sm", _t("복사")); cp.type = "button"; cp.id = "dcopy";
-    cp.addEventListener("click", function () { try { navigator.clipboard.writeText(cur.text).then(function () { toast(_t("복사했습니다.")); }, function () { toast(_t("복사하지 못했습니다.")); }); } catch (e) { toast(_t("복사하지 못했습니다.")); } });
+    cp.addEventListener("click", function () { send({ t: "kpi", n: "deliv_copy" }); try { navigator.clipboard.writeText(cur.text).then(function () { toast(_t("복사했습니다.")); }, function () { toast(_t("복사하지 못했습니다.")); }); } catch (e) { toast(_t("복사하지 못했습니다.")); } });
     var dl = mk("button", "btn sm primary", _t("파일로 저장")); dl.type = "button"; dl.id = "ddown";
     dl.addEventListener("click", function () {
+      send({ t: "kpi", n: "deliv_download" });
       try {
         var a = document.createElement("a"), u = URL.createObjectURL(new Blob([cur.text], { type: "text/plain;charset=utf-8" }));
         a.href = u; a.download = "result-v" + cur.v + "." + (EXT[deliv.lang] || "txt"); document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
