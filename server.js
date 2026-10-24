@@ -299,6 +299,25 @@ function funnel(room, step) {
   if (st['f_' + step]) return;
   st['f_' + step] = 1; track('first_' + step);
 }
+/* 보관 중인 전체 기간의 익명 이벤트를 합산해 핵심 지표를 계산한다. 분모가 0이면 null.
+   채택 행동 = 산출물 복사 + 저장 + 공유 생성(행동 수이며 방·사람 수가 아니다). 비용은 단가를 넣은 모델만이라 costComplete가 false면 과소 값이다. */
+function computeKpi(ev) {
+  const tot = {};
+  for (const d of Object.values(ev)) for (const [k, v] of Object.entries(d)) tot[k] = (tot[k] || 0) + v;
+  const pre = p => Object.entries(tot).filter(([k]) => k.startsWith(p)).reduce((a, [, v]) => a + v, 0);
+  const g = k => tot[k] || 0, ratio = (a, b) => (b > 0 ? Math.round(a / b * 1000) / 1000 : null);
+  const adopted = g('deliv_copy') + g('deliv_download') + g('share_created');
+  const costUsd = pre('cost_micro.') / 1e6, unpriced = pre('cost_unpriced.'), missing = pre('tok_missing.');
+  return {
+    funnel: { rooms: g('room_created'), humanMsg: g('first_human_msg'), aiReply: g('first_ai_reply'), deliverable: g('first_deliverable'), shared: g('first_share'),
+      msgPerRoom: ratio(g('first_human_msg'), g('room_created')), replyPerMsg: ratio(g('first_ai_reply'), g('first_human_msg')), deliverablePerReply: ratio(g('first_deliverable'), g('first_ai_reply')) },
+    runCompletion: ratio(g('run_completed'), g('run_started')),
+    adoptedActions: adopted, adoptedPerDeliverableRoom: ratio(adopted, g('first_deliverable')),
+    returns: { d1: g('room_return.d1'), d2_7: g('room_return.d2_7'), d8p: g('room_return.d8p') },
+    providerErrorRate: ratio(pre('call_err.'), pre('call_ok.') + pre('call_err.')),
+    cost: { usd: Math.round(costUsd * 10000) / 10000, perAdoptedUsd: adopted > 0 && costUsd > 0 ? Math.round(costUsd / adopted * 10000) / 10000 : null, unpricedCalls: unpriced, tokMissingCalls: missing, costComplete: unpriced === 0 && missing === 0 }
+  };
+}
 const KPI_CLIENT = new Set(['deliv_copy', 'deliv_download']);
 let reportsDirty = false;
 const REPORT_KEEP_MS = 180 * 86400000;
@@ -1561,7 +1580,7 @@ const server = http.createServer((req, res) => {
   if (u === '/admin/events' && req.method === 'GET') {
     const tok = (process.env.ADMIN_TOKEN || ''), got = String(req.headers.authorization || '').replace(/^Bearer /, '');
     if (!tok || got.length !== tok.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(tok))) return json(401, { error: 'unauthorized' });
-    return json(200, { events, pricing: { configured: Object.keys(PRICES).length, version: process.env.MODEL_PRICES_VERSION || '' } });
+    return json(200, { events, kpi: computeKpi(events), pricing: { configured: Object.keys(PRICES).length, version: process.env.MODEL_PRICES_VERSION || '' } });
   }
   if (u === '/admin/reports/resolve' && req.method === 'POST') {
     const tok = (process.env.ADMIN_TOKEN || ''), got = String(req.headers.authorization || '').replace(/^Bearer /, '');

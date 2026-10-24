@@ -11,6 +11,7 @@ async function scenario(port, env, fn) {
   const sv = spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: String(port), DATA_DIR: dir, ADMIN_TOKEN: 'adm', REQUIRE_LOGIN: '0', ALLOW_DEV_PLAN: '1', DEMO_DELAY_MS: '30', SESSION_SECRET: 's', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '', OPENROUTER_API_KEY: '', GROQ_API_KEY: '' }, env), stdio: 'ignore' });
   try { await sleep(900); return await fn(); } finally { sv.kill(); await sleep(300); }
 }
+const kpiOf = async port => (await (await fetch('http://127.0.0.1:' + port + '/admin/events', { headers: { authorization: 'Bearer adm' } })).json()).kpi;
 const events = async port => (await (await fetch('http://127.0.0.1:' + port + '/admin/events', { headers: { authorization: 'Bearer adm' } })).json());
 const sum = (e, k) => Object.values(e.events).reduce((a, d) => a + (d[k] || 0), 0);
 const freshMeta = async (port, room) => { const B = await cl(port, room); const m = B.ev.filter(e => e.t === 'meta').pop(); B.ws.close(); return m; };
@@ -28,6 +29,8 @@ const run = async (port, room) => { const A = await cl(port, room); if (!process
     check('events: tokens per provider', sum(e, 'tok_in.openai') === 44 && sum(e, 'tok_out.openai') === 28, JSON.stringify(e.events));
     check('events: cost only when priced (4 calls x (11*2+7*4)=200 micro-USD)', sum(e, 'cost_micro.openai') === 200 && !sum(e, 'cost_unpriced.openai'), JSON.stringify(e.events));
     check('events: pricing metadata exposed', e.pricing.configured === 1 && e.pricing.version === 'test-v1', JSON.stringify(e.pricing));
+    const kp = await kpiOf(3341);
+    check('admin kpi: priced run cost = $0.0002, complete', kp.cost.usd === 0.0002 && kp.cost.costComplete === true && kp.cost.unpricedCalls === 0, JSON.stringify(kp.cost));
     check('no prompt/model/key in events', !/m1|tk1|웹페이지|"k"/.test(JSON.stringify(e.events)));
     A.ws.close();
   });
@@ -35,6 +38,8 @@ const run = async (port, room) => { const A = await cl(port, room); if (!process
   await scenario(3342, { OPENAI_API_KEY: 'k', AI_MODEL: 'm1', OPENAI_BASE_URL: 'http://127.0.0.1:' + oa.address().port + '/v1' }, async () => {
     const A = await run(3342, 'tk2'); const e = await events(3342);
     check('unpriced model: tokens kept, cost marked unpriced', sum(e, 'tok_in.openai') === 44 && !sum(e, 'cost_micro.openai') && sum(e, 'cost_unpriced.openai') === 4, JSON.stringify(e.events));
+    const kp2 = await kpiOf(3342);
+    check('admin kpi: unpriced calls flagged as incomplete cost', kp2.cost.costComplete === false && kp2.cost.unpricedCalls === 4, JSON.stringify(kp2.cost));
     A.ws.close();
   });
   // 3) usage 없음 → 추정하지 않고 집계 불가

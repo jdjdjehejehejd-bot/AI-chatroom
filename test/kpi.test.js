@@ -6,6 +6,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
 const start = (port, dir) => spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: String(port), DATA_DIR: dir, ADMIN_TOKEN: 'adm', REQUIRE_LOGIN: '0', ALLOW_DEV_PLAN: '1', DEMO_DELAY_MS: '30', SESSION_SECRET: 's', ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '' }), stdio: 'ignore' });
 const cl = (port, room, name) => new Promise(r => { const ws = new WS('ws://127.0.0.1:' + port + '/ws'); const ev = []; ws.on('message', d => ev.push(JSON.parse(d))); ws.on('open', () => { ws.send(JSON.stringify({ t: 'join', room, name, consent: true })); setTimeout(() => r({ ws, ev, s: o => ws.send(JSON.stringify(o)) }), 400); }); });
 const events = async port => (await (await fetch('http://127.0.0.1:' + port + '/admin/events', { headers: { authorization: 'Bearer adm' } })).json()).events;
+const kpi = async port => (await (await fetch('http://127.0.0.1:' + port + '/admin/events', { headers: { authorization: 'Bearer adm' } })).json()).kpi;
 const sum = (e, k) => Object.values(e).reduce((a, d) => a + (d[k] || 0), 0);
 (async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kpi-')); const port = 3391; let sv = start(port, dir);
@@ -21,6 +22,10 @@ const sum = (e, k) => Object.values(e).reduce((a, d) => a + (d[k] || 0), 0);
     check('funnel: each step counted once per room', ['first_human_msg', 'first_ai_reply', 'first_deliverable', 'first_share'].every(k => sum(e, k) === 1), JSON.stringify(e));
     check('client kpi: allow-list only', sum(e, 'deliv_copy') === 1 && sum(e, 'deliv_download') === 1 && sum(e, 'evil_event') === 0, JSON.stringify(e));
     check('events carry no room id / name / text', !/kp1|Ann|웹페이지/.test(JSON.stringify(e)), 'leak');
+    const k = await kpi(port);
+    check('admin kpi: funnel and ratios', k.funnel.rooms === 1 && k.funnel.humanMsg === 1 && k.funnel.replyPerMsg === 1 && k.funnel.deliverable === 1, JSON.stringify(k.funnel));
+    check('admin kpi: adopted actions = copy+download+share', k.adoptedActions === 3 && k.adoptedPerDeliverableRoom === 3, JSON.stringify(k));
+    check('admin kpi: no cost data in demo mode -> null, not zero-division', k.cost.perAdoptedUsd === null && k.cost.costComplete === true, JSON.stringify(k.cost));
     A.ws.close(); await sleep(1500);
     // 방 나이를 3일 전으로 돌려 재시작 → 재방문(d2_7), 같은 날 두 번째 입장은 세지 않는다
     sv.kill(); await sleep(600);
