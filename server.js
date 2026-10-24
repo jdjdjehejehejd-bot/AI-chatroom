@@ -1126,13 +1126,6 @@ function rate(ws) {
   ws.hits.push(now);
   return true;
 }
-/* 자유 방: 역할 없는 AI 둘이 "AI가 알아서 판단" 방식으로 대화에 참여한다(기본 시작점) */
-function seedFree(room, names, humanName) {
-  const ok = n => typeof n === 'string' && /^[^\s@]{1,12}$/.test(n) && n !== humanName;
-  const pick = Array.isArray(names) && names.length === 2 && names[0] !== names[1] && names.every(ok) ? names : ['모아', '나루'];
-  for (const nm of pick) room.ais.push(newAI({ name: nm, persona: '' }));
-  room.policy = 'free'; track('free_room_seeded');
-}
 function join(ws, m) {
   if (ws.meta) return;
   if (loginRequired() && !ws.user) return send(ws, { t: 'err', code: 'LOGIN_REQUIRED', text: '로그인한 뒤에 시작할 수 있습니다.' });
@@ -1152,8 +1145,6 @@ function join(ws, m) {
     rooms.set(id, room);
     if (m.mode != null && m.asset == null) {
       if (!applyMode(room, String(m.mode))) assetErr = '알 수 없는 모드입니다.';
-    } else if (m.free && m.asset == null) {
-      seedFree(room, m.free && m.free.names, name);
     } else if (m.asset != null) {
       const r = validateAsset(m.asset);
       if (r.error) assetErr = r.error;

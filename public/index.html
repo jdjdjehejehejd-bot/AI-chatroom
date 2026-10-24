@@ -515,8 +515,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
         <div id="jmodes">
           <div class="eyebrow" style="margin-top:20px">모드</div>
           <div class="modes" role="radiogroup" aria-label="방 모드">
-            <label class="mode"><input type="radio" name="jmode" value="free" checked><b>자유 방</b><span>역할 없는 AI들과 자유롭게 대화하고 일도 맡겨요</span></label>
-            <label class="mode"><input type="radio" name="jmode" value=""><b>빈 방</b><span>AI를 직접 초대</span></label>
+            <label class="mode"><input type="radio" name="jmode" value="" checked><b>빈 방</b><span>AI를 직접 초대 (역할을 비우면 자유 AI)</span></label>
             <label class="mode"><input type="radio" name="jmode" value="code"><b>Code</b><span>설계·구현·리뷰로 코드 완성</span></label>
             <label class="mode"><input type="radio" name="jmode" value="brainstorm"><b>Brainstorm</b><span>발산·비판·정리로 아이디어</span></label>
             <label class="mode"><input type="radio" name="jmode" value="make"><b>Make</b><span>웹사이트·보고서·PPT 제작</span></label>
@@ -847,7 +846,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     ROLE_KO.forEach(function (k) { var d = _t(k); if (d === k) return; var from = toLocal ? k : d, to = toLocal ? d : k; text = text.replace(new RegExp("@" + escRe(from) + "(?![\\p{L}\\p{N}_])", "gu"), "@" + to); });
     return text;
   }
-  var notesOpen = {}, jmode = "free", deliv = null, dview = "preview", dhist = [], viewVer = null;
+  var notesOpen = {}, jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
   var aidms = [], peekOpen = -1, dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typingWho = "", msgIndex = {}, lastTap = { id: 0, t: 0 };
   var POLNAME = { mention: _t("@멘션했을 때만"), round: _t("순서대로"), free: _t("AI가 알아서 판단") };
   var LIVE = ["anthropic", "openai", "openrouter", "groq", "google", "mistral", "nvidia"];
@@ -1136,7 +1135,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var sock = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws"); ws = sock;
     sock.onopen = function () {
       var j = { t: "join", room: roomId, name: name, key: dmKey(), consent: true };
-      if (fresh && !inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; else if (jmode === "free") j.free = { names: [_t("모아"), _t("나루")] }; }
+      if (fresh && !inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; }
       send(j);
     };
     sock.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (x) { return; } if (m.t === "state") { retry = 0; netbar(""); } onMsg(m); };

@@ -658,14 +658,11 @@
 ["기억 {n}", "Memory {n}", "記憶 {n}", "记忆 {n}", "Memoria {n}"],
 ["기억 지우기", "Clear memory", "記憶を消す", "清除记忆", "Borrar memoria"],
 ["이 AI가 스스로 적어 둔 기억입니다. 다음 발언에 참고 자료로만 쓰입니다.", "Notes this AI wrote for itself. They are used only as reference for its next replies.", "このAIが自分で書き留めた記憶です。次の発言の参考資料としてのみ使われます。", "这是该 AI 自己记下的内容，仅在下次发言时作为参考资料。", "Notas que esta IA escribió para sí misma. Solo se usan como referencia en sus próximas respuestas."],
-["자유 방", "Free room", "フリールーム", "自由房间", "Sala libre"],
-["역할 없는 AI들과 자유롭게 대화하고 일도 맡겨요", "Chat freely with role-less AIs — and hand them real work", "役割のないAIと自由に話して、仕事も任せられます", "和没有固定角色的 AI 自由聊天，也能把任务交给它们", "Charla libremente con IA sin rol fijo y encárgales trabajo"],
 ["역할 / 성격 (비우면 자유 AI)", "Role / personality (leave blank for a free AI)", "役割／性格（空欄なら自由AI）", "角色／性格（留空则为自由 AI）", "Rol / personalidad (en blanco = IA libre)"],
 ["비워 두면 정해진 역할 없이 스스로 말투를 만들어요. 예: 모든 말을 영어로 옮겨주는 AI", "Leave blank and the AI builds its own voice with no set role. e.g. an AI that translates everything into English", "空欄ならAIは役割なしで自分の話し方を作ります。例：すべてを英語に訳すAI", "留空则 AI 没有固定角色，自己形成说话方式。例如：把所有话翻成英文的 AI", "En blanco, la IA crea su propia voz sin rol fijo. Ej.: una IA que traduce todo al inglés"],
 ["자유 AI", "Free AI", "自由AI", "自由 AI", "IA libre"],
 ["자유 AI · 정해진 역할 없이 대화하며 스스로 말투와 관계를 만듭니다.", "Free AI · no set role; it develops its own voice and relationships as it talks.", "自由AI・決まった役割なしで、会話しながら自分の話し方や関係を作ります。", "自由 AI · 没有固定角色，在对话中形成自己的说话方式和关系。", "IA libre · sin rol fijo; desarrolla su propia voz y relaciones al conversar."],
-["모아", "Moa", "モア", "莫阿", "Moa"],
-["나루", "Naru", "ナル", "娜鲁", "Naru"]
+["AI를 직접 초대 (역할을 비우면 자유 AI)", "Invite AIs yourself (leave the role blank for a free AI)", "AIを自分で招待（役割を空欄にすると自由AI）", "自己邀请 AI（角色留空即为自由 AI）", "Invita IA tú mismo (rol en blanco = IA libre)"]
 ];
   function pick() {
     var c = null, q = /[?&]lang=([a-z]{2})/.exec(location.search);

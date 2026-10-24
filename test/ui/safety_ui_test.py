@@ -12,7 +12,7 @@ try:
   with sync_playwright() as p:
     b=p.chromium.launch(args=["--no-sandbox"])
     A=b.new_context(locale="ko-KR").new_page();A.goto(B+"/")
-    A.check("input[name=jmode][value='']");A.fill("#jname","Ben");A.click("#jgo");time.sleep(.3)
+    A.fill("#jname","Ben");A.click("#jgo");time.sleep(.3)
     check("join blocked without consent",A.locator("#room").is_hidden() and "동의" in A.inner_text("#jerr2"))
     check("footer links present",A.locator(".legalfoot a").count()==3 and A.locator(".consent a").count()==2)
     A.check("#jconsent");A.click("#jgo");A.wait_for_selector("#room:not([hidden])")

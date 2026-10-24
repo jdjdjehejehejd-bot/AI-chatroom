@@ -8,8 +8,8 @@ with sync_playwright() as p:
     pg.goto(B+"/?mode=debate"); pg.wait_for_selector("#jgo")
     check("?mode=debate preselects Debate", pg.is_checked("input[name=jmode][value=debate]"))
     fl=pg.inner_text("#jflow"); check("flow shows debate roles", all(x in fl for x in ["옹호자","반박자","심판"]), fl)
-    pg.goto(B+"/?mode=nonsense"); pg.wait_for_selector("#jgo"); check("unknown mode ignored (default free room stays selected)", pg.is_checked("input[name=jmode][value=free]"))
-    pg.goto(B+"/?mode=%3Cscript%3E"); pg.wait_for_selector("#jgo"); check("odd mode value ignored", pg.is_checked("input[name=jmode][value=free]"))
+    pg.goto(B+"/?mode=nonsense"); pg.wait_for_selector("#jgo"); check("unknown mode ignored (empty room stays selected)", pg.is_checked("input[name=jmode][value='']"))
+    pg.goto(B+"/?mode=%3Cscript%3E"); pg.wait_for_selector("#jgo"); check("odd mode value ignored", pg.is_checked("input[name=jmode][value='']"))
     # 방 만들고 입장 → 판정 카드까지
     pg.goto(B+"/?mode=debate"); pg.fill("#jname","Ann"); pg.check("#jconsent",force=True); pg.click("#jgo"); pg.wait_for_selector("#room:not([hidden])")
     pg.fill("#text","재택근무가 나을까?"); pg.keyboard.press("Enter"); pg.wait_for_timeout(3500)

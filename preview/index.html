@@ -665,14 +665,11 @@
 ["기억 {n}", "Memory {n}", "記憶 {n}", "记忆 {n}", "Memoria {n}"],
 ["기억 지우기", "Clear memory", "記憶を消す", "清除记忆", "Borrar memoria"],
 ["이 AI가 스스로 적어 둔 기억입니다. 다음 발언에 참고 자료로만 쓰입니다.", "Notes this AI wrote for itself. They are used only as reference for its next replies.", "このAIが自分で書き留めた記憶です。次の発言の参考資料としてのみ使われます。", "这是该 AI 自己记下的内容，仅在下次发言时作为参考资料。", "Notas que esta IA escribió para sí misma. Solo se usan como referencia en sus próximas respuestas."],
-["자유 방", "Free room", "フリールーム", "自由房间", "Sala libre"],
-["역할 없는 AI들과 자유롭게 대화하고 일도 맡겨요", "Chat freely with role-less AIs — and hand them real work", "役割のないAIと自由に話して、仕事も任せられます", "和没有固定角色的 AI 自由聊天，也能把任务交给它们", "Charla libremente con IA sin rol fijo y encárgales trabajo"],
 ["역할 / 성격 (비우면 자유 AI)", "Role / personality (leave blank for a free AI)", "役割／性格（空欄なら自由AI）", "角色／性格（留空则为自由 AI）", "Rol / personalidad (en blanco = IA libre)"],
 ["비워 두면 정해진 역할 없이 스스로 말투를 만들어요. 예: 모든 말을 영어로 옮겨주는 AI", "Leave blank and the AI builds its own voice with no set role. e.g. an AI that translates everything into English", "空欄ならAIは役割なしで自分の話し方を作ります。例：すべてを英語に訳すAI", "留空则 AI 没有固定角色，自己形成说话方式。例如：把所有话翻成英文的 AI", "En blanco, la IA crea su propia voz sin rol fijo. Ej.: una IA que traduce todo al inglés"],
 ["자유 AI", "Free AI", "自由AI", "自由 AI", "IA libre"],
 ["자유 AI · 정해진 역할 없이 대화하며 스스로 말투와 관계를 만듭니다.", "Free AI · no set role; it develops its own voice and relationships as it talks.", "自由AI・決まった役割なしで、会話しながら自分の話し方や関係を作ります。", "自由 AI · 没有固定角色，在对话中形成自己的说话方式和关系。", "IA libre · sin rol fijo; desarrolla su propia voz y relaciones al conversar."],
-["모아", "Moa", "モア", "莫阿", "Moa"],
-["나루", "Naru", "ナル", "娜鲁", "Naru"]
+["AI를 직접 초대 (역할을 비우면 자유 AI)", "Invite AIs yourself (leave the role blank for a free AI)", "AIを自分で招待（役割を空欄にすると自由AI）", "自己邀请 AI（角色留空即为自由 AI）", "Invita IA tú mismo (rol en blanco = IA libre)"]
 ];
   function pick() {
     var c = null, q = /[?&]lang=([a-z]{2})/.exec(location.search);
@@ -1232,8 +1229,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
         <div id="jmodes">
           <div class="eyebrow" style="margin-top:20px">모드</div>
           <div class="modes" role="radiogroup" aria-label="방 모드">
-            <label class="mode"><input type="radio" name="jmode" value="free" checked><b>자유 방</b><span>역할 없는 AI들과 자유롭게 대화하고 일도 맡겨요</span></label>
-            <label class="mode"><input type="radio" name="jmode" value=""><b>빈 방</b><span>AI를 직접 초대</span></label>
+            <label class="mode"><input type="radio" name="jmode" value="" checked><b>빈 방</b><span>AI를 직접 초대 (역할을 비우면 자유 AI)</span></label>
             <label class="mode"><input type="radio" name="jmode" value="code"><b>Code</b><span>설계·구현·리뷰로 코드 완성</span></label>
             <label class="mode"><input type="radio" name="jmode" value="brainstorm"><b>Brainstorm</b><span>발산·비판·정리로 아이디어</span></label>
             <label class="mode"><input type="radio" name="jmode" value="make"><b>Make</b><span>웹사이트·보고서·PPT 제작</span></label>
@@ -2673,13 +2669,6 @@ function rate(ws) {
   ws.hits.push(now);
   return true;
 }
-/* 자유 방: 역할 없는 AI 둘이 "AI가 알아서 판단" 방식으로 대화에 참여한다(기본 시작점) */
-function seedFree(room, names, humanName) {
-  const ok = n => typeof n === 'string' && /^[^\s@]{1,12}$/.test(n) && n !== humanName;
-  const pick = Array.isArray(names) && names.length === 2 && names[0] !== names[1] && names.every(ok) ? names : ['모아', '나루'];
-  for (const nm of pick) room.ais.push(newAI({ name: nm, persona: '' }));
-  room.policy = 'free'; track('free_room_seeded');
-}
 function join(ws, m) {
   if (ws.meta) return;
   if (loginRequired() && !ws.user) return send(ws, { t: 'err', code: 'LOGIN_REQUIRED', text: '로그인한 뒤에 시작할 수 있습니다.' });
@@ -2699,8 +2688,6 @@ function join(ws, m) {
     rooms.set(id, room);
     if (m.mode != null && m.asset == null) {
       if (!applyMode(room, String(m.mode))) assetErr = '알 수 없는 모드입니다.';
-    } else if (m.free && m.asset == null) {
-      seedFree(room, m.free && m.free.names, name);
     } else if (m.asset != null) {
       const r = validateAsset(m.asset);
       if (r.error) assetErr = r.error;
@@ -3317,7 +3304,7 @@ server.listen(PORT, () => {
     ROLE_KO.forEach(function (k) { var d = _t(k); if (d === k) return; var from = toLocal ? k : d, to = toLocal ? d : k; text = text.replace(new RegExp("@" + escRe(from) + "(?![\\p{L}\\p{N}_])", "gu"), "@" + to); });
     return text;
   }
-  var notesOpen = {}, jmode = "free", deliv = null, dview = "preview", dhist = [], viewVer = null;
+  var notesOpen = {}, jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
   var aidms = [], peekOpen = -1, dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typingWho = "", msgIndex = {}, lastTap = { id: 0, t: 0 };
   var POLNAME = { mention: _t("@멘션했을 때만"), round: _t("순서대로"), free: _t("AI가 알아서 판단") };
   var LIVE = ["anthropic", "openai", "openrouter", "groq", "google", "mistral", "nvidia"];
@@ -3606,7 +3593,7 @@ server.listen(PORT, () => {
     var sock = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws"); ws = sock;
     sock.onopen = function () {
       var j = { t: "join", room: roomId, name: name, key: dmKey(), consent: true };
-      if (fresh && !inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; else if (jmode === "free") j.free = { names: [_t("모아"), _t("나루")] }; }
+      if (fresh && !inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; }
       send(j);
     };
     sock.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (x) { return; } if (m.t === "state") { retry = 0; netbar(""); } onMsg(m); };
