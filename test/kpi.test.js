@@ -19,6 +19,7 @@ const sum = (e, k) => Object.values(e).reduce((a, d) => a + (d[k] || 0), 0);
     const dv = A.ev.filter(e => e.t === 'deliv').pop().deliv; const v2 = dv.v, v1 = v2 - 1;
     const send = async o => { A.s(o); await sleep(700); };   // 서버는 연결당 5초에 8개까지만 받는다
     await send({ t: 'share', kind: 'result' });                                    // 최신 버전 공유 → 채택 1
+    await send({ t: 'share', kind: 'chat' });                                      // 대화 공유는 결과 공유와 따로 센다
     await send({ t: 'kpi', n: 'copy_success', v: v2 }); await send({ t: 'kpi', n: 'copy_success', v: v2 });   // 같은 버전·같은 행동은 한 번만
     await send({ t: 'kpi', n: 'copy_failed', v: v2 }); await send({ t: 'kpi', n: 'download_clicked', v: v2 }); await send({ t: 'kpi', n: 'download_clicked', v: v2 });
     await send({ t: 'kpi', n: 'evil_event', v: v2 }); await send({ t: 'kpi', n: 'copy_success', v: 99 }); await send({ t: 'kpi', n: 'copy_success' });
@@ -27,6 +28,8 @@ const sum = (e, k) => Object.values(e).reduce((a, d) => a + (d[k] || 0), 0);
     await send({ t: 'kpi', n: 'rate', v: v1, r: 6 }); await send({ t: 'kpi', n: 'rate', v: v1, r: 3.5 });
     let e = await events(port);
     check('funnel: each step counted once per room', ['first_human_msg', 'first_ai_reply', 'first_deliverable', 'first_share'].every(k => sum(e, k) === 1), JSON.stringify(e));
+    check('result share and chat share are separate; first_share counts result shares only', sum(e, 'result_share_created') === 1 && sum(e, 'chat_share_created') === 1 && sum(e, 'share_created') === 0, JSON.stringify(e));
+    check('run outcomes: completed counted, run_with_deliverable counted, no failure/cancel', sum(e, 'run_completed') >= 2 && sum(e, 'run_with_deliverable') >= 1 && sum(e, 'run_failed') === 0, JSON.stringify(e));
     check('copy success / failed / download click are separate, once per version', sum(e, 'copy_success') === 2 && sum(e, 'copy_failed') === 1 && sum(e, 'download_clicked') === 1, JSON.stringify(e));
     check('invalid version, unknown action and missing version are ignored', sum(e, 'evil_event') === 0 && sum(e, 'copy_success.make') === 2, JSON.stringify(e));
     check('adoption counted once per deliverable version (share + copy on one version = 1)', sum(e, 'deliv_adopted') === 2, JSON.stringify(e));
@@ -36,6 +39,7 @@ const sum = (e, k) => Object.values(e).reduce((a, d) => a + (d[k] || 0), 0);
     const k = await kpi(port);
     check('admin kpi: funnel and ratios', k.funnel.rooms === 1 && k.funnel.humanMsg === 1 && k.funnel.replyPerMsg === 1 && k.funnel.deliverable === 1, JSON.stringify(k.funnel));
     check('admin kpi: adopted per version, ratings, per-flow table', k.adopted === 2 && k.adoptedPerVersion === 1 && k.ratings.rated === 1 && k.ratings.useful === 1 && k.ratings.usefulRate === 1 && k.byFlow.make.adopted === 2 && k.byFlow.free.runs === 0, JSON.stringify(k));
+    check('admin kpi: run breakdown and failed-call field', k.runs.failed === 0 && k.runs.withDeliverable >= 1 && k.runs.deliverablePerRun > 0 && k.cost.failedCallsUnverified === 0 && k.byFlow.make.resultShares === 1 && k.byFlow.make.chatShares === 1, JSON.stringify([k.runs, k.cost]));
     check('admin kpi: demo mode = no_real_calls (not "cost 0 and complete")', k.cost.status === 'no_real_calls' && k.cost.perAdoptedUsd === null && k.cost.perUsefulUsd === null && k.cost.realCalls === 0, JSON.stringify(k.cost));
     const F = await cl(port, 'kp3', 'Fay'); F.s({ t: 'addAI', name: '모나', persona: '', provider: 'demo' }); await sleep(300); F.s({ t: 'config', policy: 'round' }); await sleep(200);
     F.s({ t: 'msg', text: '자유롭게 이야기해요' }); await sleep(1500); F.ws.close();

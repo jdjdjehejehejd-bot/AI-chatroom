@@ -54,6 +54,14 @@ const run = async (port, room) => { const A = await cl(port, room); if (!process
     check('admin kpi: missing usage -> incomplete (never fully priced)', kp3.cost.status === 'incomplete' && kp3.cost.tokMissingCalls === 4, JSON.stringify(kp3.cost));
     A.ws.close();
   });
+  // 3b) 실패 호출은 usage가 없으므로 비용 완전성을 보수적으로 미확인 처리, 실행은 failed로 센다
+  let flip = 0;
+  const bad = await mock((q, b, a) => { if (flip++ === 0) return j(a, { choices: [{ message: { content: '응답' } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }); a.statusCode = 500; j(a, { error: { message: 'boom' } }); });
+  await scenario(3345, { OPENAI_API_KEY: 'k', AI_MODEL: 'm1', MODEL_PRICES: JSON.stringify({ 'openai/m1': { in: 1, out: 2 } }), OPENAI_BASE_URL: 'http://127.0.0.1:' + bad.address().port + '/v1' }, async () => {
+    const A = await run(3345, 'tk3b'); const kpf = await kpiOf(3345);
+    check('failed call -> cost incomplete (failed calls unverified), run counted as failed', kpf.cost.status === 'incomplete' && kpf.cost.failedCallsUnverified >= 1 && kpf.runs.failed >= 1, JSON.stringify([kpf.cost, kpf.runs]));
+    A.ws.close();
+  });
   // 4) Anthropic 형식
   const an = await mock((q, b, a) => j(a, { content: [{ type: 'text', text: '응답' }], usage: { input_tokens: 20, output_tokens: 5 } }));
   await scenario(3344, { ANTHROPIC_API_KEY: 'k', AI_MODEL: 'c1', ANTHROPIC_BASE_URL: 'http://127.0.0.1:' + an.address().port }, async () => {

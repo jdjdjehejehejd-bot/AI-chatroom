@@ -316,7 +316,7 @@ function adopt(room, v) { if (onceForVersion(room, v, 'adopted')) trackF('deliv_
 function kpiVersionOk(room, v) { return Number.isInteger(v) && room.deliv && (v === room.deliv.v || (room.delivHist || []).some(h => h.v === v)); }
 const FLOWS = ['free', 'asset', 'code', 'brainstorm', 'make', 'debate'];
 /* 보관 중인 전체 기간의 익명 이벤트를 합산해 핵심 지표를 계산한다. 분모가 0이면 null.
-   비용 상태: no_real_calls(실제 제공사 호출 0건, 비용 0이 아니라 "측정 데이터 없음") / fully_priced / incomplete(단가 없는 호출·토큰 미보고가 섞임, 과소 값).
+   비용 상태: no_real_calls(실제 제공사 호출 0건, 비용 0이 아니라 "측정 데이터 없음") / fully_priced / incomplete(단가 없는 호출·토큰 미보고·실패 호출이 섞임. 실패 호출은 제공사가 usage를 주지 않으면 비용에 안 잡히므로 보수적으로 미확인 처리, 과소 값).
    실패한 호출의 비용은 제공사가 usage를 주지 않는 한 잡히지 않는다. */
 function computeKpi(ev) {
   const tot = {};
@@ -326,26 +326,27 @@ function computeKpi(ev) {
   const rate = (sfx) => { let rated = 0, useful = 0; for (let n = 1; n <= 5; n++) { const c = g('rating.' + n + sfx); rated += c; if (n >= 4) useful += c; } return { rated, useful, usefulRate: ratio(useful, rated) }; };
   const costUsd = pre('cost_micro.') / 1e6, unpriced = pre('cost_unpriced.'), missing = pre('tok_missing.');
   const realCalls = pre('call_ok.') + pre('call_err.');
-  const costStatus = realCalls === 0 ? 'no_real_calls' : (unpriced === 0 && missing === 0 ? 'fully_priced' : 'incomplete');
+  const failedCalls = pre('call_err.');
+  const costStatus = realCalls === 0 ? 'no_real_calls' : (unpriced === 0 && missing === 0 && failedCalls === 0 ? 'fully_priced' : 'incomplete');
   const adopted = g('deliv_adopted'), rt = rate('');
   const round4 = x => Math.round(x * 10000) / 10000;
   const byFlow = {};
   for (const f of FLOWS) {
     const r = rate('.' + f);
-    byFlow[f] = { runs: g('run_started.' + f), completed: g('run_completed.' + f), completion: ratio(g('run_completed.' + f), g('run_started.' + f)), deliverableRooms: g('first_deliverable.' + f), versions: g('deliverable_saved.' + f),
-      copySuccess: g('copy_success.' + f), downloadClicked: g('download_clicked.' + f), shares: g('share_created.' + f), adopted: g('deliv_adopted.' + f), adoptedPerVersion: ratio(g('deliv_adopted.' + f), g('deliverable_saved.' + f)), rated: r.rated, usefulRate: r.usefulRate };
+    byFlow[f] = { runs: g('run_started.' + f), completed: g('run_completed.' + f), failed: g('run_failed.' + f), cancelled: g('run_cancelled.' + f), withDeliverable: g('run_with_deliverable.' + f), completion: ratio(g('run_completed.' + f), g('run_started.' + f)), deliverableRooms: g('first_deliverable.' + f), versions: g('deliverable_saved.' + f),
+      copySuccess: g('copy_success.' + f), downloadClicked: g('download_clicked.' + f), resultShares: g('result_share_created.' + f), chatShares: g('chat_share_created.' + f), adopted: g('deliv_adopted.' + f), adoptedPerVersion: ratio(g('deliv_adopted.' + f), g('deliverable_saved.' + f)), rated: r.rated, usefulRate: r.usefulRate };
   }
   return {
     funnel: { rooms: g('room_created'), humanMsg: g('first_human_msg'), aiReply: g('first_ai_reply'), deliverable: g('first_deliverable'), shared: g('first_share'),
       msgPerRoom: ratio(g('first_human_msg'), g('room_created')), replyPerMsg: ratio(g('first_ai_reply'), g('first_human_msg')), deliverablePerReply: ratio(g('first_deliverable'), g('first_ai_reply')) },
-    runs: { started: g('run_started'), completed: g('run_completed'), completion: ratio(g('run_completed'), g('run_started')) },
+    runs: { started: g('run_started'), completed: g('run_completed'), failed: g('run_failed'), cancelled: g('run_cancelled'), withDeliverable: g('run_with_deliverable'), completion: ratio(g('run_completed'), g('run_started')), deliverablePerRun: ratio(g('run_with_deliverable'), g('run_started')) },
     deliverableVersions: g('deliverable_saved'),
-    actions: { copySuccess: g('copy_success'), copyFailed: g('copy_failed'), downloadClicked: g('download_clicked'), shares: g('share_created') },
+    actions: { copySuccess: g('copy_success'), copyFailed: g('copy_failed'), downloadClicked: g('download_clicked'), resultShares: g('result_share_created'), chatShares: g('chat_share_created') },
     adopted, adoptedPerVersion: ratio(adopted, g('deliverable_saved')),
     ratings: rt,
     returns: { d1: g('room_return.d1'), d2_7: g('room_return.d2_7'), d8p: g('room_return.d8p') },
     providerErrorRate: ratio(pre('call_err.'), realCalls),
-    cost: { status: costStatus, usd: round4(costUsd), perAdoptedUsd: adopted > 0 && costUsd > 0 ? round4(costUsd / adopted) : null, perUsefulUsd: rt.useful > 0 && costUsd > 0 ? round4(costUsd / rt.useful) : null, realCalls, unpricedCalls: unpriced, tokMissingCalls: missing },
+    cost: { status: costStatus, usd: round4(costUsd), perAdoptedUsd: adopted > 0 && costUsd > 0 ? round4(costUsd / adopted) : null, perUsefulUsd: rt.useful > 0 && costUsd > 0 ? round4(costUsd / rt.useful) : null, realCalls, unpricedCalls: unpriced, tokMissingCalls: missing, failedCallsUnverified: failedCalls },
     byFlow
   };
 }
@@ -668,7 +669,7 @@ function harvestDeliverable(room, ai, text) {
   if (!last || !last[2].trim()) return;
   if (!room.mode && last[2].trim().length < FREE_DELIV_MIN) return;   // 모드 없는 방은 짧은 예시 코드는 산출물로 치지 않는다
   room.deliv = { lang: (last[1] || 'text').toLowerCase().slice(0, 12), text: last[2].trim().slice(0, DELIV_MAX), by: ai.name, v: ((room.deliv && room.deliv.v) || 0) + 1, ts: Date.now() };
-  pushHist(room); trackF('deliverable_saved', room); funnel(room, 'deliverable');
+  pushHist(room); trackF('deliverable_saved', room); room.runDeliv = true; funnel(room, 'deliverable');
   broadcast(room, { t: 'deliv', deliv: room.deliv, hist: histMeta(room) });
 }
 /* 산출물 버전 기록: 최근 {HIST_MAX}개를 방에 보관한다. */
@@ -1094,7 +1095,7 @@ function harvestDoc(room, ai, text) {
 async function orchestrate(room, first, sub) {
   const gen = ++room.gen;
   const order = first.slice(), forced = new Set(first), mutedNoted = new Set();
-  room.runCalls = 0; room.runTok = { in: 0, out: 0, missing: 0 }; room.stats.runs++; trackF('run_started', room);
+  room.runErr = false; room.runDeliv = false; room.runCalls = 0; room.runTok = { in: 0, out: 0, missing: 0 }; room.stats.runs++; trackF('run_started', room);
   room.streak = 0;
   let passes = 0, dmTurns = 0;
   while (gen === room.gen) {
@@ -1129,11 +1130,11 @@ async function orchestrate(room, first, sub) {
     let text;
     try { text = await generate(room, ai); }
     catch (e) {
-      const em = redact(e.message, ai);
+      const em = redact(e.message, ai); room.runErr = true;
       system(room, ai.name + ' 응답 오류: ' + em, 'AI_ERROR', { aiId: ai.id, aiName: ai.name, text: em });
       break;
     }
-    if (gen !== room.gen) return;
+    if (gen !== room.gen) { trackF('run_cancelled', room); return; }
     text = cleanText(text, room.mode ? 4500 : 1500);
     room.lastAI = ai;
     if (ai.canPass && isPass(text)) {
@@ -1165,8 +1166,10 @@ async function orchestrate(room, first, sub) {
     room.streak++;
     if (room.policy !== 'round') for (const m of mentioned(room, text, ai)) { if (!order.includes(m)) order.push(m); forced.add(m); }
   }
+  if (gen !== room.gen) trackF('run_cancelled', room);
   if (gen === room.gen) {
-    if (room.runCalls > 0) trackF('run_completed', room);
+    if (room.runErr) trackF('run_failed', room); else if (room.runCalls > 0) trackF('run_completed', room);
+    if (room.runDeliv) trackF('run_with_deliverable', room);
     if (room.mode && room.runCalls > 0) {
       const tk = room.runTok && room.runTok.in + room.runTok.out > 0 ? ' · 토큰 입력 ' + room.runTok.in + '·출력 ' + room.runTok.out + '(제공사 보고 기준)' : '';
       system(room, '이번 실행: AI 호출 ' + room.runCalls + '회 · 남은 예산 ' + Math.max(0, room.budget.limit - room.budget.used) + '회' + tk, 'RUN_RECEIPT');
@@ -1369,7 +1372,7 @@ function handle(ws, m) {
         if (!rec.msgs.length) return send(ws, { t: 'err', text: '공유할 대화가 아직 없습니다.' });
       }
       if (shares.size >= SHARE_MAX) { const old = [...shares.keys()][0]; shares.delete(old); }
-      shares.set(rec.id, rec); sharesDirty = true; room.shareCount++; trackF('share_created', room); funnel(room, 'share'); if (kind === 'result' && room.deliv) adopt(room, room.deliv.v);
+      shares.set(rec.id, rec); sharesDirty = true; room.shareCount++; trackF(kind === 'result' ? 'result_share_created' : 'chat_share_created', room); if (kind === 'result') { funnel(room, 'share'); if (room.deliv) adopt(room, room.deliv.v); }
       send(ws, { t: 'shared', url: '/s/' + rec.id, kind, days: planOf(room).shareDays, badge: rec.badge });
       return broadcast(room, meta(room));
     }
