@@ -70,6 +70,14 @@ const run = async (port, room) => { const A = await cl(port, room); if (!process
     check('managed-call cap: only 2 server-key calls go out, then blocked with a clear message', kpg.managed.today === 2 && kpg.managed.dailyCap === 2 && kpg.managed.blockedTotal >= 1 && blocked, JSON.stringify([kpg.managed, blocked]));
     A.ws.close();
   });
+  // 3d) 금액 기준 비상 차단: 단가가 있는 서버 키 호출 비용이 상한을 넘으면 이후 호출을 막는다(1회 = 15토큰 → 0.00003 USD)
+  const gu = await mock((q, b, a) => j(a, { choices: [{ message: { content: '응답' } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }));
+  await scenario(3347, { OPENAI_API_KEY: 'k', AI_MODEL: 'm1', MODEL_PRICES: JSON.stringify({ 'openai/m1': { in: 1, out: 2 } }), MANAGED_DAILY_USD: '0.00005', OPENAI_BASE_URL: 'http://127.0.0.1:' + gu.address().port + '/v1' }, async () => {
+    const A = await run(3347, 'tk3d'); const kd = await kpiOf(3347);
+    const blockedUsd = A.ev.some(e => e.t === 'msg' && e.msg.code === 'AI_ERROR' && /AI 비용 한도/.test(e.msg.text));
+    check('managed USD cap: calls stop once priced server-key spend reaches the cap', kd.managed.usdCap === 0.00005 && kd.managed.usdToday >= 0.00005 && kd.managed.today <= 3 && blockedUsd, JSON.stringify([kd.managed, blockedUsd]));
+    A.ws.close();
+  });
   // 4) Anthropic 형식
   const an = await mock((q, b, a) => j(a, { content: [{ type: 'text', text: '응답' }], usage: { input_tokens: 20, output_tokens: 5 } }));
   await scenario(3344, { ANTHROPIC_API_KEY: 'k', AI_MODEL: 'c1', ANTHROPIC_BASE_URL: 'http://127.0.0.1:' + an.address().port }, async () => {

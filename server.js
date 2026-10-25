@@ -347,7 +347,7 @@ function computeKpi(ev) {
     ratings: rt,
     returns: { d1: g('room_return.d1'), d2_7: g('room_return.d2_7'), d8p: g('room_return.d8p') },
     providerErrorRate: ratio(pre('call_err.'), realCalls),
-    managed: { today: managedToday(), dailyCap: MANAGED_DAILY_CALLS || null, blockedTotal: g('managed_blocked') },
+    managed: { today: managedToday(), dailyCap: MANAGED_DAILY_CALLS || null, usdToday: Math.round(managedUsdToday() * 10000) / 10000, usdCap: MANAGED_DAILY_USD || null, blockedTotal: g('managed_blocked') },
     cost: { status: costStatus, usd: round4(costUsd), perAdoptedUsd: adopted > 0 && costUsd > 0 ? round4(costUsd / adopted) : null, perUsefulUsd: rt.useful > 0 && costUsd > 0 ? round4(costUsd / rt.useful) : null, realCalls, unpricedCalls: unpriced, tokMissingCalls: missing, failedCallsUnverified: failedCalls },
     byFlow
   };
@@ -908,14 +908,14 @@ function resolve(ai, room) {
   const model = ai.model || process.env.AI_MODEL;
   if (!key) throw new Error(BYOK_ONLY.has(provider) ? provider + '는 본인 API 키를 직접 입력해야 합니다.' : provider + ' API 키가 없습니다. (서버 환경변수 또는 AI 초대 시 개인 키)');
   if (!model) throw new Error('모델 이름이 필요합니다.');
-  return { provider, key, model, base: BASES[provider].replace(/\/+$/, '') };
+  return { provider, key, model, base: BASES[provider].replace(/\/+$/, ''), managed: !ai.apiKey };
 }
 /* 토큰 계측: 제공사 응답의 usage 값만 기록한다(제공사 보고 기준). usage가 없으면 추정하지 않고 "집계 불가"로 센다.
    비용은 운영자가 MODEL_PRICES(JSON, 100만 토큰당 USD)에 단가를 넣은 모델만 계산한다. 단가는 코드에 넣지 않는다(바뀌고, 확인되지 않은 값을 쓰면 안 되므로).
    예) MODEL_PRICES='{"openai/<모델>":{"in":0.5,"out":1.5}}'  MODEL_PRICES_VERSION='2026-10-24 공식 가격표 확인'
    실패한 호출은 보통 usage가 없어 토큰·비용에 잡히지 않는다(재시도·실패 비용은 과소 집계될 수 있음). */
 const PRICES = (() => { try { const j = JSON.parse(process.env.MODEL_PRICES || '{}'); return j && typeof j === 'object' ? j : {}; } catch (e) { console.error('MODEL_PRICES 형식 오류: 무시합니다.'); return {}; } })();
-function noteUsage(room, prov, model, tin, tout) {
+function noteUsage(room, prov, model, tin, tout, managed) {
   const p = /^[a-z0-9_-]{1,20}$/.test(prov) ? prov : 'other', st = room && room.stats;
   if (!Number.isFinite(tin) || !Number.isFinite(tout) || tin < 0 || tout < 0) {
     if (st) st.tokMissing = (st.tokMissing || 0) + 1;
@@ -927,7 +927,7 @@ function noteUsage(room, prov, model, tin, tout) {
   if (room && room.runTok) { room.runTok.in += tin; room.runTok.out += tout; }
   track('tok_in.' + p, tin); track('tok_out.' + p, tout);
   const pr = PRICES[p + '/' + model];
-  if (pr && pr.in >= 0 && pr.out >= 0) track('cost_micro.' + p, Math.round(tin * pr.in + tout * pr.out));   // 토큰 × (USD/100만 토큰) = 마이크로달러
+  if (pr && pr.in >= 0 && pr.out >= 0) { const mc = Math.round(tin * pr.in + tout * pr.out); track('cost_micro.' + p, mc); if (managed) track('managed_cost_micro', mc); }   // 토큰 × (USD/100만 토큰) = 마이크로달러
   else track('cost_unpriced.' + p);
 }
 async function callAnthropic(room, ai, cfg, dm) {
@@ -939,7 +939,7 @@ async function callAnthropic(room, ai, cfg, dm) {
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error('Anthropic ' + r.status + ': ' + ((j.error && j.error.message) || '응답 오류'));
-  noteUsage(room, 'anthropic', cfg.model, j.usage && j.usage.input_tokens, j.usage && j.usage.output_tokens);
+  noteUsage(room, 'anthropic', cfg.model, j.usage && j.usage.input_tokens, j.usage && j.usage.output_tokens, cfg.managed);
   return (j.content || []).map(c => c.text || '').join('');
 }
 async function callChat(room, ai, cfg, dm) {
@@ -952,7 +952,7 @@ async function callChat(room, ai, cfg, dm) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error('API ' + r.status + ': ' + ((j.error && j.error.message) || '응답 오류'));
   const u = j.usage || {};
-  noteUsage(room, cfg.provider || 'free', cfg.model, u.prompt_tokens, u.completion_tokens);
+  noteUsage(room, cfg.provider || 'free', cfg.model, u.prompt_tokens, u.completion_tokens, cfg.managed);
   return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
 }
 const FONTS = { gothic: 'Noto Sans KR,sans-serif', serif: 'Noto Serif KR,serif', round: 'Jua,Noto Sans KR,sans-serif' };
@@ -1051,14 +1051,21 @@ async function maybeSummarize(room, sub) {
 }
 /* 제공사별 호출 성공/실패 횟수와 누적 지연(ms)을 익명 집계로 남긴다. 모델 이름·키·내용은 기록하지 않는다. */
 /* 전역 비용 차단기: 운영자 서버 키로 나가는 유료 제공사 호출(개인 API 키·무료 모델·데모는 제외)을 하루(KST) 합계로 제한한다.
-   MANAGED_DAILY_CALLS=0(기본)이면 끄고, 양수를 넣으면 넘는 호출은 제공사로 보내지 않고 오류로 처리한다. 집계 이벤트(managed_call.*)를 기준으로 세므로 재시작 뒤에도 이어진다. */
+   MANAGED_DAILY_CALLS=0(기본)이면 끄고, 양수를 넣으면 넘는 호출은 제공사로 보내지 않고 오류로 처리한다.
+   MANAGED_DAILY_USD(기본 0=끔)는 같은 호출의 금액 기준 비상 차단이다. MODEL_PRICES 단가가 있고 제공사가 usage를 보고한 호출만 합산되므로(단가 없는 호출·실패 호출은 안 잡힘) 호출 수 상한과 함께 쓴다. 집계 이벤트(managed_call.*)를 기준으로 세므로 재시작 뒤에도 이어진다. */
 const MANAGED_DAILY_CALLS = Number(process.env.MANAGED_DAILY_CALLS || 0);
+const MANAGED_DAILY_USD = Number(process.env.MANAGED_DAILY_USD || 0);
+const managedUsdToday = () => ((events[kstDay()] || {}).managed_cost_micro || 0) / 1e6;
 const managedToday = () => Object.entries(events[kstDay()] || {}).filter(([k]) => k.startsWith('managed_call.')).reduce((a, [, v]) => a + v, 0);
 function managedGate(ai, prov) {
   if (ai.apiKey || prov === 'demo' || prov === 'free') return;
   if (MANAGED_DAILY_CALLS > 0 && managedToday() >= MANAGED_DAILY_CALLS) {
     track('managed_blocked');
     throw new Error('오늘 서버가 대신 내는 AI 호출 한도(전체 ' + MANAGED_DAILY_CALLS + '회)에 도달했습니다. 개인 API 키를 쓰는 AI는 계속 쓸 수 있고, 한도는 한국 시간 자정에 다시 열립니다.');
+  }
+  if (MANAGED_DAILY_USD > 0 && managedUsdToday() >= MANAGED_DAILY_USD) {
+    track('managed_blocked');
+    throw new Error('오늘 서버가 대신 내는 AI 비용 한도에 도달했습니다. 개인 API 키를 쓰는 AI는 계속 쓸 수 있고, 한도는 한국 시간 자정에 다시 열립니다.');
   }
   track('managed_call.' + prov);
 }
