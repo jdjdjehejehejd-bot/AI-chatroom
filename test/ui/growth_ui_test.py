@@ -29,7 +29,7 @@ with sync_playwright() as p:
     pg.fill("#mkq","");pg.wait_for_selector("#mklist .mk")
     pg.click("#mklist .mk >> text=이 구성으로 방 만들기");pg.wait_for_selector("#jasset .loaded")
     check("install fills entry with asset",pg.locator("#market").is_hidden() and "Brainstorm" in pg.inner_text("#jasset"),pg.inner_text("#jasset"))
-    pg.check("#jconsent",force=True); pg.click("#jgo");pg.wait_for_selector("#room:not([hidden])");check("room created from marketplace asset",pg.locator("#ais .ai-item").count()==3)
+    pg.check("#jconsent",force=True); pg.click("#jgo");pg.wait_for_selector("#room:not([hidden])");check("room created from marketplace asset",pg.locator("#ais .ai-item").count()==4)
     # my rooms (server-side) after clearing local list
     pg.wait_for_timeout(3500)
     pg.evaluate("localStorage.clear()");pg.goto(B+"/");pg.wait_for_selector("#gwho:not([hidden])");pg.wait_for_selector("#acctroomswrap:not([hidden])",timeout=8000)

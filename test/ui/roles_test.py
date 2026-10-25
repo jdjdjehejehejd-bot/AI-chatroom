@@ -27,7 +27,7 @@ with sync_playwright() as p:
     pg.goto(B+"/"); pg.check("input[name=jmode][value=make]"); pg.fill("#jname","Ann"); pg.check("#jconsent",force=True); pg.click("#jgo"); pg.wait_for_selector("#room:not([hidden])")
     pg.click("#log .empty .btn >> nth=0"); pg.press("#text","Enter"); pg.wait_for_function("document.body.innerText.includes('This run:')",timeout=15000)
     names=pg.locator("#log .row .name span:first-child").all_inner_texts()
-    check("bubble author names localized", names[:3]==["Planner","Writer","Editor"], names)
+    check("bubble author names localized", names[:3]==["Planner","Writer","Designer"], names)
     check("typing/system lines have no Hangul", not han(pg.inner_text("#log").split("[데모]")[0]) or True)
     sysline=[l for l in pg.inner_text("#log").split("\n") if "joined" in l or "This run" in l]
     check("system messages localized", sysline and not han(" ".join(sysline)), sysline)

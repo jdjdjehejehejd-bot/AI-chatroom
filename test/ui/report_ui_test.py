@@ -6,10 +6,10 @@ with sync_playwright() as p:
     b=p.chromium.launch(args=["--no-sandbox"]); errs=[]
     A=b.new_page(locale="ko-KR", bypass_csp=True, viewport={"width":1280,"height":900}); A.on("pageerror",lambda e:errs.append(str(e)))
     A.goto(B+"/"); A.check("input[name=jmode][value=brainstorm]"); A.fill("#jname","Ann"); A.check("#jconsent",force=True); A.click("#jgo"); A.wait_for_selector("#room:not([hidden])")
-    check("cost hint before run", "예상: AI 호출 3회" in A.inner_text("#costhint") and "남은 예산" in A.inner_text("#costhint"), A.inner_text("#costhint"))
+    check("cost hint before run", "예상: AI 호출 4회" in A.inner_text("#costhint") and "남은 예산" in A.inner_text("#costhint"), A.inner_text("#costhint"))
     A.click("#log .empty .btn >> nth=0"); A.press("#text","Enter")
     A.wait_for_function("document.body.innerText.includes('이번 실행')", timeout=12000)
-    check("receipt in chat", "이번 실행: AI 호출 3회" in A.inner_text("#log"), A.inner_text("#log")[-120:])
+    check("receipt in chat", "이번 실행: AI 호출 4회" in A.inner_text("#log"), A.inner_text("#log")[-120:])
     A.click('#seg [data-go=deliv]')
     check("no version select with a single version", A.locator("#dver").count()==0)
     check("next-step chips", A.locator(".dnext button").count()==2 and "한 단계 더 완성하기" in A.inner_text(".dnext"))

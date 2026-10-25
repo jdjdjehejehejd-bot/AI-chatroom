@@ -31,7 +31,7 @@ with sync_playwright() as p:
     except Exception as e: nf=("404" in str(e))
     check("unknown share 404", nf)
     u0=used(A); A.click('#seg [data-go=deliv]'); A.click("#retry"); A.wait_for_timeout(3500)
-    check("free retry consumes budget (+3)", used(A)==u0+3, (u0,used(A)))
+    check("free retry consumes budget (+4)", used(A)==u0+4, (u0,used(A)))
     A.click('#seg [data-go=settings]'); check("stats show runs", "AI 요청 실행" in A.inner_text("#stats"))
     # PLUS
     C=page(); C.goto(B2+"/"); C.fill("#jname","Dev"); C.check("#jconsent",force=True); C.click("#jgo"); C.wait_for_selector("#room:not([hidden])")

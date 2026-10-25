@@ -16,7 +16,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     check('debate mode applied (4 free→3 roles)', meta0 && meta0.mode && meta0.mode.id === 'debate', JSON.stringify(meta0 && meta0.mode));
     s({ t: 'msg', text: '비밀질문XYZ 재택근무가 나을까?' }); await sleep(2500);
     const who = ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').map(e => e.msg.who);
-    check('free room runs 옹호자→반박자→심판', who.join(',').includes('옹호자,반박자,심판') && !who.includes('검증자'), who.join(','));
+    check('free room (5 AIs) runs the full pipeline 옹호자→반박자→검증자→심판', who.join(',').includes('옹호자,반박자,검증자,심판'), who.join(','));
     const dv = ev.filter(e => e.t === 'deliv').pop();
     check('judge saves a verdict card as deliverable', dv && dv.deliv.by === '심판' && /## 결론/.test(dv.deliv.text) && /## 갈리는 것/.test(dv.deliv.text), JSON.stringify(dv && dv.deliv));
     s({ t: 'share', kind: 'result' }); await sleep(400);

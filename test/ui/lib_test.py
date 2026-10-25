@@ -23,7 +23,7 @@ with sync_playwright() as p:
     C.goto(B1+"/"); C.check("input[name=jmode][value=code]"); C.fill("#jname","Dev"); C.check("#jconsent",force=True); C.click("#jgo"); C.wait_for_selector("#room:not([hidden])")
     C.click('#seg [data-go=assets]')
     with C.expect_download() as d2: C.click("#expcur")
-    cur=json.load(open(d2.value.path())); check("export current room (mode) valid", cur["name"]=="Code" and len(cur["ais"])==3 and len(cur["rules"])<=600, (cur["name"],len(cur["rules"])))
+    cur=json.load(open(d2.value.path())); check("export current room (mode) valid", cur["name"]=="Code" and len(cur["ais"])==4 and len(cur["rules"])<=600, (cur["name"],len(cur["rules"])))
     # exported file re-imports
     D=b.new_page(locale="ko-KR", bypass_csp=True, viewport={"width":1280,"height":800}); D.on("pageerror",lambda e:errs.append(str(e)))
     D.goto(B1+"/"); D.check("input[name=jmode][value=asset]"); D.set_input_files("#jfile",d2.value.path()); 

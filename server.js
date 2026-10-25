@@ -158,7 +158,7 @@ const BUDGET_MAX = Number(process.env.ROOM_CALL_BUDGET_MAX || 50);
 /* 방 단위 플랜. 방의 AI 인원수, AI 호출 예산, 프롬프트에 넣는 대화량, 서버 유료 모델 사용 여부, 광고 표시를 플랜이 정한다.
    결제는 아직 없고, 개발용 스위치(ALLOW_DEV_PLAN=1)로만 바꿀 수 있다 */
 const PLANS = {
-  free: { label: '무료', ais: 3, budgetDefault: BUDGET_DEFAULT, budgetMax: BUDGET_MAX, ctx: 10, premium: false, ads: true, customPipeline: false, shareDays: 7, refund: false },
+  free: { label: '무료', ais: 5, budgetDefault: BUDGET_DEFAULT, budgetMax: BUDGET_MAX, ctx: 10, premium: false, ads: true, customPipeline: false, shareDays: 7, refund: false },
   plus: { label: '플러스', ais: 6, budgetDefault: 100, budgetMax: 300, ctx: 20, premium: true, ads: false, customPipeline: true, shareDays: 30, refund: true }
 };
 const ALLOW_DEV_PLAN = process.env.ALLOW_DEV_PLAN === '1';

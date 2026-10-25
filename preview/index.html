@@ -1707,7 +1707,7 @@ const BUDGET_MAX = Number(process.env.ROOM_CALL_BUDGET_MAX || 50);
 /* 방 단위 플랜. 방의 AI 인원수, AI 호출 예산, 프롬프트에 넣는 대화량, 서버 유료 모델 사용 여부, 광고 표시를 플랜이 정한다.
    결제는 아직 없고, 개발용 스위치(ALLOW_DEV_PLAN=1)로만 바꿀 수 있다 */
 const PLANS = {
-  free: { label: '무료', ais: 3, budgetDefault: BUDGET_DEFAULT, budgetMax: BUDGET_MAX, ctx: 10, premium: false, ads: true, customPipeline: false, shareDays: 7, refund: false },
+  free: { label: '무료', ais: 5, budgetDefault: BUDGET_DEFAULT, budgetMax: BUDGET_MAX, ctx: 10, premium: false, ads: true, customPipeline: false, shareDays: 7, refund: false },
   plus: { label: '플러스', ais: 6, budgetDefault: 100, budgetMax: 300, ctx: 20, premium: true, ads: false, customPipeline: true, shareDays: 30, refund: true }
 };
 const ALLOW_DEV_PLAN = process.env.ALLOW_DEV_PLAN === '1';
@@ -3376,10 +3376,10 @@ server.listen(PORT, () => {
   var SAMPLE_TEXT = JSON.stringify(SAMPLE, null, 2);
   $("fmt").textContent = SAMPLE_TEXT;
   var MODEINFO = {
-    code: { label: "Code", desc: "설계 → 구현 → 리뷰 → 수정", flow: ["설계자", "구현자", "리뷰어", "(테스터)", "구현자"] },
-    brainstorm: { label: "Brainstorm", desc: "발산 → 비판 → 정리", flow: ["발산자", "비평가", "(조합가)", "정리자"] },
-    make: { label: "Make", desc: "기획 → 작성 → 편집", flow: ["기획자", "작성자", "(디자이너)", "편집자"] },
-    debate: { label: "Debate", desc: "옹호 → 반박 → 검증 → 판정", flow: ["옹호자", "반박자", "(검증자)", "심판"] }
+    code: { label: "Code", desc: "설계 → 구현 → 리뷰 → 수정", flow: ["설계자", "구현자", "리뷰어", "테스터", "구현자"] },
+    brainstorm: { label: "Brainstorm", desc: "발산 → 비판 → 정리", flow: ["발산자", "비평가", "조합가", "정리자"] },
+    make: { label: "Make", desc: "기획 → 작성 → 편집", flow: ["기획자", "작성자", "디자이너", "편집자"] },
+    debate: { label: "Debate", desc: "옹호 → 반박 → 검증 → 판정", flow: ["옹호자", "반박자", "검증자", "심판"] }
   };
   /* 모드 역할 이름(설계자 등)은 서버가 정식 이름(한국어)으로 다루고, 화면에 보일 때만 현재 언어로 바꾼다. */
   var ROLE_KO = ["설계자", "구현자", "리뷰어", "테스터", "발산자", "비평가", "조합가", "정리자", "기획자", "작성자", "디자이너", "편집자", "옹호자", "반박자", "검증자", "심판"];
@@ -3501,7 +3501,6 @@ server.listen(PORT, () => {
     f.textContent = ""; f.hidden = !info;
     if (!info) return;
     info.flow.forEach(function (n, i) { if (i) f.appendChild(document.createTextNode("→")); f.appendChild(mk("i", "", dn(n))); });
-    f.appendChild(mk("span", "", "  " + _t("괄호는 플러스 플랜에서 추가")));
   }
   document.querySelectorAll('input[name="jmode"]').forEach(function (r) {
     r.addEventListener("change", function () { jmode = r.value; $("jassetbox").hidden = inRoomUrl || jmode !== "asset"; showFlow(); });
