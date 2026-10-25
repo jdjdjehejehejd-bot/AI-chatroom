@@ -347,6 +347,7 @@ function computeKpi(ev) {
     ratings: rt,
     returns: { d1: g('room_return.d1'), d2_7: g('room_return.d2_7'), d8p: g('room_return.d8p') },
     providerErrorRate: ratio(pre('call_err.'), realCalls),
+    managed: { today: managedToday(), dailyCap: MANAGED_DAILY_CALLS || null, blockedTotal: g('managed_blocked') },
     cost: { status: costStatus, usd: round4(costUsd), perAdoptedUsd: adopted > 0 && costUsd > 0 ? round4(costUsd / adopted) : null, perUsefulUsd: rt.useful > 0 && costUsd > 0 ? round4(costUsd / rt.useful) : null, realCalls, unpricedCalls: unpriced, tokMissingCalls: missing, failedCallsUnverified: failedCalls },
     byFlow
   };
@@ -1049,9 +1050,22 @@ async function maybeSummarize(room, sub) {
   finally { room.summarizing = false; }
 }
 /* 제공사별 호출 성공/실패 횟수와 누적 지연(ms)을 익명 집계로 남긴다. 모델 이름·키·내용은 기록하지 않는다. */
+/* 전역 비용 차단기: 운영자 서버 키로 나가는 유료 제공사 호출(개인 API 키·무료 모델·데모는 제외)을 하루(KST) 합계로 제한한다.
+   MANAGED_DAILY_CALLS=0(기본)이면 끄고, 양수를 넣으면 넘는 호출은 제공사로 보내지 않고 오류로 처리한다. 집계 이벤트(managed_call.*)를 기준으로 세므로 재시작 뒤에도 이어진다. */
+const MANAGED_DAILY_CALLS = Number(process.env.MANAGED_DAILY_CALLS || 0);
+const managedToday = () => Object.entries(events[kstDay()] || {}).filter(([k]) => k.startsWith('managed_call.')).reduce((a, [, v]) => a + v, 0);
+function managedGate(ai, prov) {
+  if (ai.apiKey || prov === 'demo' || prov === 'free') return;
+  if (MANAGED_DAILY_CALLS > 0 && managedToday() >= MANAGED_DAILY_CALLS) {
+    track('managed_blocked');
+    throw new Error('오늘 서버가 대신 내는 AI 호출 한도(전체 ' + MANAGED_DAILY_CALLS + '회)에 도달했습니다. 개인 API 키를 쓰는 AI는 계속 쓸 수 있고, 한도는 한국 시간 자정에 다시 열립니다.');
+  }
+  track('managed_call.' + prov);
+}
 async function generate(room, ai, dm) {
   const prov = String(resolve(ai, room).provider || '');
   if (!/^[a-z0-9_-]{1,20}$/.test(prov) || prov === 'demo') return generateRaw(room, ai, dm);
+  managedGate(ai, prov);
   const t0 = Date.now();
   try { const r = await generateRaw(room, ai, dm); track('call_ok.' + prov); track('ms.' + prov, Date.now() - t0); return r; }
   catch (e) { track('call_err.' + prov); track('ms.' + prov, Date.now() - t0); throw e; }

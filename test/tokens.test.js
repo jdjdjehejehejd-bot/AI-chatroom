@@ -62,6 +62,14 @@ const run = async (port, room) => { const A = await cl(port, room); if (!process
     check('failed call -> cost incomplete (failed calls unverified), run counted as failed', kpf.cost.status === 'incomplete' && kpf.cost.failedCallsUnverified >= 1 && kpf.runs.failed >= 1, JSON.stringify([kpf.cost, kpf.runs]));
     A.ws.close();
   });
+  // 3c) 전역 비용 차단기: 서버 키 호출은 하루 합계 상한을 넘으면 제공사로 나가지 않는다
+  const gm = await mock((q, b, a) => j(a, { choices: [{ message: { content: '응답' } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }));
+  await scenario(3346, { OPENAI_API_KEY: 'k', AI_MODEL: 'm1', MANAGED_DAILY_CALLS: '2', OPENAI_BASE_URL: 'http://127.0.0.1:' + gm.address().port + '/v1' }, async () => {
+    const A = await run(3346, 'tk3c'); const kpg = await kpiOf(3346);
+    const blocked = A.ev.some(e => e.t === 'msg' && e.msg.code === 'AI_ERROR' && /서버가 대신 내는 AI 호출 한도/.test(e.msg.text));
+    check('managed-call cap: only 2 server-key calls go out, then blocked with a clear message', kpg.managed.today === 2 && kpg.managed.dailyCap === 2 && kpg.managed.blockedTotal >= 1 && blocked, JSON.stringify([kpg.managed, blocked]));
+    A.ws.close();
+  });
   // 4) Anthropic 형식
   const an = await mock((q, b, a) => j(a, { content: [{ type: 'text', text: '응답' }], usage: { input_tokens: 20, output_tokens: 5 } }));
   await scenario(3344, { ANTHROPIC_API_KEY: 'k', AI_MODEL: 'c1', ANTHROPIC_BASE_URL: 'http://127.0.0.1:' + an.address().port }, async () => {
