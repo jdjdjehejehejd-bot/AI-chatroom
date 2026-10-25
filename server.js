@@ -157,9 +157,10 @@ const BUDGET_DEFAULT = Number(process.env.ROOM_CALL_BUDGET || 30);
 const BUDGET_MAX = Number(process.env.ROOM_CALL_BUDGET_MAX || 50);
 /* 방 단위 플랜. 방의 AI 인원수, AI 호출 예산, 프롬프트에 넣는 대화량, 서버 유료 모델 사용 여부, 광고 표시를 플랜이 정한다.
    결제는 아직 없고, 개발용 스위치(ALLOW_DEV_PLAN=1)로만 바꿀 수 있다 */
+const UNLIMITED = 1000000; // 사실상 제한 없음(표시는 "무제한"). 결제가 붙기 전까지의 임시 정책
 const PLANS = {
   free: { label: '무료', ais: 5, budgetDefault: BUDGET_DEFAULT, budgetMax: BUDGET_MAX, ctx: 10, premium: false, ads: true, customPipeline: false, shareDays: 7, refund: false },
-  plus: { label: '플러스', ais: 6, budgetDefault: 100, budgetMax: 300, ctx: 20, premium: true, ads: false, customPipeline: true, shareDays: 30, refund: true }
+  plus: { label: '플러스', ais: UNLIMITED, budgetDefault: UNLIMITED, budgetMax: UNLIMITED, ctx: 20, premium: true, ads: false, customPipeline: true, shareDays: 30, refund: true }
 };
 const ALLOW_DEV_PLAN = process.env.ALLOW_DEV_PLAN === '1';
 let HOUSE_ADS = [{ text: '여기에 광고가 표시됩니다 (샘플 광고)', url: '' }];
@@ -246,7 +247,7 @@ function acct(sub, name) {
   return a;
 }
 /* ---------- 계정 플랜과 일일 크레딧 ---------- */
-const DAILY = { free: Number(process.env.DAILY_FREE_CALLS || 60), plus: Number(process.env.DAILY_PLUS_CALLS || 400) };
+const DAILY = { free: Number(process.env.DAILY_FREE_CALLS || 60), plus: Number(process.env.DAILY_PLUS_CALLS || UNLIMITED) };
 const kstDay = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
 const nextResetAt = () => Math.floor((Date.now() + 9 * 3600000) / 86400000 + 1) * 86400000 - 9 * 3600000;
 function planOfAccount(sub) {

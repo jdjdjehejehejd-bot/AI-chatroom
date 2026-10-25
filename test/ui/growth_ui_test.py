@@ -2,13 +2,22 @@ import re,time
 from playwright.sync_api import sync_playwright
 B="http://127.0.0.1:3313";res=[]
 def check(n,c,i=""): res.append(bool(c)); print(("PASS " if c else "FAIL ")+n+(" | "+str(i) if (not c and i) else ""))
+def agree(pg):
+    """동의 체크: 보이고 활성일 때까지 기다린 뒤 실제 클릭하고, 상태가 바뀌었는지 직접 확인한다(강제 클릭·임의 대기 없음)."""
+    box=pg.locator("#jconsent"); box.wait_for(state="visible"); box.scroll_into_view_if_needed()
+    for _ in range(3):
+        if box.is_checked(): return
+        pg.locator("label.consent input").click()
+        try: pg.wait_for_function("document.getElementById('jconsent').checked", timeout=1500); return
+        except Exception: pass
+    raise AssertionError("consent checkbox did not become checked")
 with sync_playwright() as p:
     b=p.chromium.launch(args=["--no-sandbox"]);errs=[]
     pg=b.new_context(locale="ko-KR", bypass_csp=True, viewport={"width":1280,"height":820}).new_page();pg.on("pageerror",lambda e:errs.append(str(e)))
     pg.goto(B+"/");pg.wait_for_selector("#gbox:not([hidden])")
     pg.click("#embtn");pg.fill("#emaddr","ben@example.com");pg.click("#emsend");pg.wait_for_selector("#emcodewrap:not([hidden])");time.sleep(.3)
     code=re.findall(r"코드: (\d{6})",open("growth_server.log").read())[-1];pg.fill("#emcode",code);pg.click("#emverify");pg.wait_for_selector("#gwho:not([hidden])")
-    pg.check("input[name=jmode][value=brainstorm]");pg.check("#jconsent",force=True); pg.click("#jgo");pg.wait_for_selector("#room:not([hidden])")
+    pg.check("input[name=jmode][value=brainstorm]");agree(pg); pg.click("#jgo");pg.wait_for_selector("#room:not([hidden])")
     check("credits chip shows 0 used of 60","60/60" in pg.inner_text("#crtxt"),pg.inner_text("#crtxt"))
     pg.fill("#text","새 앱 아이디어");pg.press("#text","Enter");pg.wait_for_function("document.querySelector('#crtxt').innerText.indexOf('60/60')<0",timeout=10000)
     check("credits decrease after AI call","60/60" not in pg.inner_text("#crtxt"),pg.inner_text("#crtxt"))
@@ -29,7 +38,7 @@ with sync_playwright() as p:
     pg.fill("#mkq","");pg.wait_for_selector("#mklist .mk")
     pg.click("#mklist .mk >> text=이 구성으로 방 만들기");pg.wait_for_selector("#jasset .loaded")
     check("install fills entry with asset",pg.locator("#market").is_hidden() and "Brainstorm" in pg.inner_text("#jasset"),pg.inner_text("#jasset"))
-    pg.check("#jconsent",force=True); pg.click("#jgo");pg.wait_for_selector("#room:not([hidden])");check("room created from marketplace asset",pg.locator("#ais .ai-item").count()==4)
+    agree(pg); pg.click("#jgo");pg.wait_for_selector("#room:not([hidden])");check("room created from marketplace asset",pg.locator("#ais .ai-item").count()==4)
     # my rooms (server-side) after clearing local list
     pg.wait_for_timeout(3500)
     pg.evaluate("localStorage.clear()");pg.goto(B+"/");pg.wait_for_selector("#gwho:not([hidden])");pg.wait_for_selector("#acctroomswrap:not([hidden])",timeout=8000)

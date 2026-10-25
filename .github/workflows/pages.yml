@@ -1,5 +1,7 @@
-# main에 푸시할 때마다 데모 사이트를 다시 빌드해 GitHub Pages에 배포한다.
+# main에 푸시할 때마다 데모 사이트를 다시 빌드하고 GitHub Pages에 배포한다.
 # 사용 전 1회: 저장소 Settings → Pages → Source 를 "GitHub Actions"로 설정.
+# 두 작업을 분리해 "빌드 성공"과 "실제 배포 성공"이 서로 다른 상태로 보이게 한다.
+# Pages가 꺼져 있으면 배포 작업은 건너뛰지 않고 실패(빨강)로 끝난다: 초록 체크가 "공개됨"을 뜻하도록.
 name: Deploy demo site
 on:
   push:
@@ -13,11 +15,9 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
-  deploy:
+  build-demo:
+    name: Build demo (build only, not a deployment)
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,18 +28,33 @@ jobs:
           mkdir -p _site
           node preview/build.js _site/index.html
           touch _site/.nojekyll
-      # Pages가 아직 켜져 있지 않으면 이 단계가 "Not Found"로 실패한다. 매 push마다 빨간 실패를 남기지 않도록 경고로 바꾸고,
-      # Settings → Pages → Source를 "GitHub Actions"로 켜면 다음 push부터 자동으로 배포된다.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: demo-site
+          path: _site
+          include-hidden-files: true
+  deploy-pages:
+    name: Deploy to GitHub Pages (fails if Pages is not enabled)
+    needs: build-demo
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: demo-site
+          path: _site
       - id: pages
         uses: actions/configure-pages@v5
         continue-on-error: true
-      - name: Pages 비활성 안내
+      - name: Pages is not enabled
         if: steps.pages.outcome != 'success'
-        run: echo "::warning title=GitHub Pages가 켜져 있지 않아 데모 배포를 건너뜁니다::저장소 Settings → Pages → Build and deployment → Source를 'GitHub Actions'로 설정하세요."
-      - if: steps.pages.outcome == 'success'
-        uses: actions/upload-pages-artifact@v3
+        run: |
+          echo "::error title=GitHub Pages가 켜져 있지 않아 배포하지 못했습니다::저장소 Settings → Pages → Build and deployment → Source를 'GitHub Actions'로 설정한 뒤 이 워크플로를 다시 실행하세요."
+          exit 1
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
       - id: deployment
-        if: steps.pages.outcome == 'success'
         uses: actions/deploy-pages@v4

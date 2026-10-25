@@ -463,7 +463,7 @@ AI끼리 몰래 쪽지를 주고받았어요 · 엿보기 || The AIs passed each
 본인 API 키 (필수) || Your own API key (required) || 自分のAPIキー（必須） || 您自己的 API 密钥（必填） || Tu propia clave API (obligatoria)
 이 제공사는 본인 키만 사용할 수 있습니다 || This provider can only be used with your own key || このプロバイダーは自分のキーでのみ使用できます || 此服务商只能使用您自己的密钥 || Este proveedor solo se puede usar con tu propia clave
 설정을 적용했습니다. || Settings applied. || 設定を適用しました。 || 已应用设置。 || Ajustes aplicados.
-결제는 아직 준비 중입니다. 플러스 플랜은 AI 6명, 호출 예산 300회, 광고 없음입니다. || Payments aren’t available yet. The Plus plan offers 6 AIs, a 300-call budget and no ads. || 決済はまだ準備中です。プラスプランはAI 6人、呼び出し予算300回、広告なしです。 || 支付功能尚在准备中。Plus 套餐提供 6 个 AI、300 次调用预算、无广告。 || Los pagos aún no están disponibles. El plan Plus ofrece 6 IA, 300 llamadas de presupuesto y sin anuncios.
+결제는 아직 준비 중입니다. 플러스 플랜은 AI 인원과 호출 횟수 제한이 없고 광고도 없습니다. || Payments aren’t available yet. The Plus plan has no limit on AIs or calls, and no ads. || 決済はまだ準備中です。プラスプランはAIの人数も呼び出し回数も無制限で、広告もありません。 || 支付功能尚在准备中。Plus 套餐不限 AI 数量和调用次数，也没有广告。 || Los pagos aún no están disponibles. El plan Plus no limita las IA ni las llamadas, y no tiene anuncios.
 문서를 저장했습니다. || Document saved. || ドキュメントを保存しました。 || 已保存文档。 || Documento guardado.
 적용하면 방 전체의 AI 구성이 교체됩니다. || Applying replaces the AI lineup for the whole room. || 適用すると、ルーム全体のAI構成が置き換わります。 || 应用后会替换整个房间的 AI 阵容。 || Al aplicar se sustituye la plantilla de IA de toda la sala.
 형식을 복사했습니다. || Format copied. || 形式をコピーしました。 || 已复制格式。 || Formato copiado.
@@ -686,3 +686,9 @@ AI를 직접 초대 (역할을 비우면 자유 AI) || Invite AIs yourself (leav
 설계 → 구현 → 리뷰 → 수정 || Design → Build → Review → Revise || 設計 → 実装 → レビュー → 修正 || 设计 → 实现 → 评审 → 修改 || Diseño → Implementación → Revisión → Corrección
 발산 → 비판 → 정리 || Diverge → Critique → Consolidate || 発散 → 批判 → 整理 || 发散 → 批评 → 整理 || Divergir → Criticar → Consolidar
 기획 → 작성 → 편집 || Plan → Write → Edit || 企画 → 執筆 → 編集 || 策划 → 撰写 → 编辑 || Planificar → Redactar → Editar
+
+AI 인원 제한 없음, 광고가 표시돼요 || No limit on AIs, with ads || AIの人数制限なし、広告が表示されます || 不限 AI 数量，会显示广告 || Sin límite de IA, con anuncios
+AI 인원 제한 없음, 광고 없음 || No limit on AIs, no ads || AIの人数制限なし、広告なし || 不限 AI 数量，无广告 || Sin límite de IA, sin anuncios
+이 플랜은 호출 예산 제한이 없습니다. 원하면 예산을 직접 낮춰 쓸 수 있어요. || This plan has no call budget limit. You can still set a lower budget yourself. || このプランには呼び出し予算の上限がありません。必要なら自分で低く設定できます。 || 此套餐没有调用预算上限。需要的话你仍可以自行调低预算。 || Este plan no tiene límite de presupuesto de llamadas. Aun así puedes fijar uno más bajo.
+오늘 무제한 || Unlimited today || 今日は無制限 || 今日不限 || Hoy sin límite
+플랜 {plan} · AI 호출 횟수 제한 없음 || Plan {plan} · no limit on AI calls || プラン {plan} · AI呼び出し回数の制限なし || 套餐 {plan} · AI 调用次数不限 || Plan {plan} · sin límite de llamadas de IA

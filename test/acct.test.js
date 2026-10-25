@@ -31,7 +31,7 @@ const cl=(room,name,cookie)=>new Promise(r=>{const ws=new WS('ws://127.0.0.1:330
  check('admin wrong token 401',(await post('/admin/plan',{email:'ben@example.com',plan:'plus'},{authorization:'Bearer nope'})).status===401);
  const ar=await post('/admin/plan',{email:'ben@example.com',plan:'plus',days:30},{authorization:'Bearer adm-token-xyz'});check('admin grants plus',ar.status===200);
  await sleep(300);
- const m2=[...A.ev].reverse().find(e=>e.t==='meta');check('live room upgraded to plus',m2.plan.id==='plus'&&m2.budgetMax===300,JSON.stringify(m2.plan));
+ const m2=[...A.ev].reverse().find(e=>e.t==='meta');check('live room upgraded to plus',m2.plan.id==='plus'&&m2.budgetMax>=1000000,JSON.stringify(m2.plan));
  const cr2=[...A.ev].reverse().find(e=>e.t==='credits');check('credits limit now 50',cr2&&cr2.credits.limit===50,JSON.stringify(cr2));
  s({t:'msg',text:'@봇 이제 되나'});await sleep(500);
  check('calls work again after upgrade',A.ev.filter(e=>e.t==='msg'&&e.msg.kind==='ai').length===4);

@@ -1469,8 +1469,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   }
   function renderBudget(b) {
     updateCost(b);
-    $("budtxt").textContent = b.used + " / " + b.limit;
-    $("barfill").style.width = Math.min(100, Math.round(b.used / b.limit * 100)) + "%";
+    $("budtxt").textContent = b.used + " / " + (isUnl(b.limit) ? "∞" : b.limit);
+    $("barfill").style.width = isUnl(b.limit) ? "0%" : Math.min(100, Math.round(b.used / b.limit * 100)) + "%";
     $("chipbud").classList.toggle("full", b.used >= b.limit);
     if (document.activeElement !== $("budget")) { $("budget").value = b.limit; if (meta) $("budget").max = meta.budgetMax; }
     if (b.used < b.limit) budgetAlert = false;
@@ -1494,11 +1494,11 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var h = $("humans"); h.textContent = "";
     $("humtitle").textContent = _t("사람 {n}명", { n: s.humans.length });
     s.humans.forEach(function (n) { var p = mk("span", "pill" + (n === me ? " me" : "")); p.appendChild(mk("span", "dot")); p.appendChild(document.createTextNode(n === me ? n + " " + _t("(나)") : n)); h.appendChild(p); });
-    $("aititle").textContent = _t("AI {n} / {max}명", { n: s.ais.length, max: s.plan.ais });
+    $("aititle").textContent = isUnl(s.plan.ais) ? _t("AI {n}명", { n: s.ais.length }) : _t("AI {n} / {max}명", { n: s.ais.length, max: s.plan.ais });
     $("planbadge").textContent = _t("방 플랜 · {label}", { label: _tx(s.plan.label) });
-    $("plandesc").textContent = s.plan.ads ? _t("AI {n}명까지, 광고가 표시돼요", { n: s.plan.ais }) : _t("AI {n}명까지, 광고 없음", { n: s.plan.ais });
+    $("plandesc").textContent = isUnl(s.plan.ais) ? (s.plan.ads ? _t("AI 인원 제한 없음, 광고가 표시돼요") : _t("AI 인원 제한 없음, 광고 없음")) : (s.plan.ads ? _t("AI {n}명까지, 광고가 표시돼요", { n: s.plan.ais }) : _t("AI {n}명까지, 광고 없음", { n: s.plan.ais }));
     $("upgrade").hidden = s.plan.premium; $("devplan").hidden = !s.plan.dev;
-    $("budhint").textContent = _t("사용량보다 낮게 설정할 수 없습니다. 이 플랜의 최대 {n}회. 예산을 다 쓰면 AI가 멈추고 사람끼리만 대화합니다.", { n: s.budgetMax });
+    $("budhint").textContent = isUnl(s.budgetMax) ? _t("이 플랜은 호출 예산 제한이 없습니다. 원하면 예산을 직접 낮춰 쓸 수 있어요.") : _t("사용량보다 낮게 설정할 수 없습니다. 이 플랜의 최대 {n}회. 예산을 다 쓰면 AI가 멈추고 사람끼리만 대화합니다.", { n: s.budgetMax });
     var box = $("ais"); box.textContent = "";
     if (!s.ais.length) box.appendChild(mk("div", "hint", _t("아직 AI가 없습니다. 아래에서 초대하거나 에셋을 불러오세요.")));
     s.ais.forEach(function (ai) {
@@ -1749,12 +1749,13 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 
   /* ---- 크레딧 · 내 방 · 마켓 · 방 기억 ---- */
   var credits = null;
-  function fmtCredits(c) { return _t("오늘 {left}/{limit}", { left: c.limit - c.used, limit: c.limit }) + (c.plan === "plus" ? " ✦" : ""); }
+  var UNL = 1000000, isUnl = function (n) { return n >= UNL; };
+  function fmtCredits(c) { return (isUnl(c.limit) ? _t("오늘 무제한") : _t("오늘 {left}/{limit}", { left: c.limit - c.used, limit: c.limit })) + (c.plan === "plus" ? " ✦" : ""); }
   function renderCredits() {
     var on = !!(credits && joined); $("crchip").hidden = !on;
     if (on) { $("crtxt").textContent = fmtCredits(credits); $("crchip").style.color = credits.used >= credits.limit ? "var(--err-tx)" : ""; }
     var sec = $("acct"); if (sec && authUser && credits) { var old = sec.querySelector(".crline"); if (!old) { old = mk("div", "hint crline"); old.style.marginTop = "8px"; sec.appendChild(old); }
-      old.textContent = _t("플랜 {plan} · 오늘 남은 AI 호출 {n}회 (한국 시간 자정에 초기화)", { plan: credits.plan === "plus" ? _t("플러스") : _t("무료"), n: credits.limit - credits.used }); }
+      old.textContent = isUnl(credits.limit) ? _t("플랜 {plan} · AI 호출 횟수 제한 없음", { plan: _t("플러스") }) : _t("플랜 {plan} · 오늘 남은 AI 호출 {n}회 (한국 시간 자정에 초기화)", { plan: credits.plan === "plus" ? _t("플러스") : _t("무료"), n: credits.limit - credits.used }); }
   }
   function loadMyRooms() {
     if (!authUser) { $("acctroomswrap").hidden = true; return; }
@@ -2006,7 +2007,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     send({ t: "config", policy: document.querySelector('input[name="policy"]:checked').value, maxStreak: Number($("stval").textContent), budgetLimit: Number($("budget").value) });
     toast(_t("설정을 적용했습니다."));
   });
-  $("upgrade").addEventListener("click", function () { toast(_t("결제는 아직 준비 중입니다. 플러스 플랜은 AI 6명, 호출 예산 300회, 광고 없음입니다.")); });
+  $("upgrade").addEventListener("click", function () { toast(_t("결제는 아직 준비 중입니다. 플러스 플랜은 AI 인원과 호출 횟수 제한이 없고 광고도 없습니다.")); });
   $("devplan").addEventListener("click", function () { send({ t: "plan", id: meta.plan.id === "free" ? "plus" : "free" }); });
   $("savedoc").addEventListener("click", function () { send({ t: "doc", text: $("doc").value }); toast(_t("문서를 저장했습니다.")); });
 

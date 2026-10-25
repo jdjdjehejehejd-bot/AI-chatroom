@@ -469,7 +469,7 @@
 ["본인 API 키 (필수)", "Your own API key (required)", "自分のAPIキー（必須）", "您自己的 API 密钥（必填）", "Tu propia clave API (obligatoria)"],
 ["이 제공사는 본인 키만 사용할 수 있습니다", "This provider can only be used with your own key", "このプロバイダーは自分のキーでのみ使用できます", "此服务商只能使用您自己的密钥", "Este proveedor solo se puede usar con tu propia clave"],
 ["설정을 적용했습니다.", "Settings applied.", "設定を適用しました。", "已应用设置。", "Ajustes aplicados."],
-["결제는 아직 준비 중입니다. 플러스 플랜은 AI 6명, 호출 예산 300회, 광고 없음입니다.", "Payments aren’t available yet. The Plus plan offers 6 AIs, a 300-call budget and no ads.", "決済はまだ準備中です。プラスプランはAI 6人、呼び出し予算300回、広告なしです。", "支付功能尚在准备中。Plus 套餐提供 6 个 AI、300 次调用预算、无广告。", "Los pagos aún no están disponibles. El plan Plus ofrece 6 IA, 300 llamadas de presupuesto y sin anuncios."],
+["결제는 아직 준비 중입니다. 플러스 플랜은 AI 인원과 호출 횟수 제한이 없고 광고도 없습니다.", "Payments aren’t available yet. The Plus plan has no limit on AIs or calls, and no ads.", "決済はまだ準備中です。プラスプランはAIの人数も呼び出し回数も無制限で、広告もありません。", "支付功能尚在准备中。Plus 套餐不限 AI 数量和调用次数，也没有广告。", "Los pagos aún no están disponibles. El plan Plus no limita las IA ni las llamadas, y no tiene anuncios."],
 ["문서를 저장했습니다.", "Document saved.", "ドキュメントを保存しました。", "已保存文档。", "Documento guardado."],
 ["적용하면 방 전체의 AI 구성이 교체됩니다.", "Applying replaces the AI lineup for the whole room.", "適用すると、ルーム全体のAI構成が置き換わります。", "应用后会替换整个房间的 AI 阵容。", "Al aplicar se sustituye la plantilla de IA de toda la sala."],
 ["형식을 복사했습니다.", "Format copied.", "形式をコピーしました。", "已复制格式。", "Formato copiado."],
@@ -675,7 +675,12 @@
 ["평가해 주셔서 고마워요.", "Thanks for rating.", "評価ありがとうございます。", "感谢你的评分。", "Gracias por valorar."],
 ["설계 → 구현 → 리뷰 → 수정", "Design → Build → Review → Revise", "設計 → 実装 → レビュー → 修正", "设计 → 实现 → 评审 → 修改", "Diseño → Implementación → Revisión → Corrección"],
 ["발산 → 비판 → 정리", "Diverge → Critique → Consolidate", "発散 → 批判 → 整理", "发散 → 批评 → 整理", "Divergir → Criticar → Consolidar"],
-["기획 → 작성 → 편집", "Plan → Write → Edit", "企画 → 執筆 → 編集", "策划 → 撰写 → 编辑", "Planificar → Redactar → Editar"]
+["기획 → 작성 → 편집", "Plan → Write → Edit", "企画 → 執筆 → 編集", "策划 → 撰写 → 编辑", "Planificar → Redactar → Editar"],
+["AI 인원 제한 없음, 광고가 표시돼요", "No limit on AIs, with ads", "AIの人数制限なし、広告が表示されます", "不限 AI 数量，会显示广告", "Sin límite de IA, con anuncios"],
+["AI 인원 제한 없음, 광고 없음", "No limit on AIs, no ads", "AIの人数制限なし、広告なし", "不限 AI 数量，无广告", "Sin límite de IA, sin anuncios"],
+["이 플랜은 호출 예산 제한이 없습니다. 원하면 예산을 직접 낮춰 쓸 수 있어요.", "This plan has no call budget limit. You can still set a lower budget yourself.", "このプランには呼び出し予算の上限がありません。必要なら自分で低く設定できます。", "此套餐没有调用预算上限。需要的话你仍可以自行调低预算。", "Este plan no tiene límite de presupuesto de llamadas. Aun así puedes fijar uno más bajo."],
+["오늘 무제한", "Unlimited today", "今日は無制限", "今日不限", "Hoy sin límite"],
+["플랜 {plan} · AI 호출 횟수 제한 없음", "Plan {plan} · no limit on AI calls", "プラン {plan} · AI呼び出し回数の制限なし", "套餐 {plan} · AI 调用次数不限", "Plan {plan} · sin límite de llamadas de IA"]
 ];
   function pick() {
     var c = null, q = /[?&]lang=([a-z]{2})/.exec(location.search);
@@ -1706,9 +1711,10 @@ const BUDGET_DEFAULT = Number(process.env.ROOM_CALL_BUDGET || 30);
 const BUDGET_MAX = Number(process.env.ROOM_CALL_BUDGET_MAX || 50);
 /* 방 단위 플랜. 방의 AI 인원수, AI 호출 예산, 프롬프트에 넣는 대화량, 서버 유료 모델 사용 여부, 광고 표시를 플랜이 정한다.
    결제는 아직 없고, 개발용 스위치(ALLOW_DEV_PLAN=1)로만 바꿀 수 있다 */
+const UNLIMITED = 1000000; // 사실상 제한 없음(표시는 "무제한"). 결제가 붙기 전까지의 임시 정책
 const PLANS = {
   free: { label: '무료', ais: 5, budgetDefault: BUDGET_DEFAULT, budgetMax: BUDGET_MAX, ctx: 10, premium: false, ads: true, customPipeline: false, shareDays: 7, refund: false },
-  plus: { label: '플러스', ais: 6, budgetDefault: 100, budgetMax: 300, ctx: 20, premium: true, ads: false, customPipeline: true, shareDays: 30, refund: true }
+  plus: { label: '플러스', ais: UNLIMITED, budgetDefault: UNLIMITED, budgetMax: UNLIMITED, ctx: 20, premium: true, ads: false, customPipeline: true, shareDays: 30, refund: true }
 };
 const ALLOW_DEV_PLAN = process.env.ALLOW_DEV_PLAN === '1';
 let HOUSE_ADS = [{ text: '여기에 광고가 표시됩니다 (샘플 광고)', url: '' }];
@@ -1795,7 +1801,7 @@ function acct(sub, name) {
   return a;
 }
 /* ---------- 계정 플랜과 일일 크레딧 ---------- */
-const DAILY = { free: Number(process.env.DAILY_FREE_CALLS || 60), plus: Number(process.env.DAILY_PLUS_CALLS || 400) };
+const DAILY = { free: Number(process.env.DAILY_FREE_CALLS || 60), plus: Number(process.env.DAILY_PLUS_CALLS || UNLIMITED) };
 const kstDay = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
 const nextResetAt = () => Math.floor((Date.now() + 9 * 3600000) / 86400000 + 1) * 86400000 - 9 * 3600000;
 function planOfAccount(sub) {
@@ -4013,8 +4019,8 @@ server.listen(PORT, () => {
   }
   function renderBudget(b) {
     updateCost(b);
-    $("budtxt").textContent = b.used + " / " + b.limit;
-    $("barfill").style.width = Math.min(100, Math.round(b.used / b.limit * 100)) + "%";
+    $("budtxt").textContent = b.used + " / " + (isUnl(b.limit) ? "∞" : b.limit);
+    $("barfill").style.width = isUnl(b.limit) ? "0%" : Math.min(100, Math.round(b.used / b.limit * 100)) + "%";
     $("chipbud").classList.toggle("full", b.used >= b.limit);
     if (document.activeElement !== $("budget")) { $("budget").value = b.limit; if (meta) $("budget").max = meta.budgetMax; }
     if (b.used < b.limit) budgetAlert = false;
@@ -4038,11 +4044,11 @@ server.listen(PORT, () => {
     var h = $("humans"); h.textContent = "";
     $("humtitle").textContent = _t("사람 {n}명", { n: s.humans.length });
     s.humans.forEach(function (n) { var p = mk("span", "pill" + (n === me ? " me" : "")); p.appendChild(mk("span", "dot")); p.appendChild(document.createTextNode(n === me ? n + " " + _t("(나)") : n)); h.appendChild(p); });
-    $("aititle").textContent = _t("AI {n} / {max}명", { n: s.ais.length, max: s.plan.ais });
+    $("aititle").textContent = isUnl(s.plan.ais) ? _t("AI {n}명", { n: s.ais.length }) : _t("AI {n} / {max}명", { n: s.ais.length, max: s.plan.ais });
     $("planbadge").textContent = _t("방 플랜 · {label}", { label: _tx(s.plan.label) });
-    $("plandesc").textContent = s.plan.ads ? _t("AI {n}명까지, 광고가 표시돼요", { n: s.plan.ais }) : _t("AI {n}명까지, 광고 없음", { n: s.plan.ais });
+    $("plandesc").textContent = isUnl(s.plan.ais) ? (s.plan.ads ? _t("AI 인원 제한 없음, 광고가 표시돼요") : _t("AI 인원 제한 없음, 광고 없음")) : (s.plan.ads ? _t("AI {n}명까지, 광고가 표시돼요", { n: s.plan.ais }) : _t("AI {n}명까지, 광고 없음", { n: s.plan.ais }));
     $("upgrade").hidden = s.plan.premium; $("devplan").hidden = !s.plan.dev;
-    $("budhint").textContent = _t("사용량보다 낮게 설정할 수 없습니다. 이 플랜의 최대 {n}회. 예산을 다 쓰면 AI가 멈추고 사람끼리만 대화합니다.", { n: s.budgetMax });
+    $("budhint").textContent = isUnl(s.budgetMax) ? _t("이 플랜은 호출 예산 제한이 없습니다. 원하면 예산을 직접 낮춰 쓸 수 있어요.") : _t("사용량보다 낮게 설정할 수 없습니다. 이 플랜의 최대 {n}회. 예산을 다 쓰면 AI가 멈추고 사람끼리만 대화합니다.", { n: s.budgetMax });
     var box = $("ais"); box.textContent = "";
     if (!s.ais.length) box.appendChild(mk("div", "hint", _t("아직 AI가 없습니다. 아래에서 초대하거나 에셋을 불러오세요.")));
     s.ais.forEach(function (ai) {
@@ -4293,12 +4299,13 @@ server.listen(PORT, () => {
 
   /* ---- 크레딧 · 내 방 · 마켓 · 방 기억 ---- */
   var credits = null;
-  function fmtCredits(c) { return _t("오늘 {left}/{limit}", { left: c.limit - c.used, limit: c.limit }) + (c.plan === "plus" ? " ✦" : ""); }
+  var UNL = 1000000, isUnl = function (n) { return n >= UNL; };
+  function fmtCredits(c) { return (isUnl(c.limit) ? _t("오늘 무제한") : _t("오늘 {left}/{limit}", { left: c.limit - c.used, limit: c.limit })) + (c.plan === "plus" ? " ✦" : ""); }
   function renderCredits() {
     var on = !!(credits && joined); $("crchip").hidden = !on;
     if (on) { $("crtxt").textContent = fmtCredits(credits); $("crchip").style.color = credits.used >= credits.limit ? "var(--err-tx)" : ""; }
     var sec = $("acct"); if (sec && authUser && credits) { var old = sec.querySelector(".crline"); if (!old) { old = mk("div", "hint crline"); old.style.marginTop = "8px"; sec.appendChild(old); }
-      old.textContent = _t("플랜 {plan} · 오늘 남은 AI 호출 {n}회 (한국 시간 자정에 초기화)", { plan: credits.plan === "plus" ? _t("플러스") : _t("무료"), n: credits.limit - credits.used }); }
+      old.textContent = isUnl(credits.limit) ? _t("플랜 {plan} · AI 호출 횟수 제한 없음", { plan: _t("플러스") }) : _t("플랜 {plan} · 오늘 남은 AI 호출 {n}회 (한국 시간 자정에 초기화)", { plan: credits.plan === "plus" ? _t("플러스") : _t("무료"), n: credits.limit - credits.used }); }
   }
   function loadMyRooms() {
     if (!authUser) { $("acctroomswrap").hidden = true; return; }
@@ -4550,7 +4557,7 @@ server.listen(PORT, () => {
     send({ t: "config", policy: document.querySelector('input[name="policy"]:checked').value, maxStreak: Number($("stval").textContent), budgetLimit: Number($("budget").value) });
     toast(_t("설정을 적용했습니다."));
   });
-  $("upgrade").addEventListener("click", function () { toast(_t("결제는 아직 준비 중입니다. 플러스 플랜은 AI 6명, 호출 예산 300회, 광고 없음입니다.")); });
+  $("upgrade").addEventListener("click", function () { toast(_t("결제는 아직 준비 중입니다. 플러스 플랜은 AI 인원과 호출 횟수 제한이 없고 광고도 없습니다.")); });
   $("devplan").addEventListener("click", function () { send({ t: "plan", id: meta.plan.id === "free" ? "plus" : "free" }); });
   $("savedoc").addEventListener("click", function () { send({ t: "doc", text: $("doc").value }); toast(_t("문서를 저장했습니다.")); });
 
