@@ -130,7 +130,7 @@ label.lb { display:block; font-size:12px; font-weight:700; margin:14px 0 6px; co
 .loaded { padding:12px; border-radius:12px; border:1px solid var(--accent); background:var(--accent-soft); }
 .loaded b { display:block; }
 .loaded small { display:block; color:var(--muted); font-size:12px; }
-.drate{display:flex;align-items:center;gap:6px;margin:8px 0;flex-wrap:wrap}.drate small{margin-right:4px;color:var(--muted)}.ainotes{margin:-4px 0 10px 44px;padding:8px 10px;border-radius:10px;background:var(--panel2,rgba(127,127,127,.1));font-size:12.5px}.ainotes ul{margin:6px 0;padding-left:18px}.cast { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.dcmp{margin:6px 0 10px}.dcmp summary{cursor:pointer;font-size:13px;color:var(--muted)}.dcmpout{white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto;font-size:12.5px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface2)}.drate{display:flex;align-items:center;gap:6px;margin:8px 0;flex-wrap:wrap}.drate small{margin-right:4px;color:var(--muted)}.ainotes{margin:-4px 0 10px 44px;padding:8px 10px;border-radius:10px;background:var(--panel2,rgba(127,127,127,.1));font-size:12.5px}.ainotes ul{margin:6px 0;padding-left:18px}.cast { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .cm { display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:2px 10px 2px 3px; border-radius:999px; background:var(--sf, var(--h-sf)); color:var(--tx, var(--ink)); }
 .cm .av { width:20px; height:20px; font-size:10px; }
 .err { margin-top:10px; padding:9px 12px; border-radius:10px; background:var(--err-sf); color:var(--err-tx); font-size:13px; }
@@ -846,7 +846,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     ROLE_KO.forEach(function (k) { var d = _t(k); if (d === k) return; var from = toLocal ? k : d, to = toLocal ? d : k; text = text.replace(new RegExp("@" + escRe(from) + "(?![\\p{L}\\p{N}_])", "gu"), "@" + to); });
     return text;
   }
-  var rateDone = {}, notesOpen = {}, jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
+  var cmp = null, cmpBusy = false, cmpVoted = {}, rateDone = {}, notesOpen = {}, jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
   var aidms = [], peekOpen = -1, dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typingWho = "", msgIndex = {}, lastTap = { id: 0, t: 0 };
   var POLNAME = { mention: _t("@멘션했을 때만"), round: _t("순서대로"), free: _t("AI가 알아서 판단") };
   var LIVE = ["anthropic", "openai", "openrouter", "groq", "google", "mistral", "nvidia"];
@@ -1608,6 +1608,25 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
         rt.appendChild(b);
       });
       box.appendChild(rt);
+      var cb = mk("div", "dcmp");
+      if (cmp && cmp.v === cur.v) {
+        var dt = mk("details"); dt.open = true; dt.appendChild(mk("summary", "", _t("혼자 일하는 AI의 답 (같은 요청)")));
+        var pre = mk("pre", "dcmpout"); pre.textContent = cmp.text; dt.appendChild(pre); cb.appendChild(dt);
+        var vr = mk("div", "drate"); vr.appendChild(mk("small", "", _t("어느 쪽이 더 낫나요?")));
+        var voted = cmpVoted[cur.v];
+        [["multi", "여러 AI 결과"], ["single", "단일 AI 답"], ["tie", "비슷함"]].forEach(function (o) {
+          var b = mk("button", "btn sm", _t(o[1])); b.type = "button"; b.dataset.vote = o[0]; b.disabled = !!voted;
+          if (voted === o[0]) b.classList.add("primary");
+          b.addEventListener("click", function () { cmpVoted[cur.v] = o[0]; send({ t: "kpi", n: "compare_vote", v: cur.v, r: o[0] }); toast(_t("투표해 주셔서 고마워요.")); renderDeliv(); });
+          vr.appendChild(b);
+        });
+        cb.appendChild(vr);
+      } else {
+        var cr = mk("button", "btn sm", cmpBusy ? _t("비교 중…") : _t("단일 AI 답과 비교 (AI 호출 1회)")); cr.type = "button"; cr.id = "cmprun"; cr.disabled = cmpBusy;
+        cr.addEventListener("click", function () { cmpBusy = true; send({ t: "compare" }); renderDeliv(); });
+        cb.appendChild(cr);
+      }
+      box.appendChild(cb);
     }
     var NEXT = {
       brainstorm: ["고른 아이디어를 실행 계획으로 정리해줘", "각 아이디어의 위험과 반대 의견을 더 따져줘"],
@@ -1915,7 +1934,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       me = m.you; joined = true;
       $("entrypane").hidden = true; $("room").hidden = false; setView("main");
       $("log").textContent = ""; last = null; lastDay = ""; m.messages.forEach(addMessage);
-      $("doc").value = m.doc || ""; deliv = m.deliv || null; dhist = m.dhist || []; viewVer = null; dmThreads = m.dms || {}; aidms = m.aidms || []; credits = m.credits || credits; youOwner = m.youOwner !== false; renderCredits(); renderPub(); loadMyRooms();
+      $("doc").value = m.doc || ""; deliv = m.deliv || null; dhist = m.dhist || []; viewVer = null; dmThreads = m.dms || {}; aidms = m.aidms || []; cmp = m.compare || null; credits = m.credits || credits; youOwner = m.youOwner !== false; renderCredits(); renderPub(); loadMyRooms();
       if (wide()) $("shell").dataset.info = "1";
       renderBlocked(m.blocked); renderMeta(m); renderMemory(m.memory); renderRooms(); if (!matchMedia("(pointer:coarse)").matches) $("text").focus();
     } else if (m.t === "meta") { renderMeta(m); }
@@ -1960,6 +1979,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       saveJson(m.asset, nm + ".aichat.json"); toast(_t("에셋 파일을 저장했습니다."));
     }
     else if (m.t === "delver") { viewVer = m.item; renderDeliv(); }
+    else if (m.t === "compare") { cmp = m.compare || null; cmpBusy = false; renderDeliv(); }
     else if (m.t === "deliv") {
       deliv = m.deliv; dhist = m.hist || []; viewVer = null; renderDeliv();
       if (deliv) {
@@ -1972,6 +1992,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     else if (m.t === "reported") { hideMsgLocal(m.id); toast(_t("신고했어요. 검토 후 조치합니다.")); }
     else if (m.t === "blocked") { renderBlocked(m.list); if (m.name) { dropFromLog(m.name); toast(_t("{name} 님을 차단했어요", { name: m.name })); } else toast(_t("차단을 해제했어요. 다시 입장하면 이전 메시지가 보여요.")); }
     else if (m.t === "err") {
+      if (cmpBusy) { cmpBusy = false; renderDeliv(); }
       if (m.code === "KICKED" || m.code === "ROOM_DELETED" || m.code === "TOO_MANY") { joined = false; try { history.replaceState(null, "", location.pathname); } catch (e) {} alert_(_tx(m.text)); setTimeout(function () { location.href = location.pathname; }, 1200); return; }
       if (m.code === "CONSENT_REQUIRED") { $("jconsent").checked = false; }
       if (!joined) { joinErr(_tx(m.text)); $("jgo").disabled = false; } else toast(_tx(m.text));

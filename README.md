@@ -207,6 +207,8 @@ npm start          # http://localhost:3000
 - `DATA_DIR`·`ADMIN_TOKEN`이 없거나, https인데 `COOKIE_SECURE=1`이 아니면 시작 로그에 경고한다.
 - `FREE_EXTRA_BACKENDS`의 원격 `http://` 주소는 운영에서 무시한다(https 또는 localhost만 허용).
 
+**단일 AI 비교**: 산출물 탭의 "단일 AI 답과 비교"(AI 호출 1회)를 누르면 같은 요청을 AI 한 명이 혼자 처리한 답이 나란히 나오고, "여러 AI 결과 / 단일 AI 답 / 비슷함"을 고를 수 있다. 투표는 익명 집계(`compare_vote.*`)로만 쌓이며 관리자 요약에 비율이 나온다.
+
 **KPI 계측(익명)**: 깔때기(`first_human_msg`·`first_ai_reply`·`first_deliverable`·`first_share`), 복사 성공(`copy_success`)·복사 실패·다운로드 클릭(저장 성공 아님), 채택(`deliv_adopted`, 버전당 한 번), 유용성 1~5점(`rating.N`), 방 재방문(`room_return.*`)을 흐름(free/모드)별로 센다. 같은 버전의 같은 행동은 한 번만 받고, 없는 버전·허용되지 않은 이름은 버린다. 비용 상태는 `no_real_calls`/`fully_priced`/`incomplete`로 구분한다. 정의와 한계는 `docs/VALIDATION.md`.
 
 **제공사 호출 지표**: 제공사별 성공·실패 횟수와 누적 지연(ms)을 익명 집계(`call_ok.<제공사>`, `call_err.<제공사>`, `ms.<제공사>`)로 남긴다. 평균 지연 = `ms ÷ (ok+err)`. 모델 이름·키·내용은 기록하지 않는다. 

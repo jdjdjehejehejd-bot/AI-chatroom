@@ -692,3 +692,11 @@ AI 인원 제한 없음, 광고 없음 || No limit on AIs, no ads || AIの人数
 이 플랜은 호출 예산 제한이 없습니다. 원하면 예산을 직접 낮춰 쓸 수 있어요. || This plan has no call budget limit. You can still set a lower budget yourself. || このプランには呼び出し予算の上限がありません。必要なら自分で低く設定できます。 || 此套餐没有调用预算上限。需要的话你仍可以自行调低预算。 || Este plan no tiene límite de presupuesto de llamadas. Aun así puedes fijar uno más bajo.
 오늘 무제한 || Unlimited today || 今日は無制限 || 今日不限 || Hoy sin límite
 플랜 {plan} · AI 호출 횟수 제한 없음 || Plan {plan} · no limit on AI calls || プラン {plan} · AI呼び出し回数の制限なし || 套餐 {plan} · AI 调用次数不限 || Plan {plan} · sin límite de llamadas de IA
+혼자 일하는 AI의 답 (같은 요청) || Answer from a single AI working alone (same request) || 1人で作業するAIの回答（同じ依頼） || 单个 AI 独立完成的回答（同一请求） || Respuesta de una sola IA trabajando sola (misma petición)
+어느 쪽이 더 낫나요? || Which one is better? || どちらが良いですか？ || 哪一个更好？ || ¿Cuál es mejor?
+여러 AI 결과 || Multi-AI result || 複数AIの結果 || 多个 AI 的结果 || Resultado de varias IA
+단일 AI 답 || Single-AI answer || 単独AIの回答 || 单个 AI 的回答 || Respuesta de una sola IA
+비슷함 || About the same || ほぼ同じ || 差不多 || Parecidas
+투표해 주셔서 고마워요. || Thanks for voting. || 投票ありがとうございます。 || 感谢投票。 || Gracias por votar.
+비교 중… || Comparing… || 比較中… || 对比中… || Comparando…
+단일 AI 답과 비교 (AI 호출 1회) || Compare with a single AI (1 AI call) || 単独AIの回答と比較（AI呼び出し1回） || 与单个 AI 回答对比（消耗 1 次 AI 调用） || Comparar con una sola IA (1 llamada de IA)
