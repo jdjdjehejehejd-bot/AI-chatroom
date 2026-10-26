@@ -1831,5 +1831,8 @@ wss.on('connection', (ws, req) => {
 });
 server.listen(PORT, () => {
   const live = process.env.ANTHROPIC_API_KEY ? 'Anthropic' : process.env.OPENAI_API_KEY ? 'OpenAI 호환' : '데모(고정 응답)';
+  const hasServerKey = Object.values(ENV_KEYS).some(k => process.env[k]);
+  if (hasServerKey && !MANAGED_DAILY_CALLS && !MANAGED_DAILY_USD) console.warn('[경고] 서버 API 키가 설정돼 있는데 MANAGED_DAILY_CALLS / MANAGED_DAILY_USD가 모두 0(상한 없음)입니다. 공개하기 전에 하루 비용 상한을 정하세요.');
+  if (hasServerKey && MANAGED_DAILY_USD > 0 && !Object.keys(PRICES).length) console.warn('[경고] MANAGED_DAILY_USD는 MODEL_PRICES 단가가 있어야 작동합니다. MODEL_PRICES가 비어 있어 금액 상한이 적용되지 않습니다.');
   console.log('AI 채팅방 서버 http://localhost:' + PORT + '  | AI 모드: ' + live + ' | 방당 예산 ' + BUDGET_DEFAULT + '회');
 });

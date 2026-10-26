@@ -846,7 +846,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     ROLE_KO.forEach(function (k) { var d = _t(k); if (d === k) return; var from = toLocal ? k : d, to = toLocal ? d : k; text = text.replace(new RegExp("@" + escRe(from) + "(?![\\p{L}\\p{N}_])", "gu"), "@" + to); });
     return text;
   }
-  var cmp = null, cmpBusy = false, cmpVoted = {}, rateDone = {}, notesOpen = {}, jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
+  var cmp = null, cmpBusy = false, cmpVoted = {}, cmpSwap = {}, rateDone = {}, notesOpen = {}, jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
   var aidms = [], peekOpen = -1, dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typingWho = "", msgIndex = {}, lastTap = { id: 0, t: 0 };
   var POLNAME = { mention: _t("@멘션했을 때만"), round: _t("순서대로"), free: _t("AI가 알아서 판단") };
   var LIVE = ["anthropic", "openai", "openrouter", "groq", "google", "mistral", "nvidia"];
@@ -1610,14 +1610,24 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       box.appendChild(rt);
       var cb = mk("div", "dcmp");
       if (cmp && cmp.v === cur.v) {
-        var dt = mk("details"); dt.open = true; dt.appendChild(mk("summary", "", _t("혼자 일하는 AI의 답 (같은 요청)")));
-        var pre = mk("pre", "dcmpout"); pre.textContent = cmp.text; dt.appendChild(pre); cb.appendChild(dt);
+        /* 블라인드 비교: 어느 쪽이 여러 AI 결과인지 숨기고 A/B 순서를 버전마다 무작위로 섞는다. 투표 뒤에 공개한다 */
+        if (cmpSwap[cur.v] === undefined) cmpSwap[cur.v] = Math.random() < 0.5;
+        var swap = cmpSwap[cur.v], voted = cmpVoted[cur.v];
+        var sides = swap ? [["single", cmp.text], ["multi", cur.text]] : [["multi", cur.text], ["single", cmp.text]];
+        var dt = mk("details"); dt.open = true; dt.appendChild(mk("summary", "", _t("같은 요청에 대한 두 결과 (어느 쪽이 여러 AI인지는 투표 뒤에 공개돼요)")));
+        ["A", "B"].forEach(function (lab, i) {
+          dt.appendChild(mk("b", "", lab + (voted ? " — " + (sides[i][0] === "multi" ? _t("여러 AI 결과") : _t("단일 AI 답")) : "")));
+          var pre = mk("pre", "dcmpout"); pre.textContent = sides[i][1]; dt.appendChild(pre);
+        });
+        cb.appendChild(dt);
         var vr = mk("div", "drate"); vr.appendChild(mk("small", "", _t("어느 쪽이 더 낫나요?")));
-        var voted = cmpVoted[cur.v];
-        [["multi", "여러 AI 결과"], ["single", "단일 AI 답"], ["tie", "비슷함"]].forEach(function (o) {
-          var b = mk("button", "btn sm", _t(o[1])); b.type = "button"; b.dataset.vote = o[0]; b.disabled = !!voted;
+        [["A", _t("A가 더 낫다")], ["B", _t("B가 더 낫다")], ["tie", _t("비슷함")]].forEach(function (o) {
+          var b = mk("button", "btn sm", o[1]); b.type = "button"; b.dataset.vote = o[0]; b.disabled = !!voted;
           if (voted === o[0]) b.classList.add("primary");
-          b.addEventListener("click", function () { cmpVoted[cur.v] = o[0]; send({ t: "kpi", n: "compare_vote", v: cur.v, r: o[0] }); toast(_t("투표해 주셔서 고마워요.")); renderDeliv(); });
+          b.addEventListener("click", function () {
+            var r = o[0] === "tie" ? "tie" : sides[o[0] === "A" ? 0 : 1][0];
+            cmpVoted[cur.v] = o[0]; send({ t: "kpi", n: "compare_vote", v: cur.v, r: r }); toast(_t("투표해 주셔서 고마워요.")); renderDeliv();
+          });
           vr.appendChild(b);
         });
         cb.appendChild(vr);

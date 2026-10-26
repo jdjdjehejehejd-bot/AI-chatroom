@@ -49,6 +49,7 @@ html=html.slice(0,idx)+shim+'\n'+html.slice(idx);
 // 샌드박스 대응: root padding 제거 (앱 셸이 직접 safe-area 처리)
 html=html.replace('</style>',':root{padding:0 !important}\n</style>');
 // 배너
-html=html.replace('<div id="toast"','<div id="toast"');
+const banner='<div id="demobar" role="note" style="position:fixed;top:0;left:0;right:0;z-index:90;display:flex;gap:8px;justify-content:center;align-items:center;padding:2px 8px;background:#1f2330;color:#fff;font:11px/1.5 system-ui,sans-serif;white-space:nowrap;overflow:hidden"><span id="demotxt"></span><button type="button" aria-label="close" onclick="this.parentNode.remove()" style="border:0;background:transparent;color:#fff;font-size:13px;cursor:pointer;padding:0 2px;line-height:1">×</button></div><script>(function(){var ko=(navigator.language||"").slice(0,2)==="ko";document.getElementById("demotxt").textContent=ko?"체험판 · 예시 응답만 · 실제 AI·로그인 없음":"Demo · sample replies only · no real AI or sign-in";})();</script>';
+html=html.replace('<div id="toast"',()=>banner+'<div id="toast"');
 fs.writeFileSync(process.argv[2],html);
 console.log('ok',html.length);
