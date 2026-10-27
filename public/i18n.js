@@ -683,7 +683,11 @@
 ["단일 AI 답과 비교 (AI 호출 1회)", "Compare with a single AI (1 AI call)", "単独AIの回答と比較（AI呼び出し1回）", "与单个 AI 回答对比（消耗 1 次 AI 调用）", "Comparar con una sola IA (1 llamada de IA)"],
 ["같은 요청에 대한 두 결과 (어느 쪽이 여러 AI인지는 투표 뒤에 공개돼요)", "Two results for the same request (which one is the multi-AI result is revealed after you vote)", "同じ依頼に対する2つの結果（どちらが複数AIの結果かは投票後に公開されます）", "同一请求的两个结果（哪一个是多 AI 的结果会在投票后揭晓）", "Dos resultados para la misma petición (cuál es el de varias IA se revela tras votar)"],
 ["A가 더 낫다", "A is better", "Aの方が良い", "A 更好", "A es mejor"],
-["B가 더 낫다", "B is better", "Bの方が良い", "B 更好", "B es mejor"]
+["B가 더 낫다", "B is better", "Bの方が良い", "B 更好", "B es mejor"],
+["무료 AI 한 명으로 바로 시작", "Start now with one free AI", "無料AI1人ですぐ始める", "用一个免费 AI 立即开始", "Empieza ya con una IA gratuita"],
+["오늘 저녁 메뉴 세 가지만 추천해줘", "Suggest three dinner ideas for tonight", "今夜の夕食メニューを3つ提案して", "推荐三个今晚的晚餐菜单", "Sugiéreme tres ideas para la cena de hoy"],
+["이 문장을 자연스러운 영어로 바꿔줘: 내일 회의 시간 좀 옮길 수 있을까요?", "Translate into natural English: 내일 회의 시간 좀 옮길 수 있을까요?", "この文を自然な英語にして：내일 회의 시간 좀 옮길 수 있을까요?", "把这句话译成自然的英语：내일 회의 시간 좀 옮길 수 있을까요?", "Tradúcelo a un inglés natural: 내일 회의 시간 좀 옮길 수 있을까요?"],
+["파이썬으로 중복 파일 찾는 스크립트 짜줘", "Write a Python script that finds duplicate files", "重複ファイルを探すPythonスクリプトを書いて", "用 Python 写一个查找重复文件的脚本", "Escribe un script de Python que encuentre archivos duplicados"]
 ];
   function pick() {
     var c = null, q = /[?&]lang=([a-z]{2})/.exec(location.search);

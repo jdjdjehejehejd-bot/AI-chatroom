@@ -647,7 +647,11 @@ function libAdd(room, asset, by) {
 }
 function firstFor(room, text) {
   if (room.pipeline) return room.pipeline.map(n => room.ais.find(a => a.name === n)).filter(Boolean);
-  return room.policy === 'round' ? room.ais.slice() : mentioned(room, text, null);
+  if (room.policy === 'round') return room.ais.slice();
+  const m = mentioned(room, text, null);
+  // 라이트 유저 배려: AI가 한 명뿐이면 @ 없이 보낸 말도 그 AI에게 건 말로 본다(일반 AI 채팅과 같은 첫 경험).
+  if (!m.length && !room.mode && room.ais.length === 1 && !room.ais[0].muted && !/@\S/.test(text)) return [room.ais[0]];
+  return m;
 }
 function currentAsset(room) {
   return {

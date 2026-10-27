@@ -26,7 +26,7 @@ const msgs=c=>c.ev.filter(e=>e.t==='msg').map(e=>e.msg);
  check('guest join ok (anon)',G.ev.some(e=>e.t==='state'));
  // second join w/o consent flag works (already consented)
  const M2=await cl('safe1','Mia',ck2,undefined);check('consent remembered',M2.ev.some(e=>e.t==='state'));M2.ws.close();
- A.s({t:'addAI',name:'봇',persona:'p'});await sleep(250);
+ A.s({t:'addAI',name:'봇',persona:'p'});await sleep(250); A.s({t:'addAI',name:'봇2',persona:'p'});await sleep(250);
  M.s({t:'msg',text:'미아의 스팸 메시지'});await sleep(300);
  Z.s({t:'msg',text:'제드의 정상 메시지'});await sleep(300);
  const mm=msgs(A).find(m=>m.text==='미아의 스팸 메시지');

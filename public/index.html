@@ -1431,8 +1431,17 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       var ex = mk("div", "cast"); ex.style.justifyContent = "center";
       meta.mode.examples.forEach(function (exs) { var t = _tx(exs); var b = mk("button", "btn sm", t); b.type = "button"; b.style.textAlign = "left"; b.addEventListener("click", function () { $("text").value = t; autosize(); $("text").focus(); }); ex.appendChild(b); });
       e.appendChild(ex);
+    } else if (has) {
+      var ex2 = mk("div", "cast"); ex2.style.justifyContent = "center";
+      [_t("오늘 저녁 메뉴 세 가지만 추천해줘"), _t("이 문장을 자연스러운 영어로 바꿔줘: 내일 회의 시간 좀 옮길 수 있을까요?"), _t("파이썬으로 중복 파일 찾는 스크립트 짜줘")].forEach(function (t) {
+        var b = mk("button", "btn sm", t); b.type = "button"; b.style.textAlign = "left"; b.addEventListener("click", function () { $("text").value = t; autosize(); $("text").focus(); }); ex2.appendChild(b);
+      });
+      e.appendChild(ex2);
     } else if (!has) {
-      var b1 = mk("button", "btn primary sm", _t("에셋 불러오기")); b1.type = "button"; b1.addEventListener("click", function () { openInfo("assets"); });
+      var b0 = mk("button", "btn primary", _t("무료 AI 한 명으로 바로 시작")); b0.type = "button"; b0.id = "quickai"; b0.style.display = "block"; b0.style.margin = "0 auto 10px";
+      b0.addEventListener("click", function () { send({ t: "addAI", name: "AI", persona: "", provider: (meta && meta.free && meta.free.available) ? "free" : "demo" }); });
+      e.appendChild(b0);
+      var b1 =mk("button", "btn primary sm", _t("에셋 불러오기")); b1.type = "button"; b1.addEventListener("click", function () { openInfo("assets"); });
       var b2 = mk("button", "btn sm", _t("AI 초대")); b2.type = "button"; b2.style.marginLeft = "8px"; b2.addEventListener("click", function () { openInfo("ai"); $("invdet").open = true; $("ainame").focus(); });
       e.appendChild(b1); e.appendChild(b2);
     }
