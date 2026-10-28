@@ -20,6 +20,20 @@ const cnt = A => A.ev.filter(e => e.t === 'msg' && e.msg && e.msg.kind === 'ai')
     const n2 = cnt(A);
     await send({ t: 'msg', text: '둘 다 있을 때 멘션 없는 말' }); await sleep(1200);
     check('two AIs: no mention means no reply', cnt(A) === n2, '');
+    // AI끼리 대화 구경
+    const B = await cl(port, 'qs2', 'Bea'); const sb = async o => { B.s(o); await sleep(800); };
+    await sb({ t: 'spectate', text: '짜장면 vs 짬뽕' });
+    check('spectate needs 2+ AIs', B.ev.some(e => e.t === 'err' && /2명/.test(e.text)), JSON.stringify(B.ev.filter(e => e.t === 'err')));
+    await sb({ t: 'addAI', name: 'A1', persona: '', provider: 'demo' }); await sb({ t: 'addAI', name: 'A2', persona: '', provider: 'demo' });
+    const m0 = cnt(B);
+    await sb({ t: 'spectate', text: '짜장면 vs 짬뽕', turns: 4 }); await sleep(2500);
+    const m1 = cnt(B) - m0;
+    check('spectate: AIs talk 2..4 turns', m1 >= 2 && m1 <= 4, m1);
+    const st = [...B.ev].reverse().find(e => e.t === 'meta' || e.t === 'state');
+    check('spectate restores policy', st && (st.policy || (st.room && st.room.policy)) === 'mention', JSON.stringify(st && st.policy));
+    await sb({ t: 'spectate', text: 'x', turns: 999 }); await sleep(3000);
+    check('spectate turns are capped (<=8 more)', cnt(B) - m0 - m1 <= 8, cnt(B) - m0 - m1);
+    B.ws.close();
     A.ws.close();
   } finally { sv.kill(); }
   console.log(res.every(Boolean) ? 'ALL OK' : 'SOME FAILED'); process.exit(res.every(Boolean) ? 0 : 1);

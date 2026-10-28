@@ -1539,6 +1539,15 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     if (!s.mode) s.ais.forEach(function (ai) {
       var c = mk("button", "c" + colorOf(ai.name), "@" + dn(ai.name)); c.type = "button"; c.addEventListener("click", function () { insertMention(ai.name); }); chips.appendChild(c);
     });
+    if (!s.mode && s.ais.filter(function (x) { return !x.muted; }).length >= 2) {
+      var sp = mk("button", "", _t("AI끼리 대화 구경")); sp.type = "button"; sp.id = "spectate"; sp.title = _t("주제를 입력창에 적고 누르면 AI들이 서로 대화해요. 비우면 아무 주제나 골라요.");
+      sp.addEventListener("click", function () {
+        var TOPICS = [_t("짜장면 vs 짬뽕, 끝장 토론"), _t("고양이와 강아지 중 진짜 승자는?"), _t("민트초코는 음식인가 치약인가"), _t("내일 로또 1등이 되면 제일 먼저 할 일")];
+        var t = $("text").value.trim() || TOPICS[Math.floor(Math.random() * TOPICS.length)];
+        $("text").value = ""; autosize(); send({ t: "spectate", text: t });
+      });
+      chips.appendChild(sp);
+    }
     if (s.ais.length && !s.mode) { var a2 = mk("button", "", _t("@모두")); a2.type = "button"; a2.addEventListener("click", function () { insertMention(_t("모두")); }); chips.appendChild(a2); }
     var cur = $("curasset"); cur.textContent = "";
     if (s.asset) { cur.appendChild(mk("b", "", s.asset.name)); cur.appendChild(mk("small", "", (s.asset.description || _t("설명 없음")) + " · " + _t("AI {n}명", { n: s.asset.ais }))); }
@@ -1601,6 +1610,11 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       } catch (e) { toast(_t("저장하지 못했습니다. 복사해서 쓰세요.")); }
     });
     act.appendChild(cp); act.appendChild(dl);
+    if (meta && meta.mode && meta.mode.id === "debate" && /^(markdown|md)$/i.test(cur.lang)) {
+      var im = mk("button", "btn sm", _t("카드 이미지로 저장")); im.type = "button"; im.id = "dimg";
+      im.addEventListener("click", function () { saveCardPng(cur.text, cur.v); });
+      act.appendChild(im);
+    }
     if (old) {
       var rs = mk("button", "btn sm", _t("이 버전으로 되돌리기")); rs.type = "button"; rs.id = "drestore";
       rs.addEventListener("click", function () { send({ t: "delrestore", v: cur.v }); });
@@ -1659,6 +1673,49 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       nx.forEach(function (q) { var b = mk("button", "btn sm", _t(q)); b.type = "button"; b.addEventListener("click", function () { $("text").value = _t(q); autosize(); $("text").focus(); setView("main"); }); nb.appendChild(b); });
       box.appendChild(nb);
     }
+  }
+  function saveCardPng(md, v) {
+    try {
+      var W = 1080, P = 72, ink = "#1c1b22", mute = "#6b6878", acc = "#5b4bdb", bg = "#faf8f3";
+      var FONT = '"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,sans-serif';
+      var blocks = [];
+      md.split("\n").forEach(function (ln) {
+        var t = ln.replace(/\s+$/, ""); if (!t.trim()) return;
+        var h = /^#{1,6}\s*(.*)$/.exec(t);
+        if (h) blocks.push({ k: "h", t: h[1] });
+        else blocks.push({ k: "p", t: t.replace(/^\s*[-*]\s+/, "• ").replace(/\*\*/g, "") });
+      });
+      blocks = blocks.slice(0, 40);
+      var cv = document.createElement("canvas"), cx = cv.getContext("2d");
+      function wrap(text, size, weight, width) {
+        cx.font = weight + " " + size + "px " + FONT; var out = [], line = "";
+        Array.from(text).forEach(function (ch) { var tst = line + ch; if (cx.measureText(tst).width > width && line) { out.push(line); line = ch; } else line = tst; });
+        if (line) out.push(line); return out;
+      }
+      var layout = [], y = P + 120;
+      blocks.forEach(function (b) {
+        var size = b.k === "h" ? 36 : 32, weight = b.k === "h" ? "700" : "400", lh = Math.round(size * 1.5);
+        if (b.k === "h") y += 22;
+        var lines = wrap(b.t, size, weight, W - P * 2);
+        lines.forEach(function (l) { layout.push({ t: l, y: y + size, size: size, weight: weight, color: b.k === "h" ? acc : ink }); y += lh; });
+        y += b.k === "h" ? 6 : 10;
+      });
+      var H = y + 150;
+      cv.width = W; cv.height = H;
+      cx.fillStyle = bg; cx.fillRect(0, 0, W, H);
+      cx.fillStyle = acc; cx.fillRect(0, 0, W, 14);
+      cx.textBaseline = "alphabetic"; cx.fillStyle = mute; cx.font = "600 28px " + FONT; cx.fillText(_t("AI 토론 판정 카드"), P, P + 40);
+      cx.fillStyle = ink; cx.font = "800 44px " + FONT; cx.fillText("Debate", P, P + 92);
+      layout.forEach(function (o) { cx.fillStyle = o.color; cx.font = o.weight + " " + o.size + "px " + FONT; cx.fillText(o.t, P, o.y); });
+      cx.fillStyle = mute; cx.font = "400 24px " + FONT;
+      cx.fillText(_t("AI 채팅방 · 여러 AI가 따져 본 결과예요. 중요한 결정은 직접 확인하세요."), P, H - 70);
+      cv.toBlob(function (bl) {
+        if (!bl) { toast(_t("저장하지 못했습니다.")); return; }
+        var a = document.createElement("a"), u = URL.createObjectURL(bl);
+        a.href = u; a.download = "debate-card-v" + v + ".png"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
+        send({ t: "kpi", n: "download_clicked", v: v });
+      }, "image/png");
+    } catch (e) { toast(_t("저장하지 못했습니다.")); }
   }
   function saveJson(obj, fname) {
     try {

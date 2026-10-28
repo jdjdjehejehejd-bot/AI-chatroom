@@ -706,3 +706,12 @@ B가 더 낫다 || B is better || Bの方が良い || B 更好 || B es mejor
 오늘 저녁 메뉴 세 가지만 추천해줘 || Suggest three dinner ideas for tonight || 今夜の夕食メニューを3つ提案して || 推荐三个今晚的晚餐菜单 || Sugiéreme tres ideas para la cena de hoy
 이 문장을 자연스러운 영어로 바꿔줘: 내일 회의 시간 좀 옮길 수 있을까요? || Translate into natural English: 내일 회의 시간 좀 옮길 수 있을까요? || この文を自然な英語にして：내일 회의 시간 좀 옮길 수 있을까요? || 把这句话译成自然的英语：내일 회의 시간 좀 옮길 수 있을까요? || Tradúcelo a un inglés natural: 내일 회의 시간 좀 옮길 수 있을까요?
 파이썬으로 중복 파일 찾는 스크립트 짜줘 || Write a Python script that finds duplicate files || 重複ファイルを探すPythonスクリプトを書いて || 用 Python 写一个查找重复文件的脚本 || Escribe un script de Python que encuentre archivos duplicados
+AI끼리 대화 구경 || Watch the AIs talk || AI同士の会話を見る || 看 AI 互相聊天 || Ver a las IA conversar
+주제를 입력창에 적고 누르면 AI들이 서로 대화해요. 비우면 아무 주제나 골라요. || Type a topic in the box and tap — the AIs will talk to each other. Leave it empty for a random topic. || 入力欄にお題を書いて押すとAI同士が会話します。空なら適当なお題を選びます。 || 在输入框写下话题再点，AI 们会互相聊天。留空则随机选一个话题。 || Escribe un tema en el cuadro y pulsa: las IA hablarán entre sí. Si lo dejas vacío, elijo uno al azar.
+짜장면 vs 짬뽕, 끝장 토론 || Jajangmyeon vs jjamppong: the ultimate debate || ジャジャン麺 vs チャンポン、決着バトル || 炸酱面 vs 海鲜面，终极辩论 || Jajangmyeon vs jjamppong: el debate definitivo
+고양이와 강아지 중 진짜 승자는? || Cats or dogs: who is the real winner? || 猫と犬、本当の勝者は？ || 猫和狗，谁才是真正的赢家？ || ¿Gatos o perros: quién gana de verdad?
+민트초코는 음식인가 치약인가 || Is mint chocolate food or toothpaste? || ミントチョコは食べ物か歯磨き粉か || 薄荷巧克力是食物还是牙膏？ || ¿El chocolate con menta es comida o pasta de dientes?
+내일 로또 1등이 되면 제일 먼저 할 일 || The first thing to do if I win the lottery tomorrow || 明日ロト1等が当たったら最初にすること || 明天中了彩票头奖先做什么 || Lo primero que haría si ganara la lotería mañana
+카드 이미지로 저장 || Save as card image || カード画像として保存 || 保存为卡片图片 || Guardar como imagen de tarjeta
+AI 토론 판정 카드 || AI debate verdict card || AI討論の判定カード || AI 辩论裁决卡 || Tarjeta de veredicto del debate de IA
+AI 채팅방 · 여러 AI가 따져 본 결과예요. 중요한 결정은 직접 확인하세요. || AI Chatroom · Several AIs weighed in. Double-check important decisions yourself. || AIチャットルーム · 複数のAIが検討した結果です。大切な決定は自分で確認してください。 || AI 聊天室 · 这是多个 AI 讨论后的结果。重要决定请自行核实。 || Sala de chat con IA · Varias IA lo han analizado. Verifica tú mismo las decisiones importantes.

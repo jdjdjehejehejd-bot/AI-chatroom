@@ -626,6 +626,7 @@ const MODES = {
     rules: '이 방은 토론방이다. 질문이 오면 옹호 → 반박 → 검증 → 판정 순서로 이어 받는다. 서로 일부러 반대 입장을 맡되 사실은 지어내지 않는다. 마지막 심판만 ```markdown 판정 카드를 낸다(3500자 이내). 나머지는 짧게 말한다. 판정은 참고용이며 중요한 결정은 직접 확인하라고 한 줄 덧붙인다.'
   }
 };
+const SPECTATE_MAX = 8, SPECTATE_DEFAULT = 6;
 const DELIV_MAX = 12000, FREE_DELIV_MIN = 300;
 function modeAsset(id, room) {
   const md = MODES[id];
@@ -1284,6 +1285,23 @@ function handle(ws, m) {
   if (room.ownerSub && OWNER_ONLY.includes(m.t) && !(ws.user && ws.user.sub === room.ownerSub))
     return send(ws, { t: 'err', text: '방장(Google 로그인 계정)만 바꿀 수 있습니다.' });
   switch (m.t) {
+    case 'spectate': {
+      /* AI끼리 대화 구경: 주제만 주면 AI들이 정해진 횟수만큼 알아서 이어 말한다. 예산·크레딧은 일반 발언과 같이 차감되고 횟수 상한이 있다. */
+      if (room.mode) return send(ws, { t: 'err', text: '모드가 없는 방에서만 쓸 수 있습니다.' });
+      const live = room.ais.filter(a => !a.muted);
+      if (live.length < 2) return send(ws, { t: 'err', text: 'AI가 2명 이상 있어야 서로 대화하게 할 수 있습니다.' });
+      const topic = cleanText(m.text, 200);
+      if (!topic) return;
+      const turns = Math.max(2, Math.min(SPECTATE_MAX, Math.floor(Number(m.turns)) || SPECTATE_DEFAULT));
+      addMsg(room, 'human', name, '[구경] AI끼리 이 주제로 대화해 주세요: ' + topic, undefined, undefined, ws.user ? ws.user.sub : '');
+      room.lastReq = topic;
+      funnel(room, 'human_msg'); track('spectate_started');
+      const prevPolicy = room.policy, prevStreak = room.maxStreak;
+      room.policy = 'free'; room.maxStreak = turns;
+      /* 처음 둘은 반드시 말하고(PASS 불가), 이후는 AI가 알아서 이어 간다 */
+      orchestrate(room, live.slice(0, 2), ws.user ? ws.user.sub : '').finally(() => { room.policy = prevPolicy; room.maxStreak = prevStreak; broadcast(room, meta(room)); });
+      return;
+    }
     case 'msg': {
       const text = cleanText(m.text, LIMITS.text);
       if (!text) return;
