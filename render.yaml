@@ -1,16 +1,11 @@
-# Render Blueprint — 영구 디스크가 있어야 방 데이터가 재시작 뒤에도 남는다 (유료 인스턴스 필요).
+# Render Free Blueprint — 방·계정은 메모리에만 있고 수면·재시작·재배포 때 사라진다.
 services:
   - type: web
     name: ai-chatroom
     runtime: docker
-    plan: starter
+    plan: free
     healthCheckPath: /healthz
-    disk:
-      name: data
-      mountPath: /data
-      sizeGB: 1
     envVars:
-      - { key: DATA_DIR, value: /data }
       - { key: COOKIE_SECURE, value: "1" }
       - { key: SESSION_SECRET, generateValue: true }
       - { key: ADMIN_TOKEN, generateValue: true }
