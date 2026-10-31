@@ -1045,7 +1045,18 @@ async function callFree(room, ai, dm) {
       freeState.cool[b.id] = Date.now() + (code === 429 || code >= 500 || !code ? 60000 : 600000);
     }
   }
-  if (tried && lastErr) throw new Error('무료 모델이 지금 응답하지 못했습니다. 잠시 뒤 다시 시도하세요.');
+  if (tried && lastErr) {
+    const m = /API (\d+)/.exec(String(lastErr.message || '')), code = m ? Number(m[1]) : 0;
+    const reason = code === 401 ? 'API 키 인증을 확인하세요.'
+      : code === 402 ? '무료 포함 사용량 또는 계정 요금제 한도를 확인하세요.'
+      : code === 403 ? '이 모델의 계정 접근 권한을 확인하세요.'
+      : code === 404 ? '모델 ID 또는 API 경로를 확인하세요.'
+      : code === 429 ? '무료 요청 한도 또는 속도 제한에 도달했습니다.'
+      : code >= 500 ? '제공사에서 일시 오류가 발생했습니다.'
+      : code ? '모델 설정이나 API 요청 형식을 확인하세요.'
+      : '네트워크 연결 또는 제공사 설정을 확인하세요.';
+    throw new Error('무료 모델 호출 실패' + (code ? ' (HTTP ' + code + ')' : '') + ': ' + reason);
+  }
   throw new Error('오늘의 무료 모델 사용량이 모두 소진되었거나 아직 설정되지 않았습니다.');
 }
 function demoSummary(room) {
