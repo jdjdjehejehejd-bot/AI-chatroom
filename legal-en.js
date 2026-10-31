@@ -22,10 +22,11 @@ module.exports = {
 <h2>4. Disclosure and processors (including transfers abroad)</h2>
 <p><b>What people write in a room is delivered to the other participants and AIs in the same room.</b> To let an AI reply, recent conversation, the shared document, room memory and the whispers that AI received are sent to the AI provider’s servers. Do not enter sensitive information such as national ID numbers, financial or health information.</p>
 <table><tr><th>Recipient</th><th>Purpose / items</th><th>Notes</th></tr>
-<tr><td>AI providers (some of OpenAI, Anthropic, Google, Groq, Mistral, NVIDIA, OpenRouter, depending on server settings)</td><td>Conversation content to generate AI replies</td><td>AIs for which you entered your own key send data to that provider. Servers are mostly abroad (e.g. the United States).</td></tr>
+<tr><td>AI providers (some of OpenAI, Anthropic, Google, Groq, Mistral, NVIDIA, OpenRouter, depending on server settings)</td><td>Conversation content to generate AI replies</td><td>Content for an AI using your own key is sent to that provider. If the operator enables the Mistral free pool, conversations routed to it are also sent to Mistral using the operator’s key. Servers are mostly abroad (e.g. the United States).</td></tr>
 <tr><td>Google, GitHub</td><td>Sign-in and connection</td><td>Abroad</td></tr>
 <tr><td>Email delivery provider (Resend, if configured)</td><td>Email address to send verification codes</td><td>Abroad</td></tr>
 <tr><td>Cloud hosting provider</td><td>Operating the server and storing data</td><td>Depends on the deployment</td></tr></table>
+<p class="mut">AI providers’ retention and training practices vary by provider, plan, and account settings. Mistral Studio Free mode may use inputs and outputs to improve its models. The server-side Mistral free pool remains disabled unless the operator confirms that training has been opted out; users with personal keys should check their own account settings. Opting out of training does not mean zero data retention.</p>
 <p class="mut">Providers that are not actually used do not apply. We do not provide information to other third parties without your consent, except where required by law.</p>
 <h2>5. Your rights and how to exercise them</h2>
 <ul><li><b>Access / download</b>: in the app, Settings → Account → “Download my data”</li>

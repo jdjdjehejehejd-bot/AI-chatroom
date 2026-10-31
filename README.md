@@ -29,19 +29,23 @@ npm start          # http://localhost:3000
 
 제공사 주소 변경(테스트용): `ANTHROPIC_BASE_URL`, `OPENAI_BASE_URL`, `OPENROUTER_BASE_URL`
 
-**무료 모델 (키 없이 쓰기)**: 서버 운영자가 무료 티어 키를 환경변수로 넣어 두면, 참가자는 "AI 제공사"에서 "무료 모델"을 골라 키 없이 AI를 초대할 수 있다. `default`도 유료 키가 없으면 무료 풀로 연결된다. 여러 백엔드를 돌려 쓰고, 한 곳이 429/오류를 내면 1분(인증·모델 오류는 10분) 쉬고 다음으로 넘어간다.
+**무료 모델 (참가자는 키 없이 사용)**: 서버 운영자가 키를 안전하게 설정한 경우에만 참가자가 "무료 모델"을 고를 수 있다. `default`도 서버 유료 키가 없으면 설정된 무료 풀로 연결된다. 한 제공사가 429/오류를 내면 잠시 쉬고 다음 백엔드로 넘어간다. Render에 제공사 키가 없으면 무료 풀은 비활성이고 AI는 데모 응답이다.
 
 | 환경변수 | 설명 |
 |---|---|
 | `OPENROUTER_API_KEY` | OpenRouter `:free` 모델. 기본 `qwen/qwen3.8-27b:free`, `nvidia/nemotron-3-super-120b-a12b:free`, `google/gemma-4-31b-it:free`. `FREE_OPENROUTER_MODELS`로 교체 |
 | `GROQ_API_KEY` | Groq. 기본 `openai/gpt-oss-120b`, `qwen/qwen3.8-27b`, `openai/gpt-oss-20b`. `FREE_GROQ_MODELS`로 교체 |
-| `FREE_EXTRA_BACKENDS` | 운영자가 OpenAI 호환 백엔드를 더 추가하는 JSON. 예: `[{"id":"ovh","base":"https://.../v1","models":["gpt-oss-120b"],"cap":100}]`, 키가 있으면 `"key"` 추가. http(s) 주소만 허용, 사용자는 못 바꿈 |
-| `FREE_CAP_OPENROUTER` / `FREE_CAP_GROQ` | 서버 전체 하루 호출 상한(기본 45 / 900, UTC 기준 초기화) |
+| `MISTRAL_API_KEY` | Mistral 서버 키. Free mode에서 입력·응답의 학습 사용을 끈 뒤에만 사용. 이 키만으로는 무료 풀에 노출되지 않음 |
+| `MISTRAL_FREE_TRAINING_OPT_OUT_CONFIRMED=1` | 운영자가 Mistral 계정에서 학습 옵트아웃을 확인한 뒤에만 설정. 이 값은 확인 서약일 뿐 계정 설정을 자동 검증하거나 바꾸지 않음 |
+| `FREE_MISTRAL_MODELS` | 계정의 현재 무료 포함 사용량에 들어 있는 모델 ID를 명시(쉼표 구분). 기본 빈 값이라 미설정 시 Mistral 풀 비활성 |
+| `FREE_CAP_MISTRAL` | 앱 프로세스 기준 Mistral 일일 요청 상한(기본 30, `0`이면 비활성). 재시작 시 앱 내부 집계가 초기화되므로 제공사 한도를 대체하지 않음 |
+| `FREE_EXTRA_BACKENDS` | 운영자가 OpenAI 호환 백엔드를 추가하는 JSON. 예: `[{"id":"ovh","base":"https://.../v1","models":["gpt-oss-120b"],"cap":100}]`, 키가 필요하면 `"key"` 추가. `mistral` ID는 예약되어 이 경로에서 무시됨 |
+| `FREE_CAP_OPENROUTER` / `FREE_CAP_GROQ` | 서버 프로세스 기준 일일 호출 상한(기본 45 / 900, UTC 초기화). 재시작·복제 서버마다 초기화되므로 제공사 한도도 함께 적용됨 |
 | `FREE_ROOM_CAP` | 방당 무료 호출 상한(기본 20) |
 | `MANAGED_DAILY_CALLS` | 운영자 서버 키로 나가는 유료 제공사 호출의 **하루(KST) 전체 상한**. 0이면 끔(기본). 플러스가 무제한인 동안 운영자 비용의 안전장치로 쓴다. 넘으면 해당 호출은 제공사로 나가지 않고 오류로 처리되며 개인 키·무료 모델·데모는 영향 없음. 관리자 요약에 오늘 호출 수가 나온다 |
 | `MANAGED_DAILY_USD` | 위와 같은 서버 키 호출의 **금액 기준 비상 차단**(USD, 기본 0=끔). `MODEL_PRICES` 단가가 있고 제공사가 usage를 보고한 호출만 합산한다(단가 없는 호출·실패 호출은 안 잡히고, 동시에 진행 중인 호출은 한도를 조금 넘길 수 있음). 호출 수 상한과 함께 쓴다 |
 
-**개인 키 전용 제공사**: Anthropic, OpenAI, OpenRouter, Groq는 서버 키 또는 개인 키, **NVIDIA NIM은 개인 키만** 쓴다. NVIDIA API 체험 약관(2026-10 확인)은 내부 테스트·평가 용도로만 쓰고 제3자에게 제공하지 못하게 해서, 서버 키로 다른 사람에게 대신 호출해 주는 구성에는 넣지 않았다.
+**제공사 키 사용 정책**: Anthropic, OpenAI, OpenRouter, Groq는 서버 키 또는 개인 키를 쓸 수 있다. Google과 NVIDIA NIM은 개인 키만 쓴다. Mistral은 일반 제공사 선택에서 개인 키를 요구한다. 별도 무료 풀은 Mistral Free mode의 학습 옵트아웃을 운영자가 확인하고 현재 계정에 포함된 모델을 명시한 경우에만 활성화된다. 입력 내용은 외부 제공사로 전송되며, 학습 옵트아웃이 데이터 보관까지 뜻하지는 않으므로 민감정보를 입력하지 말고 제공사 정책을 확인한다.
 
 **한도 참고(2026-10, 공식 문서 또는 제3자 정리 기준이라 운영 전 재확인)**: OpenRouter `:free` 분당 20회, 하루 50회(크레딧 10달러 이상 구매 시 1000회). Groq 무료 플랜 모델당 분당 30회, 하루 1000회, 하루 20만 토큰. 모델 이름과 한도는 제공사가 자주 바꾼다.
 
@@ -108,7 +112,7 @@ npm start          # http://localhost:3000
 - **에셋**: 방 구성(AI 목록, 발언 방식, 연속 발언 한도, 시작 문서, 방 규칙 문구)을 JSON 파일로 올려 한 번에 적용. 게임·토론·협업 같은 기본 템플릿은 두지 않고, 사용자가 에셋으로 만든다
 - 발언 정책 3종, AI 연속 발언 한도, 방별 호출 예산
 - 공유 문서 (AI가 `[문서]`로 시작하는 줄을 쓰면 자동 기록)
-- 개인 키 제공사: Groq, OpenRouter, Google Gemini, Mistral, NVIDIA NIM, Anthropic, OpenAI. Google·Mistral·NVIDIA는 본인 키만(약관상 운영자 키로 남의 대화를 보내지 않음)
+- 개인 키로 직접 선택할 수 있는 제공사: Groq, OpenRouter, Google Gemini, Mistral, NVIDIA NIM, Anthropic, OpenAI. Google·NVIDIA는 본인 키만 가능. Mistral 서버 무료 풀은 위 옵트아웃·모델 설정 조건이 충족된 경우에만 별도로 동작한다.
 
 이전 프로젝트(logtimeline)는 git 이력에 남아 있다: `git checkout b78f5a7`
 

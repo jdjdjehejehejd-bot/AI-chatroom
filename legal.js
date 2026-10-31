@@ -2,7 +2,7 @@
 const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const OPERATOR = () => process.env.OPERATOR_NAME || '[운영자 이름을 OPERATOR_NAME에 설정하세요]';
 const CONTACT = () => process.env.CONTACT_EMAIL || '[문의 이메일을 CONTACT_EMAIL에 설정하세요]';
-const VERSION = '2026-10-23';
+const VERSION = '2026-10-31';
 const T = require('./legal-text'), EN = require('./legal-en');
 const pickLang = l => T.LANGS.includes(l) ? l : 'en';
 
@@ -39,10 +39,11 @@ function privacyKo() {
 <h2>4. 제3자 제공과 처리 위탁 (국외 이전 포함)</h2>
 <p><b>대화방에서 사람이 쓴 글은 같은 방의 다른 참가자와 AI에게 전달됩니다.</b> AI가 답하려면 최근 대화, 공유 문서, 방 기억, 해당 AI가 받은 귓속말이 AI 제공사의 서버로 전송됩니다. 주민등록번호, 금융정보, 건강정보 등 민감한 정보는 입력하지 마세요.</p>
 <table><tr><th>받는 자</th><th>목적·항목</th><th>비고</th></tr>
-<tr><td>AI 제공사 (서버 설정에 따라 OpenAI, Anthropic, Google, Groq, Mistral, NVIDIA, OpenRouter 등 중 일부)</td><td>AI 응답 생성을 위한 대화 내용</td><td>이용자가 개인 키를 입력한 AI는 해당 제공사로 전송됩니다. 대부분 국외(미국 등) 서버입니다.</td></tr>
+<tr><td>AI 제공사 (서버 설정에 따라 OpenAI, Anthropic, Google, Groq, Mistral, NVIDIA, OpenRouter 등 중 일부)</td><td>AI 응답 생성을 위한 대화 내용</td><td>이용자가 개인 키를 입력한 AI는 해당 제공사로 전송됩니다. 운영자가 Mistral 무료 풀을 켠 경우 그 무료 모델을 사용한 대화도 운영자 키로 Mistral에 전송됩니다. 대부분 국외(미국 등) 서버입니다.</td></tr>
 <tr><td>Google, GitHub</td><td>로그인·연동</td><td>국외</td></tr>
 <tr><td>이메일 발송 업체(설정 시 Resend)</td><td>인증 코드 발송을 위한 이메일 주소</td><td>국외</td></tr>
 <tr><td>클라우드 호스팅 사업자</td><td>서버 운영과 데이터 저장</td><td>운영 환경에 따라 다름</td></tr></table>
+<p class="mut">AI 제공사의 보관·학습 정책은 제공사·요금제·계정 설정에 따라 다릅니다. Mistral Studio Free mode는 입력·응답을 모델 개선에 사용할 수 있습니다. 서버 Mistral 무료 풀은 운영자가 계정의 학습 옵트아웃을 확인한 경우에만 활성화하며, 개인 키 사용자는 본인 계정 설정을 확인해야 합니다. 학습 옵트아웃은 데이터 보관 중지나 무기록을 뜻하지 않습니다.</p>
 <p class="mut">위 업체 중 실제로 사용하지 않는 곳은 해당되지 않습니다. 법령에 따른 요구가 있는 경우를 제외하고 이용자 동의 없이 그 밖의 제3자에게 제공하지 않습니다.</p>
 <h2>5. 이용자의 권리와 행사 방법</h2>
 <ul><li><b>열람·내려받기</b>: 앱 설정 → 계정 → “내 데이터 내려받기”</li>

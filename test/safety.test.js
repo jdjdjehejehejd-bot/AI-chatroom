@@ -12,7 +12,11 @@ const msgs=c=>c.ev.filter(e=>e.t==='msg').map(e=>e.msg);
  let sv=start();await sleep(900);
  // legal pages
  for(const p of ['/privacy','/terms','/delete-account']){const r=await fetch(B+p);const t=await r.text();check(p+' 200 html + CSP',r.status===200&&/html/.test(r.headers.get('content-type'))&&!!r.headers.get('content-security-policy')&&t.length>500,r.status)}
- check('privacy shows operator info',/테스트운영/.test(await (await fetch(B+'/privacy')).text()));
+ const pko=await (await fetch(B+'/privacy?lang=ko')).text();
+ check('privacy shows operator info',/테스트운영/.test(pko));
+ check('Korean privacy explains Mistral Free training and server-key routing',/Mistral Studio Free mode/.test(pko)&&/운영자 키로 Mistral/.test(pko)&&/학습 옵트아웃/.test(pko));
+ const pen=await (await fetch(B+'/privacy?lang=en')).text();
+ check('English privacy explains Mistral Free training and retention',/operator’s key/.test(pen)&&/Mistral Studio Free mode/.test(pen)&&/zero data retention/.test(pen));
  check('healthz',(await fetch(B+'/healthz')).status===200);
  const ck1=await login('ben@example.com'),ck2=await login('mia@example.com'),ck3=await login('zed@example.com');
  // consent
@@ -90,7 +94,22 @@ const msgs=c=>c.ev.filter(e=>e.t==='msg').map(e=>e.msg);
  const A4=await cl('safe1','Ben',ck1,true);const sm=A4.ev.find(e=>e.t==='state').messages;
  check("member room: Mia's msgs anonymized",!sm.some(m=>m.text.includes('미아 개인정보'))&&sm.some(m=>m.who==='탈퇴한 사용자'),JSON.stringify(sm.map(m=>[m.who,m.text])));
  const newroom=await cl('mia1','X',ck1,true);check('deleted room is brand new',newroom.ev.find(e=>e.t==='state').messages.length<=1);
- await sleep(3500);sv.kill('SIGTERM');await sleep(600);sv=start();await sleep(1000);
+ await sleep(3500);
+ await new Promise(r=>{sv.once('exit',r);sv.kill('SIGTERM')});
+ const accountFile=path.join(dir,'accounts.json'), persisted=JSON.parse(fs.readFileSync(accountFile,'utf8'));
+ const hasAccounts=Object.keys(persisted).length>0;
+ check('accounts persisted for consent-version test',hasAccounts);
+ Object.values(persisted).forEach(a=>a.consentVer='2026-10-23');
+ fs.writeFileSync(accountFile,JSON.stringify(persisted));
+ sv=start();await sleep(1000);
+ const stale=await cl('safe1','Ben',ck1,undefined);
+ check('old policy consent requires re-consent',stale.ev.some(e=>e.t==='err'&&e.code==='CONSENT_REQUIRED')&&!stale.ev.some(e=>e.t==='state'),JSON.stringify(stale.ev.map(e=>e.t)));
+ stale.ws.close();
+ const renewed=await cl('safe1','Ben',ck1,true);
+ check('re-consent under current policy version permits entry',renewed.ev.some(e=>e.t==='state'),JSON.stringify(renewed.ev.map(e=>e.t)));
+ await sleep(3500);
+ const updatedAccounts=JSON.parse(fs.readFileSync(accountFile,'utf8'));
+ check('new consent version is persisted',Object.values(updatedAccounts).some(a=>a.consentVer==='2026-10-31'));
  const raw=fs.readdirSync(dir,{recursive:true}).map(f=>{try{return fs.readFileSync(path.join(dir,f),'utf8')}catch(e){return''}}).join('\n');
  check('no mia content on disk after restart',!raw.includes('미아 개인정보 글')&&!raw.includes('mia@example.com')==true||!raw.includes('미아 개인정보 글'),'');
  check('mia email not in accounts',!raw.includes('mia@example.com'));

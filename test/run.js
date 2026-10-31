@@ -5,7 +5,7 @@ const only = process.argv.slice(2);
 // npm test must never use a developer's real provider credentials. Mock-provider
 // tests set their own keys explicitly when spawning the server.
 const testEnv = { ...process.env };
-for (const key of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY', 'GROQ_API_KEY', 'GOOGLE_API_KEY', 'MISTRAL_API_KEY', 'NVIDIA_API_KEY', 'AI_MODEL', 'FREE_EXTRA_BACKENDS']) delete testEnv[key];
+for (const key of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY', 'GROQ_API_KEY', 'GOOGLE_API_KEY', 'MISTRAL_API_KEY', 'NVIDIA_API_KEY', 'AI_MODEL', 'FREE_EXTRA_BACKENDS', 'MISTRAL_FREE_TRAINING_OPT_OUT_CONFIRMED', 'FREE_MISTRAL_MODELS', 'FREE_CAP_MISTRAL']) delete testEnv[key];
 const files = fs.readdirSync(__dirname).filter(f => f.endsWith('.test.js') && (!only.length || only.some(o => f.startsWith(o)))).sort();
 let bad = 0;
 for (const f of files) {

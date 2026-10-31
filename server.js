@@ -187,28 +187,42 @@ const BASES = {
   nvidia: process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1'
 };
 const ENV_KEYS = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', openrouter: 'OPENROUTER_API_KEY', groq: 'GROQ_API_KEY' };
-/* 서버 키로 다른 사람에게 대신 호출해 주면 약관에 어긋나는 제공사. 사용자가 본인 키를 직접 넣을 때만 쓴다.
-   NVIDIA API 체험(build.nvidia.com) 약관은 내부 테스트·평가 용도로만 쓰고 제3자에게 제공하지 못하게 하고,
-   Google·Mistral 무료 티어는 프롬프트가 학습에 쓰일 수 있어 운영자 키로 남의 대화를 보내지 않는다 */
+/* 직접 제공사 선택은 보수적으로 개인 키를 요구한다. NVIDIA API Trial은 프로덕션용이 아니고,
+   Google의 공개 앱 범위에는 제한이 있다. Mistral Free 입력·응답은 학습에 쓰일 수 있어
+   별도 무료 풀은 운영자가 계정에서 옵트아웃을 확인했다고 명시한 경우에만 아래에서 연다. */
 const BYOK_ONLY = new Set(['nvidia', 'google', 'mistral']);
 
 /* 무료 모델 풀: 서버가 가진 무료 티어 키로 사용자 대신 호출한다. 무료 티어는 계정 전체 한도가 작으므로
    백엔드별 일일 상한, 방별 상한, 실패 시 다음 백엔드로 넘어가는 로직을 둔다.
+   Mistral은 Free mode의 학습 옵트아웃 확인, 전용 API 키, 계정에 포함된 모델 ID가 모두 설정되어야 활성화된다.
+   MISTRAL_FREE_TRAINING_OPT_OUT_CONFIRMED는 운영자 확인값이지 제공사 설정을 자동 검증하지 않는다.
    모델 이름은 제공사가 자주 바꾸므로 환경변수로 교체할 수 있고, FREE_EXTRA_BACKENDS(JSON)로 운영자가
-   OpenAI 호환 백엔드를 더 추가할 수 있다. 주소는 운영자만 정하므로 사용자가 서버를 임의 주소로 향하게 할 수 없다 */
+   OpenAI 호환 백엔드를 더 추가할 수 있다. 주소는 운영자만 정하므로 사용자는 서버를 임의 주소로 향하게 할 수 없다 */
 const csv = (v, d) => String(v || d).split(',').map(s => s.trim()).filter(Boolean);
+const mistralFreeOptOutConfirmed = process.env.MISTRAL_FREE_TRAINING_OPT_OUT_CONFIRMED === '1';
+const mistralFreeModels = String(process.env.FREE_MISTRAL_MODELS || '').split(',').map(s => s.trim())
+  .filter(s => /^[A-Za-z0-9_.:/-]{1,120}$/.test(s)).slice(0, 20);
+const capFromEnv = (name, fallback) => {
+  const raw = process.env[name];
+  if (raw == null || String(raw).trim() === '') return fallback;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) && n >= 0 ? n : fallback;
+};
 const FREE_BACKENDS = [
   { id: 'openrouter', keyEnv: 'OPENROUTER_API_KEY', base: BASES.openrouter,
     models: csv(process.env.FREE_OPENROUTER_MODELS, 'qwen/qwen3.8-27b:free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free'),
     cap: Number(process.env.FREE_CAP_OPENROUTER || 45) },
   { id: 'groq', keyEnv: 'GROQ_API_KEY', base: BASES.groq,
     models: csv(process.env.FREE_GROQ_MODELS, 'openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b'),
-    cap: Number(process.env.FREE_CAP_GROQ || 900) }
+    cap: Number(process.env.FREE_CAP_GROQ || 900) },
+  { id: 'mistral', keyEnv: mistralFreeOptOutConfirmed ? 'MISTRAL_API_KEY' : '', base: BASES.mistral,
+    models: mistralFreeModels,
+    cap: capFromEnv('FREE_CAP_MISTRAL', 30) }
 ];
 try {
   const extra = JSON.parse(process.env.FREE_EXTRA_BACKENDS || '[]');
   (Array.isArray(extra) ? extra : []).forEach(e => {
-    if (e && /^[a-z0-9_-]{2,20}$/.test(e.id) && /^https?:\/\//.test(e.base) && (!PRODUCTION || /^https:\/\//.test(e.base) || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(e.base)) && Array.isArray(e.models) && e.models.length && !FREE_BACKENDS.some(b => b.id === e.id)) {
+    if (e && e.id !== 'mistral' && /^[a-z0-9_-]{2,20}$/.test(e.id) && /^https?:\/\//.test(e.base) && (!PRODUCTION || /^https:\/\//.test(e.base) || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(e.base)) && Array.isArray(e.models) && e.models.length && !FREE_BACKENDS.some(b => b.id === e.id)) {
       FREE_BACKENDS.push({ id: e.id, key: e.key ? String(e.key) : '', keyEnv: '', noKey: !e.key, base: String(e.base),
         models: e.models.map(String), cap: Number(e.cap) > 0 ? Number(e.cap) : 100 });
     }
@@ -217,7 +231,7 @@ try {
 const FREE_ROOM_CAP = Number(process.env.FREE_ROOM_CAP || 20);
 const freeState = { day: '', used: {}, cool: {}, rr: 0 };
 const freeKey = b => b.key || (b.keyEnv && process.env[b.keyEnv]) || '';
-const freeConfigured = b => b.noKey || !!freeKey(b);
+const freeConfigured = b => Array.isArray(b.models) && b.models.length > 0 && Number.isSafeInteger(b.cap) && b.cap > 0 && (b.noKey || !!freeKey(b));
 function freeTick() {
   const day = new Date().toISOString().slice(0, 10);
   if (freeState.day !== day) { freeState.day = day; freeState.used = {}; freeState.cool = {}; }
@@ -1017,8 +1031,9 @@ async function callFree(room, ai, dm) {
     const b = FREE_BACKENDS[(freeState.rr + i) % n];
     if (!freeUsable(b)) continue;
     tried++;
-    freeState.used[b.id] = (freeState.used[b.id] || 0) + 1;
-    const model = b.models[(freeState.used[b.id]) % b.models.length];
+    const modelIndex = freeState.used[b.id] || 0;
+    freeState.used[b.id] = modelIndex + 1;
+    const model = b.models[modelIndex % b.models.length];
     try {
       const text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model }, dm);
       freeState.rr = (freeState.rr + i + 1) % n;
@@ -1220,7 +1235,10 @@ function join(ws, m) {
   if (loginRequired() && !ws.user) return send(ws, { t: 'err', code: 'LOGIN_REQUIRED', text: '로그인한 뒤에 시작할 수 있습니다.' });
   if (ws.user) {
     const a = acct(ws.user.sub, ws.user.name);
-    if (!a.consentAt) { if (m.consent !== true) return send(ws, { t: 'err', code: 'CONSENT_REQUIRED', text: '이용약관과 개인정보처리방침에 동의해야 시작할 수 있습니다.' }); a.consentAt = Date.now(); a.consentVer = TERMS_VERSION; accountsDirty = true; }
+    if (!a.consentAt || a.consentVer !== TERMS_VERSION) {
+      if (m.consent !== true) return send(ws, { t: 'err', code: 'CONSENT_REQUIRED', text: '변경된 이용약관과 개인정보처리방침을 확인하고 동의해야 시작할 수 있습니다.' });
+      a.consentAt = Date.now(); a.consentVer = TERMS_VERSION; accountsDirty = true;
+    }
   }
   const id = String(m.room || '');
   if (!/^[a-z0-9]{3,12}$/.test(id)) return send(ws, { t: 'err', text: '방 코드는 영문 소문자/숫자 3~12자여야 합니다.' });
