@@ -39,7 +39,7 @@ function privacyKo() {
 <h2>4. 제3자 제공과 처리 위탁 (국외 이전 포함)</h2>
 <p><b>대화방에서 사람이 쓴 글은 같은 방의 다른 참가자와 AI에게 전달됩니다.</b> AI가 답하려면 최근 대화, 공유 문서, 방 기억, 해당 AI가 받은 귓속말이 AI 제공사의 서버로 전송됩니다. 주민등록번호, 금융정보, 건강정보 등 민감한 정보는 입력하지 마세요.</p>
 <table><tr><th>받는 자</th><th>목적·항목</th><th>비고</th></tr>
-<tr><td>AI 제공사 (서버 설정에 따라 OpenAI, Anthropic, Google, Groq, Mistral, NVIDIA, OpenRouter 등 중 일부)</td><td>AI 응답 생성을 위한 대화 내용</td><td>이용자가 개인 키를 입력한 AI는 해당 제공사로 전송됩니다. 운영자가 무료 모델 풀(Mistral, NVIDIA, Google, Cerebras, Cloudflare 등)을 켠 경우 그 무료 모델을 사용한 대화도 운영자 키로 해당 제공사에 전송됩니다. 대부분 국외(미국 등) 서버입니다.</td></tr>
+<tr><td>AI 제공사 (서버 설정에 따라 OpenAI, Anthropic, Google, Groq, Mistral, NVIDIA, OpenRouter 등 중 일부)</td><td>AI 응답 생성을 위한 대화 내용</td><td>이용자가 개인 키를 입력한 AI는 해당 제공사로 전송됩니다. 운영자가 무료 모델 풀(Mistral, NVIDIA, Google, Cerebras, Cloudflare 등)을 켠 경우 그 무료 모델을 사용한 대화도 운영자 키로 Mistral 등 해당 제공사에 전송됩니다. 대부분 국외(미국 등) 서버입니다.</td></tr>
 <tr><td>Google, GitHub</td><td>로그인·연동</td><td>국외</td></tr>
 <tr><td>이메일 발송 업체(설정 시 Resend)</td><td>인증 코드 발송을 위한 이메일 주소</td><td>국외</td></tr>
 <tr><td>클라우드 호스팅 사업자</td><td>서버 운영과 데이터 저장</td><td>운영 환경에 따라 다름</td></tr></table>
