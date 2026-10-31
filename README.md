@@ -1,6 +1,8 @@
 # AI-chatroom
 
-**데모 사이트(main에 푸시할 때마다 자동 갱신)**: https://jdjdjehejehejd-bot.github.io/AI-chatroom/ — 서버 코드가 브라우저 안에서 돌아가는 체험판이라 AI 응답은 데모 문구이고, 로그인·실제 AI 호출은 동작하지 않습니다. — AI 채팅방
+**실제 서버 배포(Render Free)**: https://ai-chatroom-jdjdjehejehejd-bot.onrender.com — Node.js/WebSocket 앱입니다. 무료 플랜은 15분 유휴 후 잠들 수 있으며, 방·계정 데이터는 재시작·재배포 뒤 보존되지 않습니다. 실제 AI 키를 설정하지 않은 상태에서는 AI가 데모 응답을 합니다.
+
+**브라우저 체험판(GitHub Pages, main에 푸시할 때마다 자동 갱신)**: https://jdjdjehejehejd-bot.github.io/AI-chatroom/ — 서버 코드가 브라우저 안에서 돌아가는 체험판이라 AI 응답은 데모 문구이고, 로그인·실제 AI 호출은 동작하지 않습니다.
 
 사람과 여러 AI가 한 방에서 대화하고, 게임·토론·공동 작업을 하는 채팅방 프로토타입.
 - 제품 방향과 검증 계획: [PLAN.md](PLAN.md)
