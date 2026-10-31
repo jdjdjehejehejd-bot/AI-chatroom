@@ -2,11 +2,15 @@
    실제 외부 서비스(AI 제공사·OAuth·메일)는 호출하지 않는다. 가짜 서버로 요청 형식과 오류 처리만 검증한다. */
 const { spawnSync } = require('child_process'), fs = require('fs'), path = require('path');
 const only = process.argv.slice(2);
+// npm test must never use a developer's real provider credentials. Mock-provider
+// tests set their own keys explicitly when spawning the server.
+const testEnv = { ...process.env };
+for (const key of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY', 'GROQ_API_KEY', 'GOOGLE_API_KEY', 'MISTRAL_API_KEY', 'NVIDIA_API_KEY', 'AI_MODEL', 'FREE_EXTRA_BACKENDS']) delete testEnv[key];
 const files = fs.readdirSync(__dirname).filter(f => f.endsWith('.test.js') && (!only.length || only.some(o => f.startsWith(o)))).sort();
 let bad = 0;
 for (const f of files) {
   const t0 = Date.now();
-  const r = spawnSync('node', [path.join(__dirname, f)], { cwd: path.resolve(__dirname, '..'), encoding: 'utf8', timeout: 180000 });
+  const r = spawnSync('node', [path.join(__dirname, f)], { cwd: path.resolve(__dirname, '..'), encoding: 'utf8', env: testEnv, timeout: 180000 });
   const out = (r.stdout || '') + (r.stderr || '');
   const fails = out.split('\n').filter(l => /^FAIL /.test(l) || /\d+ pass, [1-9]\d* fail/.test(l) || /^SOME FAILED/.test(l));
   const passN = (out.match(/^PASS /gm) || []).length;
