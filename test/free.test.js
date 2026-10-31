@@ -135,6 +135,32 @@ const sysMsgs = c => c.ev.filter(e => e.t === 'msg' && e.msg.kind === 'system').
   c.ws.send(JSON.stringify({ t: 'msg', text: '@무료 상한 확인' })); await sleep(700);
   check('Mistral sends configured model with server key and obeys daily cap', M.log.length === 1 && M.log[0].auth === 'Bearer server-mistral-key' && M.log[0].model === 'mistral-test' && sysMsgs(c).some(t => t.includes('소진')), JSON.stringify({ log: M.log, sys: sysMsgs(c).slice(-2) }));
   c.ws.close(); sv.kill(); M.s.close();
+  // 6) NVIDIA/Gemini/Cerebras/Cloudflare free pools: off by default, on only with key + explicit confirmation flag.
+  const X = await mock(4105, 'ok');
+  sv = startServer(3108, { NVIDIA_API_KEY: 'srv-nv', NVIDIA_BASE_URL: 'http://127.0.0.1:4105', CEREBRAS_API_KEY: 'srv-cb', CEREBRAS_BASE_URL: 'http://127.0.0.1:4105',
+    FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'nvidia', base: 'http://127.0.0.1:4105', models: ['bypass'], key: 'bypass' }]) });
+  await sleep(600);
+  c = await client(3108, 'Mia', 'room8');
+  const g0 = c.ev.filter(e => e.t === 'meta').pop();
+  check('extra pools stay off with keys but no confirmation; extra backend cannot take reserved id', g0 && !g0.free.available && X.log.length === 0, JSON.stringify(g0 && g0.free));
+  c.ws.close(); sv.kill(); await sleep(200);
+  sv = startServer(3109, { NVIDIA_API_KEY: 'srv-nv', NVIDIA_BASE_URL: 'http://127.0.0.1:4105', FREE_NVIDIA_CONFIRMED: '1', FREE_NVIDIA_MODELS: 'nv-model', FREE_CAP_NVIDIA: '1', FREE_ROOM_CAP: '5' });
+  await sleep(600);
+  c = await client(3109, 'Mia', 'room9');
+  c.ws.send(JSON.stringify({ t: 'addAI', name: '엔비', persona: 'p', provider: 'free' })); await sleep(250);
+  const g1 = c.ev.filter(e => e.t === 'meta').pop();
+  check('NVIDIA pool on with key + confirmation, cap applied', g1 && g1.free.available && g1.free.left === 1, JSON.stringify(g1 && g1.free));
+  c.ws.send(JSON.stringify({ t: 'msg', text: '@엔비 안녕' })); await sleep(700);
+  c.ws.send(JSON.stringify({ t: 'msg', text: '@엔비 상한' })); await sleep(700);
+  check('NVIDIA pool uses server key + configured model and obeys cap', X.log.length === 1 && X.log[0].auth === 'Bearer srv-nv' && X.log[0].model === 'nv-model' && sysMsgs(c).some(t => t.includes('소진')), JSON.stringify({ log: X.log, sys: sysMsgs(c).slice(-2) }));
+  c.ws.close(); sv.kill(); await sleep(200);
+  X.log.length = 0;
+  sv = startServer(3110, { CLOUDFLARE_API_TOKEN: 'cf-tok', CLOUDFLARE_ACCOUNT_ID: 'abc', FREE_CLOUDFLARE_CONFIRMED: '1' });
+  await sleep(600);
+  c = await client(3110, 'Mia', 'room10');
+  const g2 = c.ev.filter(e => e.t === 'meta').pop();
+  check('Cloudflare pool needs a valid 32-hex account id', g2 && !g2.free.available, JSON.stringify(g2 && g2.free));
+  c.ws.close(); sv.kill(); X.s.close();
   N.s.close();
   A.s.close(); G.s.close();
   console.log(results.every(Boolean) ? 'ALL OK' : 'SOME FAILED'); process.exit(0);

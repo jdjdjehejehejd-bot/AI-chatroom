@@ -109,7 +109,7 @@ const msgs=c=>c.ev.filter(e=>e.t==='msg').map(e=>e.msg);
  check('re-consent under current policy version permits entry',renewed.ev.some(e=>e.t==='state'),JSON.stringify(renewed.ev.map(e=>e.t)));
  await sleep(3500);
  const updatedAccounts=JSON.parse(fs.readFileSync(accountFile,'utf8'));
- check('new consent version is persisted',Object.values(updatedAccounts).some(a=>a.consentVer==='2026-10-31'));
+ check('new consent version is persisted',Object.values(updatedAccounts).some(a=>a.consentVer==='2026-11-01'));
  const raw=fs.readdirSync(dir,{recursive:true}).map(f=>{try{return fs.readFileSync(path.join(dir,f),'utf8')}catch(e){return''}}).join('\n');
  check('no mia content on disk after restart',!raw.includes('미아 개인정보 글')&&!raw.includes('mia@example.com')==true||!raw.includes('미아 개인정보 글'),'');
  check('mia email not in accounts',!raw.includes('mia@example.com'));

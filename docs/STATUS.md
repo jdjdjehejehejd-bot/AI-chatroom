@@ -16,7 +16,7 @@
 |---|---|---|---|---|---|
 | 방·실시간 채팅·AI 발언 정책·예산 | ✓ | ✓ | – | ✓ | Render Free에서 방 입장·WebSocket·데모 AI 응답 확인; 데이터는 휘발성 |
 | AI 제공사 호출(Anthropic/OpenAI/OpenRouter/Groq/Google/Mistral/NVIDIA) | ✓ | ✓ 가짜 서버 | ✗ | ✗ | 요청 형식·오류 처리만 검증. `smoke-providers.js`로 확인 |
-| 무료 모델 풀 | ✓ | ✓ 가짜 서버 | ✗ | ✗ | OpenRouter/Groq와 Mistral 옵트아웃 게이트 구현. Mistral은 키·계정 포함 모델 ID·옵트아웃 확인값이 모두 있어야 켜짐. 외부 호출은 아직 안 함 |
+| 무료 모델 풀 | ✓ | ✓ 가짜 서버 | ✗ | ✗ | OpenRouter/Groq와 Mistral 옵트아웃 게이트 구현. Mistral은 키·계정 포함 모델 ID·옵트아웃 확인값이 모두 있어야 켜짐. NVIDIA·Gemini·Cerebras·Cloudflare 풀도 코드는 있으나 키 + `FREE_<ID>_CONFIRMED=1`이 있어야 켜지고 기본 꺼짐(모델 ID 기본값은 미검증). 외부 호출은 아직 안 함 |
 | 모드(Code/Brainstorm/Make), 산출물, 버전 기록 | ✓ | ✓ | – | ✗ | 데모 응답 기준. 실제 모델 품질은 미측정 |
 | Debate 모드(옹호·반박·검증·판정 카드) | ✓ | ✓ 데모 응답 기준 | – | ✗ | 실제 모델이 반대 입장을 성실히 맡는지, 판정 카드가 쓸모 있는지는 미측정 |
 | 자유 AI(역할을 비운 AI, 빈 방에서 초대, 긴 코드 블록은 산출물) | ✓ | ✓ 데모·가짜 제공사 | ✗ | ✗ | 실제 모델이 역할 없이 어떤 말투·행동을 보이는지, 일을 맡겼을 때 결과 품질은 미측정. 자율 루프(사람 없이 AI끼리 이어 가기)는 없음 |

@@ -39,11 +39,16 @@ npm start          # http://localhost:3000
 | `MISTRAL_FREE_TRAINING_OPT_OUT_CONFIRMED=1` | 운영자가 Mistral 계정에서 학습 옵트아웃을 확인한 뒤에만 설정. 이 값은 확인 서약일 뿐 계정 설정을 자동 검증하거나 바꾸지 않음 |
 | `FREE_MISTRAL_MODELS` | 계정의 현재 무료 포함 사용량에 들어 있는 모델 ID를 명시(쉼표 구분). 기본 빈 값이라 미설정 시 Mistral 풀 비활성 |
 | `FREE_CAP_MISTRAL` | 앱 프로세스 기준 Mistral 일일 요청 상한(기본 30, `0`이면 비활성). 재시작 시 앱 내부 집계가 초기화되므로 제공사 한도를 대체하지 않음 |
+| `NVIDIA_API_KEY` / `GEMINI_API_KEY` / `CEREBRAS_API_KEY` / `CLOUDFLARE_API_TOKEN`+`CLOUDFLARE_ACCOUNT_ID` | 추가 무료 풀(NVIDIA NIM, Google Gemini, Cerebras, Cloudflare Workers AI). **기본 꺼짐**: 키만으로는 켜지지 않고 `FREE_NVIDIA_CONFIRMED=1`(`GEMINI`·`CEREBRAS`·`CLOUDFLARE`도 같은 형식)을 넣어야 한다. 이 값은 "제공사 약관·데이터 사용 정책을 확인했고 운영자가 책임진다"는 서약일 뿐 자동 검증이 아니다 |
+| `FREE_NVIDIA_MODELS` 등 `FREE_<ID>_MODELS` | 모델 ID(쉼표 구분). 기본값은 `meta/llama-3.3-70b-instruct`(NVIDIA), `gemini-2.5-flash`(Gemini), `llama-3.3-70b`(Cerebras), `@cf/meta/llama-3.3-70b-instruct-fp8-fast`(Cloudflare)이며 **제공사가 바꿨을 수 있어 확인 필요**. 틀리면 404 안내가 나온다 |
+| `FREE_CAP_NVIDIA` 등 `FREE_CAP_<ID>` | 서버 프로세스 기준 일일 상한. 기본 100(Gemini 50). 제공사 한도도 별도로 적용된다 |
 | `FREE_EXTRA_BACKENDS` | 운영자가 OpenAI 호환 백엔드를 추가하는 JSON. 예: `[{"id":"ovh","base":"https://.../v1","models":["gpt-oss-120b"],"cap":100}]`, 키가 필요하면 `"key"` 추가. `mistral` ID는 예약되어 이 경로에서 무시됨 |
 | `FREE_CAP_OPENROUTER` / `FREE_CAP_GROQ` | 서버 프로세스 기준 일일 호출 상한(기본 45 / 900, UTC 초기화). 재시작·복제 서버마다 초기화되므로 제공사 한도도 함께 적용됨 |
 | `FREE_ROOM_CAP` | 방당 무료 호출 상한(기본 20) |
 | `MANAGED_DAILY_CALLS` | 운영자 서버 키로 나가는 유료 제공사 호출의 **하루(KST) 전체 상한**. 0이면 끔(기본). 플러스가 무제한인 동안 운영자 비용의 안전장치로 쓴다. 넘으면 해당 호출은 제공사로 나가지 않고 오류로 처리되며 개인 키·무료 모델·데모는 영향 없음. 관리자 요약에 오늘 호출 수가 나온다 |
 | `MANAGED_DAILY_USD` | 위와 같은 서버 키 호출의 **금액 기준 비상 차단**(USD, 기본 0=끔). `MODEL_PRICES` 단가가 있고 제공사가 usage를 보고한 호출만 합산한다(단가 없는 호출·실패 호출은 안 잡히고, 동시에 진행 중인 호출은 한도를 조금 넘길 수 있음). 호출 수 상한과 함께 쓴다 |
+
+**추가 무료 풀을 켜기 전 확인할 것**: NVIDIA API Trial은 시험·평가 용도이고 생성물 배포·제품 개선용 데이터 사용 조항이 있다는 보고가 있으며(포럼 요약, 약관 원문 미확인), Google Gemini 무료 티어는 입력이 제품 개선에 쓰일 수 있고, Cerebras·Cloudflare의 상업 이용·학습 정책은 확인하지 못했다. 공개 서비스에서 여러 사람의 대화를 운영자 키로 보내기 전에 각 약관 원문을 읽고, 개인정보처리방침의 제3자 목록과 일치하는지 확인한다. 한도도 작다(예: Cloudflare 하루 10,000 Neurons, Gemini 무료 티어 소량).
 
 **제공사 키 사용 정책**: Anthropic, OpenAI, OpenRouter, Groq는 서버 키 또는 개인 키를 쓸 수 있다. Google과 NVIDIA NIM은 개인 키만 쓴다. Mistral은 일반 제공사 선택에서 개인 키를 요구한다. 별도 무료 풀은 Mistral Free mode의 학습 옵트아웃을 운영자가 확인하고 현재 계정에 포함된 모델을 명시한 경우에만 활성화된다. 입력 내용은 외부 제공사로 전송되며, 학습 옵트아웃이 데이터 보관까지 뜻하지는 않으므로 민감정보를 입력하지 말고 제공사 정책을 확인한다.
 

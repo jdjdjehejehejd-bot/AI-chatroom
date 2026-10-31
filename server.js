@@ -208,6 +208,17 @@ const capFromEnv = (name, fallback) => {
   const n = Number(raw);
   return Number.isSafeInteger(n) && n >= 0 ? n : fallback;
 };
+/* 추가 무료 풀(NVIDIA NIM, Google Gemini, Cerebras, Cloudflare Workers AI): 기본 꺼짐.
+   각 제공사의 무료 티어 약관은 공개 서비스에서 여러 사람의 대화를 운영자 키로 보내는 것을 허용하지 않거나(NVIDIA API Trial은 시험·평가 용도),
+   무료 티어 입력이 제품 개선에 쓰일 수 있어서(Google·NVIDIA), 운영자가 FREE_<ID>_CONFIRMED=1 로 "약관을 확인했고 책임진다"고 명시하고
+   키와 모델 목록을 넣은 경우에만 켜진다. 이 값은 확인 서약일 뿐 제공사 설정을 검증하지 않는다. 모델 ID는 기본값이 있으나 제공사가 자주 바꾸므로 FREE_<ID>_MODELS 로 교체한다 */
+const gatedFree = (id, o) => {
+  const U = id.toUpperCase();
+  const confirmed = process.env['FREE_' + U + '_CONFIRMED'] === '1';
+  const keyEnv = confirmed && o.ready() ? o.keyEnv : '';
+  const models = String(process.env['FREE_' + U + '_MODELS'] || o.models).split(',').map(x => x.trim()).filter(x => /^[A-Za-z0-9_.:@\/-]{1,120}$/.test(x)).slice(0, 20);
+  return { id, keyEnv, base: o.base(), models, cap: capFromEnv('FREE_CAP_' + U, o.cap), gated: true };
+};
 const FREE_BACKENDS = [
   { id: 'openrouter', keyEnv: 'OPENROUTER_API_KEY', base: BASES.openrouter,
     models: csv(process.env.FREE_OPENROUTER_MODELS, 'qwen/qwen3.8-27b:free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free'),
@@ -219,10 +230,17 @@ const FREE_BACKENDS = [
     models: mistralFreeModels,
     cap: capFromEnv('FREE_CAP_MISTRAL', 30) }
 ];
+FREE_BACKENDS.push(
+  gatedFree('nvidia', { keyEnv: 'NVIDIA_API_KEY', ready: () => !!process.env.NVIDIA_API_KEY, base: () => BASES.nvidia, models: 'meta/llama-3.3-70b-instruct', cap: 100 }),
+  gatedFree('gemini', { keyEnv: 'GEMINI_API_KEY', ready: () => !!process.env.GEMINI_API_KEY, base: () => BASES.google, models: 'gemini-2.5-flash', cap: 50 }),
+  gatedFree('cerebras', { keyEnv: 'CEREBRAS_API_KEY', ready: () => !!process.env.CEREBRAS_API_KEY, base: () => process.env.CEREBRAS_BASE_URL || 'https://api.cerebras.ai/v1', models: 'llama-3.3-70b', cap: 100 }),
+  gatedFree('cloudflare', { keyEnv: 'CLOUDFLARE_API_TOKEN', ready: () => !!process.env.CLOUDFLARE_API_TOKEN && /^[a-f0-9]{32}$/i.test(process.env.CLOUDFLARE_ACCOUNT_ID || ''),
+    base: () => process.env.CLOUDFLARE_BASE_URL || ('https://api.cloudflare.com/client/v4/accounts/' + (process.env.CLOUDFLARE_ACCOUNT_ID || 'x') + '/ai/v1'), models: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', cap: 100 })
+);
 try {
   const extra = JSON.parse(process.env.FREE_EXTRA_BACKENDS || '[]');
   (Array.isArray(extra) ? extra : []).forEach(e => {
-    if (e && e.id !== 'mistral' && /^[a-z0-9_-]{2,20}$/.test(e.id) && /^https?:\/\//.test(e.base) && (!PRODUCTION || /^https:\/\//.test(e.base) || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(e.base)) && Array.isArray(e.models) && e.models.length && !FREE_BACKENDS.some(b => b.id === e.id)) {
+    if (e && !['mistral', 'nvidia', 'gemini', 'cerebras', 'cloudflare'].includes(e.id) && /^[a-z0-9_-]{2,20}$/.test(e.id) && /^https?:\/\//.test(e.base) && (!PRODUCTION || /^https:\/\//.test(e.base) || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(e.base)) && Array.isArray(e.models) && e.models.length && !FREE_BACKENDS.some(b => b.id === e.id)) {
       FREE_BACKENDS.push({ id: e.id, key: e.key ? String(e.key) : '', keyEnv: '', noKey: !e.key, base: String(e.base),
         models: e.models.map(String), cap: Number(e.cap) > 0 ? Number(e.cap) : 100 });
     }
