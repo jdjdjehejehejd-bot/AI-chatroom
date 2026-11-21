@@ -1,0 +1,37 @@
+name: deploy-render
+# main의 테스트(test 워크플로)가 통과하면 Render 배포 훅을 불러 실제 서버를 새 커밋으로 다시 배포한다.
+# 필요: 저장소 Settings → Secrets → Actions 에 RENDER_DEPLOY_HOOK_URL (Render 서비스 Settings → Deploy Hook 주소).
+# 시크릿이 없으면 아무것도 하지 않고 통과한다.
+on:
+  workflow_run:
+    workflows: [test]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Render 배포 훅 호출
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then echo "RENDER_DEPLOY_HOOK_URL 시크릿이 없어 건너뜁니다."; exit 0; fi
+          curl -fsS -X POST "$HOOK" > /dev/null && echo "배포 요청을 보냈습니다."
+      - name: 새 버전이 떠 있는지 확인
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          URL: ${{ vars.RENDER_URL || 'https://ai-chatroom-jdjdjehejehejd-bot.onrender.com' }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          if [ -z "$HOOK" ]; then exit 0; fi
+          want=${SHA:0:7}
+          for i in $(seq 1 40); do
+            v=$(curl -fsS "$URL/healthz" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("version") or "")' 2>/dev/null || true)
+            echo "현재 버전: ${v:-?} / 기대: $want"
+            [ "$v" = "$want" ] && echo "배포 확인 완료" && exit 0
+            sleep 20
+          done
+          echo "13분 안에 새 버전이 확인되지 않았습니다. Render 대시보드의 배포 로그를 확인하세요."; exit 1

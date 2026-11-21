@@ -1757,7 +1757,13 @@ const server = http.createServer((req, res) => {
   }
   if (u === '/auth/logout' && req.method === 'POST') { if (!sameOrigin(req)) return json(403, { error: 'origin' }); res.setHeader('set-cookie', [ck(COOKIE_NAME, '', 0), ck(GH_COOKIE, '', 0)]); return json(200, { ok: true }); }
   if (galleryRoute(req, res, u, json)) return;
-  if (u === '/healthz') return json(200, { ok: true, rooms: rooms.size, persist: store.enabled });
+  if (u === '/healthz') {
+    /* 배포 확인용: 어떤 커밋이 떠 있는지, 무료 풀이 켜졌는지(어느 백엔드인지만, 키는 절대 포함하지 않음) */
+    freeTick();
+    return json(200, { ok: true, rooms: rooms.size, persist: store.enabled,
+      version: (process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || '').slice(0, 7) || null, up: Math.round(process.uptime()),
+      free: { available: freeAvailable(), backends: FREE_BACKENDS.filter(freeConfigured).map(b => ({ id: b.id, left: Math.max(0, b.cap - (freeState.used[b.id] || 0)), cooling: (freeState.cool[b.id] || 0) > Date.now() })) } });
+  }
   if ((u === '/privacy' || u === '/terms' || u === '/delete-account') && req.method === 'GET') {
     const q = new URL(req.url, 'http://x').searchParams.get('lang') || String(req.headers['accept-language'] || '').toLowerCase().split(',')[0].slice(0, 2), html = u === '/privacy' ? legal.privacy(q) : u === '/terms' ? legal.terms(q) : legal.deleteAccount(q);
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" });
@@ -1961,4 +1967,6 @@ server.listen(PORT, () => {
   if (hasServerKey && !MANAGED_DAILY_CALLS && !MANAGED_DAILY_USD) console.warn('[경고] 서버 API 키가 설정돼 있는데 MANAGED_DAILY_CALLS / MANAGED_DAILY_USD가 모두 0(상한 없음)입니다. 공개하기 전에 하루 비용 상한을 정하세요.');
   if (hasServerKey && MANAGED_DAILY_USD > 0 && !Object.keys(PRICES).length) console.warn('[경고] MANAGED_DAILY_USD는 MODEL_PRICES 단가가 있어야 작동합니다. MODEL_PRICES가 비어 있어 금액 상한이 적용되지 않습니다.');
   console.log('AI 채팅방 서버 http://localhost:' + PORT + '  | AI 모드: ' + live + ' | 방당 예산 ' + BUDGET_DEFAULT + '회');
+  const fb = FREE_BACKENDS.filter(freeConfigured).map(b => b.id);
+  console.log('무료 풀: ' + (fb.length ? fb.join(', ') : '없음(AI는 데모 응답)') + (process.env.RENDER_GIT_COMMIT ? ' | 커밋 ' + process.env.RENDER_GIT_COMMIT.slice(0, 7) : ''));
 });

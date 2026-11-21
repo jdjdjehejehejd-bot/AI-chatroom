@@ -4,6 +4,7 @@ services:
     name: ai-chatroom
     runtime: docker
     plan: free
+    autoDeploy: true
     healthCheckPath: /healthz
     envVars:
       - { key: COOKIE_SECURE, value: "1" }
