@@ -10,7 +10,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
   const nameOf = j => (/이제 (\S+?)이\(가\) 말할 차례다/.exec(((j.messages[1] || {}).content) || '') || [])[1] || '';
   const mock = http.createServer((req, rq) => { let b = ''; req.on('data', c => b += c); req.on('end', () => {
     const j = JSON.parse(b || '{}'); const sys = (j.messages[0] || {}).content || ''; const name = nameOf(j);
-    log.push({ name, called: sys.includes('너를 @로 불렀다'), optional: /\[PASS\]/.test(sys) });
+    log.push({ name, called: sys.includes('너를 @로 불렀다'), optional: /\[PASS\]/.test(sys), wind: /AI들끼리 \d+번 말했다/.test(sys) });
     let text = '[PASS]', delay = 30;
     if (mode === 'chatty') text = name + ' 의견';
     if (mode === 'one' && name === '나' && log.filter(l => l.name === '나').length === 1) text = '나는 이렇게 생각해';
@@ -18,7 +18,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     setTimeout(() => { rq.writeHead(200, { 'content-type': 'application/json' }); rq.end(JSON.stringify({ choices: [{ message: { content: text } }] })); }, delay);
   }); });
   await new Promise(r => mock.listen(4121, '127.0.0.1', r));
-  const sv = spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: '3321', DEFAULT_POLICY: 'free', CHAT_JITTER_MIN_MS: '0', CHAT_JITTER_MAX_MS: '60', FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'mk', base: 'http://127.0.0.1:4121', models: ['m'], cap: 900 }]), FREE_ROOM_CAP: '300', REQUIRE_LOGIN: '0', SESSION_SECRET: 's' }), stdio: 'ignore' });
+  const sv = spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: '3321', DEFAULT_POLICY: 'free', CHAT_JITTER_MIN_MS: '0', CHAT_JITTER_MAX_MS: '60', CHAT_SAFETY_MAX: '7', CHAT_SLOWDOWN_MS: '20', FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'mk', base: 'http://127.0.0.1:4121', models: ['m'], cap: 900 }]), FREE_ROOM_CAP: '300', REQUIRE_LOGIN: '0', SESSION_SECRET: 's' }), stdio: 'ignore' });
   try {
     await sleep(900);
     const ws = new WS('ws://127.0.0.1:3321/ws'); const ev = []; ws.on('message', d => ev.push(JSON.parse(d)));
@@ -38,8 +38,9 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     ws.send(JSON.stringify({ t: 'msg', text: '@나 너한테 묻는 거야' })); await sleep(1500);
     check('@mention is a hint, not an order: mentioned AI is told, and may still pass', ais() - a0 === 0 && log.find(l => l.name === '나').called && !log.find(l => l.name === '가').called, JSON.stringify(log));
     a0 = ais(); log.length = 0; mode = 'chatty';
-    ws.send(JSON.stringify({ t: 'msg', text: '자유롭게 떠들어 봐' })); await sleep(3000);
-    check('chatter stops at the streak limit (4 AI lines after a human line)', ais() - a0 === 4 && ev.some(e => e.t === 'msg' && e.msg.code === 'STREAK_LIMIT'), ais() - a0);
+    ws.send(JSON.stringify({ t: 'msg', text: '자유롭게 떠들어 봐' })); await sleep(4000);
+    check('no fixed 4-line cap: AIs keep going while they have something to say, stopped only by the safety line (7 here)', ais() - a0 === 7 && ev.some(e => e.t === 'msg' && e.msg.code === 'STREAK_LIMIT'), ais() - a0);
+    check('prompt tells AIs how long they have been chatting so they can wind down', log.some(l => l.wind), '');
     const n0 = ev.length; mode = 'race';
     ws.send(JSON.stringify({ t: 'msg', text: '각자 한마디씩!' })); await sleep(3000);
     const seq = ev.slice(n0).filter(e => (e.t === 'typing' && e.on) || (e.t === 'msg' && e.msg.kind === 'ai')).map(e => e.t === 'typing' ? 'T:' + e.who : 'M:' + e.msg.who);

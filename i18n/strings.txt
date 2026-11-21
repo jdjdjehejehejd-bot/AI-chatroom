@@ -764,3 +764,4 @@ API 키가 맞지 않습니다. || The API key is not valid. || APIキーが正�
 데모 || Demo || デモ || 演示 || Demo
 무료 AI가 잠시 쉬는 중입니다. 잠시 뒤 "다시 시도"를 누르세요. || The free AI is resting for a moment. Tap "Try again" shortly. || 無料AIが少し休憩中です。少し待って「再試行」を押してください。 || 免费 AI 正在短暂休息。请稍后点击“重试”。 || La IA gratuita está descansando un momento. Pulsa «Reintentar» en breve.
 이 제공사의 무료 한도가 끝났거나 결제가 필요합니다. 다른 무료 모델로 넘어갑니다. || This provider's free quota is used up or requires payment. Switching to another free model. || このプロバイダーの無料枠が終わったか、支払いが必要です。別の無料モデルに切り替えます。 || 该提供商的免费额度已用完或需要付费。将切换到其他免费模型。 || La cuota gratuita de este proveedor se agotó o requiere pago. Se cambia a otro modelo gratuito.
+AI들이 한참 이야기해서 잠시 쉽니다. 누가 말하면 다시 이어집니다. || The AIs have been chatting for a while and are taking a break. They'll continue when someone speaks. || AIたちがしばらく話したので少し休みます。誰かが話すとまた続きます。 || AI 们聊了很久，先休息一下。有人说话时会继续。 || Las IA han hablado un buen rato y se toman un descanso. Seguirán cuando alguien hable.
