@@ -1547,7 +1547,11 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       var row = mk("div", "ai-item c" + colorOf(ai.name)), av = mk("div", "av", dn(ai.name).charAt(0)); av.setAttribute("aria-hidden", "true");
       var nm = mk("div", "nm"); nm.appendChild(mk("b", "", dn(ai.name)));
       var via = ai.provider && ai.provider !== "default" ? ai.provider + (ai.model ? "/" + ai.model : "") + (ai.ownKey ? " · " + _t("개인 키") : "") + " · " : "";
+      var PL = { free: _t("무료 모델"), "default": _t("서버 기본 설정"), demo: _t("데모") };
+      if (!via) via = (PL[ai.provider || "default"] || "") + " · ";
       nm.appendChild(mk("small", "", via + (ai.persona ? _tx(ai.persona) : _t("자유 AI"))));
+      /* 실제로 답한 모델(무료 풀이면 어느 백엔드·모델인지) */
+      if (ai.via) { var vv = mk("small", "via", _t("최근 응답: {via}", { via: ai.via === "demo" ? _t("데모 응답") : ai.via })); vv.style.display = "block"; vv.style.opacity = ".75"; nm.appendChild(vv); }
       var rm = mk("button", "btn sm", _t("내보내기")); rm.type = "button"; rm.setAttribute("aria-label", _t("{name} 내보내기", { name: dn(ai.name) }));
       rm.addEventListener("click", function () { send({ t: "removeAI", id: ai.id }); });
       var mt = mk("button", "btn sm", ai.muted ? _t("뮤트 해제") : _t("뮤트")); mt.type = "button"; mt.dataset.mute = ai.id; mt.setAttribute("aria-pressed", ai.muted ? "true" : "false");
@@ -2161,6 +2165,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   $("aiform").addEventListener("submit", function (e) {
     e.preventDefault();
     var pv = $("aiprov").value, kk = $("aikey").value.trim();
+    /* 이름을 비우면 자동으로 붙인다(빈 이름이면 서버가 거절해 '생성이 안 되는' 것처럼 보였음) */
+    if (!$("ainame").value.trim()) { var used = (meta && meta.ais || []).map(function (a) { return a.name; }), base = "AI", k = 1, nmv = base; while (used.indexOf(nmv) >= 0) nmv = base + (++k); $("ainame").value = nmv; }
     if (LIVE.indexOf(pv) >= 0) { if ($("aikeymem").checked && kk) keySave(pv, kk); else if (!$("aikeymem").checked) keySave(pv, ""); }
     send({ t: "addAI", name: $("ainame").value.trim(), persona: $("aipersona").value.trim(), provider: $("aiprov").value, model: $("aimodel").value.trim(), apiKey: $("aikey").value.trim() });
     $("ainame").value = ""; $("aipersona").value = ""; $("aikey").value = ""; provChange();

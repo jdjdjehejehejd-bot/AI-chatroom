@@ -789,7 +789,7 @@ function meta(room) {
     free: { available: freeAvailable(), left: freeLeft(), roomUsed: room.freeUsed || 0, roomCap: FREE_ROOM_CAP },
     library: room.library.map(l => ({ id: l.id, name: l.asset.name, description: l.asset.description, by: l.by, ais: l.asset.ais.length })),
     humans: [...room.clients].map(c => c.meta.name), verified: [...room.clients].filter(c => c.meta.user).map(c => c.meta.name), ownerName: room.ownerSub ? room.ownerName : '',
-    ais: room.ais.map(a => ({ id: a.id, name: a.name, persona: a.persona, provider: a.provider, model: a.model, ownKey: !!a.apiKey, muted: !!a.muted, notes: a.notes || [] }))
+    ais: room.ais.map(a => ({ id: a.id, name: a.name, persona: a.persona, provider: a.provider, model: a.model, ownKey: !!a.apiKey, muted: !!a.muted, notes: a.notes || [], via: a.via || '' }))
   };
 }
 /* 신고·차단: 차단한 사람의 메시지는 차단한 쪽에만 전달하지 않는다. 작성자 계정 ID(_sub)는 클라이언트에 보내지 않는다 */
@@ -1098,6 +1098,7 @@ async function callFree(room, ai, dm) {
         text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model }, dm);
       }
       if (b.id !== 'freellmapi' && !b.keyless) freeState.rr = (order[i] + 1) % n;
+      noteVia(room, ai, b.id + '/' + model);
       room.freeUsed = (room.freeUsed || 0) + 1;
       return text;
     } catch (e) {
@@ -1171,9 +1172,16 @@ async function generate(room, ai, dm) {
   try { const r = await generateRaw(room, ai, dm); track('call_ok.' + prov); track('ms.' + prov, Date.now() - t0); return r; }
   catch (e) { track('call_err.' + prov); track('ms.' + prov, Date.now() - t0); throw e; }
 }
+/* 이 AI가 실제로 어떤 제공사·모델로 답했는지 화면에 보여 준다(키는 포함하지 않음). 바뀔 때만 방 정보를 다시 보낸다 */
+function noteVia(room, ai, via) {
+  if (!via || ai.via === via) return;
+  ai.via = via; broadcast(room, meta(room));
+}
 async function generateRaw(room, ai, dm) {
   const cfg = resolve(ai, room);
   if (cfg.provider === 'free') return callFree(room, ai, dm);
+  if (cfg.provider !== 'demo') noteVia(room, ai, cfg.provider + '/' + cfg.model);
+  else noteVia(room, ai, 'demo');
   if (cfg.provider === 'anthropic') return callAnthropic(room, ai, cfg, dm);
   if (['openai', 'openrouter', 'groq', 'google', 'mistral', 'nvidia'].includes(cfg.provider)) return callChat(room, ai, cfg, dm);
   await new Promise(r => setTimeout(r, DEMO_DELAY));

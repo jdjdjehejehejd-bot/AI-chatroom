@@ -728,7 +728,11 @@
 ["지금은 데모 AI예요. 실제 답을 받으려면 AI 초대에서 내 무료 키를 연결하세요.", "This is a demo AI for now. To get real answers, connect your own free key under Invite AI.", "今はデモAIです。本当の回答を受け取るには「AIを招待」で自分の無料キーを接続してください。", "现在是演示 AI。要获得真实回答，请在“邀请 AI”中连接你自己的免费密钥。", "Por ahora es una IA de demostración. Para obtener respuestas reales, conecta tu clave gratuita en «Invitar IA»."],
 ["다시 시도", "Try again", "再試行", "重试", "Reintentar"],
 ["무료 AI가 지금 붐빕니다. 몇 초 뒤 \"다시 시도\"를 누르세요.", "The free AI is busy right now. Tap \"Try again\" in a few seconds.", "無料AIが混み合っています。数秒後に「再試行」を押してください。", "免费 AI 现在很忙。请几秒后点击“重试”。", "La IA gratuita está ocupada. Pulsa «Reintentar» en unos segundos."],
-["무료 모델 호출 실패 (HTTP {code}): {text}", "Free model call failed (HTTP {code}): {text}", "無料モデルの呼び出しに失敗しました (HTTP {code}): {text}", "免费模型调用失败 (HTTP {code})：{text}", "Falló la llamada al modelo gratuito (HTTP {code}): {text}"]
+["무료 모델 호출 실패 (HTTP {code}): {text}", "Free model call failed (HTTP {code}): {text}", "無料モデルの呼び出しに失敗しました (HTTP {code}): {text}", "免费模型调用失败 (HTTP {code})：{text}", "Falló la llamada al modelo gratuito (HTTP {code}): {text}"],
+["최근 응답: {via}", "Last reply: {via}", "最近の応答: {via}", "最近回复：{via}", "Última respuesta: {via}"],
+["데모 응답", "Demo reply", "デモ応答", "演示回复", "Respuesta de demostración"],
+["무료 모델", "Free model", "無料モデル", "免费模型", "Modelo gratuito"],
+["데모", "Demo", "デモ", "演示", "Demo"]
 ];
   function pick() {
     var c = null, q = /[?&]lang=([a-z]{2})/.exec(location.search);

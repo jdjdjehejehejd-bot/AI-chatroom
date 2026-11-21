@@ -16,6 +16,8 @@ const cnt = A => A.ev.filter(e => e.t === 'msg' && e.msg && e.msg.kind === 'ai')
     await send({ t: 'msg', text: '안녕, 오늘 뭐 먹지?' }); await sleep(1500);
     const n1 = cnt(A);
     check('one AI answers without @mention', n1 > n0, [n0, n1]);
+    const mv = A.ev.filter(e => e.t === 'meta').pop();
+    check('meta shows which model actually answered (via)', mv && mv.ais[0].via === 'demo', JSON.stringify(mv && mv.ais[0]));
     await send({ t: 'addAI', name: 'Bob', persona: '', provider: 'demo' });
     const n2 = cnt(A);
     await send({ t: 'msg', text: '둘 다 있을 때 멘션 없는 말' }); await sleep(1200);

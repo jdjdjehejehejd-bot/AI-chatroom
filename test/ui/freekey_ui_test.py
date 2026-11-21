@@ -34,6 +34,8 @@ with sync_playwright() as p:
     check("remembered key prefilled + box checked", pg.input_value("#aikey")=="gsk_test_123" and pg.is_checked("#aikeymem"))
     pg.uncheck("#aikeymem"); pg.fill("#ainame","G2"); pg.click("#addai"); pg.wait_for_timeout(500)
     check("unchecking forgets the key", "gsk_test_123" not in (pg.evaluate("localStorage.getItem('mm_keys')") or ""))
+    open_inv(pg); pg.fill("#ainame",""); pg.select_option("#aiprov","default"); n0=pg.locator("#ais .ai-item").count(); pg.click("#addai"); pg.wait_for_timeout(700)
+    check("empty name gets an automatic name (server default AI is created)", pg.locator("#ais .ai-item").count()==n0+1, pg.inner_text("#ais"))
     check("no page errors", not errs, errs)
     ctx.close()
     en=b.new_context(locale="en-US",bypass_csp=True,viewport={"width":1280,"height":800}); pe=en.new_page(); enter(pe,"Eve"); open_inv(pe); pe.click("[data-fk=nvidia]")
