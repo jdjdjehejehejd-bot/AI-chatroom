@@ -238,10 +238,21 @@ FREE_BACKENDS.push(
   gatedFree('cloudflare', { keyEnv: 'CLOUDFLARE_API_TOKEN', ready: () => !!process.env.CLOUDFLARE_API_TOKEN && /^[a-f0-9]{32}$/i.test(process.env.CLOUDFLARE_ACCOUNT_ID || ''),
     base: () => process.env.CLOUDFLARE_BASE_URL || ('https://api.cloudflare.com/client/v4/accounts/' + (process.env.CLOUDFLARE_ACCOUNT_ID || 'x') + '/ai/v1'), models: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', cap: 100 })
 );
+/* FreeLLMAPI(여러 무료 제공사를 하나의 OpenAI 호환 주소로 묶는 개인용 라우터)를 운영자가 이미 돌리고 있으면 주소와 통합 키만 넣어 연결한다.
+   여러 제공사를 FreeLLMAPI가 알아서 돌려 쓰므로 가장 먼저 시도한다. 주소는 운영자만 정한다(https 또는 localhost) */
+(() => {
+  const base = String(process.env.FREELLMAPI_URL || '').trim().replace(/\/+$/, '');
+  if (!base) return;
+  const okBase = /^https:\/\//.test(base) || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(base) || (!PRODUCTION && /^http:\/\//.test(base));
+  if (!okBase) return console.error('FREELLMAPI_URL은 https 주소 또는 localhost여야 합니다: 무시합니다.');
+  const models = String(process.env.FREELLMAPI_MODELS || 'auto').split(',').map(x => x.trim()).filter(x => /^[A-Za-z0-9_.:@\/-]{1,120}$/.test(x)).slice(0, 20);
+  FREE_BACKENDS.unshift({ id: 'freellmapi', key: String(process.env.FREELLMAPI_KEY || ''), keyEnv: '', noKey: !process.env.FREELLMAPI_KEY,
+    base: /\/v1$/.test(base) ? base : base + '/v1', models, cap: capFromEnv('FREE_CAP_FREELLMAPI', 1000) });
+})();
 try {
   const extra = JSON.parse(process.env.FREE_EXTRA_BACKENDS || '[]');
   (Array.isArray(extra) ? extra : []).forEach(e => {
-    if (e && !['mistral', 'nvidia', 'gemini', 'cerebras', 'cloudflare'].includes(e.id) && /^[a-z0-9_-]{2,20}$/.test(e.id) && /^https?:\/\//.test(e.base) && (!PRODUCTION || /^https:\/\//.test(e.base) || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(e.base)) && Array.isArray(e.models) && e.models.length && !FREE_BACKENDS.some(b => b.id === e.id)) {
+    if (e && !['mistral', 'nvidia', 'gemini', 'cerebras', 'cloudflare', 'freellmapi'].includes(e.id) && /^[a-z0-9_-]{2,20}$/.test(e.id) && /^https?:\/\//.test(e.base) && (!PRODUCTION || /^https:\/\//.test(e.base) || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(e.base)) && Array.isArray(e.models) && e.models.length && !FREE_BACKENDS.some(b => b.id === e.id)) {
       FREE_BACKENDS.push({ id: e.id, key: e.key ? String(e.key) : '', keyEnv: '', noKey: !e.key, base: String(e.base),
         models: e.models.map(String), cap: Number(e.cap) > 0 ? Number(e.cap) : 100 });
     }
@@ -1046,8 +1057,13 @@ async function callFree(room, ai, dm) {
   if ((room.freeUsed || 0) >= FREE_ROOM_CAP) throw new Error('이 방의 무료 모델 사용 한도(' + FREE_ROOM_CAP + '회)에 도달했습니다. 개인 API 키를 쓰는 AI를 초대하면 계속할 수 있습니다.');
   const n = FREE_BACKENDS.length;
   let lastErr = null, tried = 0;
+  /* FreeLLMAPI가 연결돼 있으면 항상 먼저 시도하고(자체적으로 여러 제공사를 돌려 씀), 실패하면 나머지를 순서대로 돌린다 */
+  const order = [];
+  for (let i = 0; i < n; i++) order.push((freeState.rr + i) % n);
+  const fi = FREE_BACKENDS.findIndex(x => x.id === 'freellmapi');
+  if (fi >= 0) { order.splice(order.indexOf(fi), 1); order.unshift(fi); }
   for (let i = 0; i < n; i++) {
-    const b = FREE_BACKENDS[(freeState.rr + i) % n];
+    const b = FREE_BACKENDS[order[i]];
     if (!freeUsable(b)) continue;
     tried++;
     const modelIndex = freeState.used[b.id] || 0;
@@ -1055,7 +1071,7 @@ async function callFree(room, ai, dm) {
     const model = b.models[modelIndex % b.models.length];
     try {
       const text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model }, dm);
-      freeState.rr = (freeState.rr + i + 1) % n;
+      if (b.id !== 'freellmapi') freeState.rr = (order[i] + 1) % n;
       room.freeUsed = (room.freeUsed || 0) + 1;
       return text;
     } catch (e) {

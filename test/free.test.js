@@ -54,7 +54,7 @@ const sysMsgs = c => c.ev.filter(e => e.t === 'msg' && e.msg.kind === 'system').
   check('free AI added; meta.free.available', meta1.ais.length === 1 && meta1.free.available === true && meta1.free.left > 0, JSON.stringify(meta1.free));
   c.ws.send(JSON.stringify({ t: 'msg', text: '@무료 안녕' })); await sleep(700);
   check('failover: reply came from groq first configured model', aiMsgs(c).some(t => t.includes('FREE-OK(openai/gpt-oss-120b)')), aiMsgs(c).concat(sysMsgs(c)));
-  check('openrouter tried first with :free model + its key', A.log.length === 1 && A.log[0].model.endsWith(':free') && A.log[0].auth === 'Bearer orkey', JSON.stringify(A.log));
+  check('openrouter tried first with free router model + its key', A.log.length === 1 && (A.log[0].model === 'openrouter/free' || A.log[0].model.endsWith(':free')) && A.log[0].auth === 'Bearer orkey', JSON.stringify(A.log));
   check('groq used server key and first configured model', G.log[0] && G.log[0].auth === 'Bearer gqkey' && G.log[0].url === '/chat/completions' && G.log[0].model === 'openai/gpt-oss-120b', JSON.stringify(G.log));
   check('user model ignored', !G.log.concat(A.log).some(l => l.model === 'evil-model'));
   c.ws.send(JSON.stringify({ t: 'msg', text: '@무료 또' })); await sleep(700);
@@ -161,6 +161,23 @@ const sysMsgs = c => c.ev.filter(e => e.t === 'msg' && e.msg.kind === 'system').
   const g2 = c.ev.filter(e => e.t === 'meta').pop();
   check('Cloudflare pool needs a valid 32-hex account id', g2 && !g2.free.available, JSON.stringify(g2 && g2.free));
   c.ws.close(); sv.kill(); X.s.close();
+  // 7) FreeLLMAPI router: tried first with model "auto" and unified key; falls back to other pools when it fails.
+  const FL = await mock(4106, 'ok'), FB = await mock(4107, 'ok');
+  sv = startServer(3111, { FREELLMAPI_URL: 'http://127.0.0.1:4106', FREELLMAPI_KEY: 'freellmapi-unified', GROQ_API_KEY: 'g', GROQ_BASE_URL: 'http://127.0.0.1:4107', FREE_ROOM_CAP: '10' });
+  await sleep(600);
+  c = await client(3111, 'Mia', 'room11');
+  c.ws.send(JSON.stringify({ t: 'addAI', name: '라우터', persona: 'p', provider: 'free' })); await sleep(250);
+  for (const t of ['하나', '둘', '셋']) { c.ws.send(JSON.stringify({ t: 'msg', text: '@라우터 ' + t })); await sleep(600); }
+  check('FreeLLMAPI is always tried first (auto model, unified key, /v1 added)', FL.log.length === 3 && FB.log.length === 0 && FL.log.every(l => l.model === 'auto' && l.auth === 'Bearer freellmapi-unified' && l.url === '/v1/chat/completions'), JSON.stringify({ fl: FL.log, fb: FB.log }));
+  c.ws.close(); sv.kill(); FL.s.close(); await sleep(200);
+  const FL2 = await mock(4108, '429');
+  sv = startServer(3112, { FREELLMAPI_URL: 'http://127.0.0.1:4108/v1', FREELLMAPI_KEY: 'k', GROQ_API_KEY: 'g', GROQ_BASE_URL: 'http://127.0.0.1:4107' });
+  await sleep(600);
+  c = await client(3112, 'Mia', 'room12');
+  c.ws.send(JSON.stringify({ t: 'addAI', name: '라우터', persona: 'p', provider: 'free' })); await sleep(250);
+  c.ws.send(JSON.stringify({ t: 'msg', text: '@라우터 폴백' })); await sleep(900);
+  check('FreeLLMAPI failure falls back to the next free pool', FL2.log.length === 1 && FB.log.length === 1 && c.ev.some(e => e.t === 'msg' && e.msg.kind === 'ai' && /FREE-OK/.test(e.msg.text)), JSON.stringify({ fl: FL2.log, fb: FB.log }));
+  c.ws.close(); sv.kill(); FL2.s.close(); FB.s.close();
   N.s.close();
   A.s.close(); G.s.close();
   console.log(results.every(Boolean) ? 'ALL OK' : 'SOME FAILED'); process.exit(0);
