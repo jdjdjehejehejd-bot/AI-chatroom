@@ -1494,7 +1494,13 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       open.addEventListener("click", function () { openInfo("ai"); });
       var rm = mk("button", "btn sm", _t("이 AI 내보내기")); rm.type = "button"; rm.id = "rmerr";
       rm.addEventListener("click", function () { send({ t: "removeAI", id: errAI.id }); errAI = null; renderStatus(); });
-      e.appendChild(open); e.appendChild(rm); box.appendChild(e);
+      /* 잠깐 붐비거나 서버 오류처럼 기다리면 풀리는 오류는 '다시 시도'를 앞에 두고, AI 내보내기는 권하지 않는다 */
+      var transient = /HTTP (429|5\d\d)|붐빕니다|일시 오류|네트워크|연결하지 못/.test(errAI.text || "");
+      var rt = mk("button", "btn sm" + (transient ? " primary" : ""), _t("다시 시도")); rt.type = "button"; rt.id = "retryai";
+      rt.addEventListener("click", function () { var id = errAI.id; errAI = null; renderStatus(); send({ t: "retryAI", id: id }); });
+      e.appendChild(rt);
+      if (transient) box.appendChild(e), e.appendChild(open);
+      else { e.appendChild(open); e.appendChild(rm); box.appendChild(e); }
     }
   }
   function updateCost(b) {

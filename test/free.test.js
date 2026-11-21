@@ -204,6 +204,25 @@ const sysMsgs = c => c.ev.filter(e => e.t === 'msg' && e.msg.kind === 'system').
   const k2 = c.ev.filter(e => e.t === 'meta').pop();
   check('FREE_KEYLESS=0 turns keyless pool off', k2 && !k2.free.available, JSON.stringify(k2 && k2.free));
   c.ws.close(); sv.kill(); P.s.close(); L.s.close(); GK.s.close();
+  // 9) Keyless 429: wait briefly and retry once on the same backend; alternate between keyless APIs; retryAI re-runs the AI.
+  let n429 = 0; const P9 = http.createServer((req, res) => { let bb = ''; req.on('data', c => bb += c); req.on('end', () => {
+    n429++; res.setHeader('content-type', 'application/json');
+    if (n429 === 1) { res.writeHead(429, { 'retry-after': '1' }); return res.end('{"error":{"message":"slow down"}}'); }
+    res.writeHead(200); res.end(JSON.stringify({ choices: [{ message: { content: 'KEYLESS-OK' } }] })); }); });
+  await new Promise(r => P9.listen(4113, '127.0.0.1', r));
+  const L9 = await mock(4114, 'ok');
+  sv = startServer(3116, { FREE_KEYLESS: '1', KEYLESS_RETRY_S: '1', POLLINATIONS_BASE_URL: 'http://127.0.0.1:4113/openai', LLM7_BASE_URL: 'http://127.0.0.1:4114/v1', FREE_ROOM_CAP: '10' });
+  await sleep(600);
+  c = await client(3116, 'Mia', 'room16');
+  c.ws.send(JSON.stringify({ t: 'addAI', name: '공개', persona: 'p', provider: 'free' })); await sleep(250);
+  c.ws.send(JSON.stringify({ t: 'msg', text: '@공개 첫' })); await sleep(3500);
+  check('keyless 429 -> short wait + retry on same backend succeeds', n429 === 2 && c.ev.some(e => e.t === 'msg' && e.msg.kind === 'ai' && /KEYLESS-OK/.test(e.msg.text)) && L9.log.length === 0, JSON.stringify({ n429, l: L9.log.length }));
+  c.ws.send(JSON.stringify({ t: 'msg', text: '@공개 둘' })); await sleep(900);
+  check('next keyless call alternates to the other API', L9.log.length === 1, L9.log.length);
+  const aiId = c.ev.filter(e => e.t === 'meta').pop().ais[0].id, before = c.ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').length;
+  c.ws.send(JSON.stringify({ t: 'retryAI', id: aiId })); await sleep(900);
+  check('retryAI makes the AI answer again', c.ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').length === before + 1, '');
+  c.ws.close(); sv.kill(); P9.close(); L9.s.close();
   N.s.close();
   A.s.close(); G.s.close();
   console.log(results.every(Boolean) ? 'ALL OK' : 'SOME FAILED'); process.exit(0);

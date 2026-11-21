@@ -270,6 +270,7 @@ try {
   });
 } catch (e) { console.error('FREE_EXTRA_BACKENDS 형식 오류: 무시합니다.'); }
 const FREE_ROOM_CAP = Number(process.env.FREE_ROOM_CAP || 20);
+const KEYLESS_RETRY_S = Number(process.env.KEYLESS_RETRY_S || 5);
 const freeState = { day: '', used: {}, cool: {}, rr: 0 };
 const freeKey = b => b.key || (b.keyEnv && process.env[b.keyEnv]) || '';
 const freeConfigured = b => Array.isArray(b.models) && b.models.length > 0 && Number.isSafeInteger(b.cap) && b.cap > 0 && (b.noKey || !!freeKey(b));
@@ -1012,7 +1013,7 @@ async function callChat(room, ai, cfg, dm) {
     body: JSON.stringify({ model: cfg.model, messages: [{ role: 'system', content: system }, { role: 'user', content: user }] })
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error('API ' + r.status + ': ' + ((j.error && j.error.message) || '응답 오류'));
+  if (!r.ok) { const er = new Error('API ' + r.status + ': ' + ((j.error && j.error.message) || '응답 오류')); er.status = r.status; er.retryAfter = Number(r.headers.get('retry-after')) || 0; throw er; }
   const u = j.usage || {};
   noteUsage(room, cfg.provider || 'free', cfg.model, u.prompt_tokens, u.completion_tokens, cfg.managed);
   return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
@@ -1075,6 +1076,9 @@ async function callFree(room, ai, dm) {
   if (fi >= 0) { order.splice(order.indexOf(fi), 1); order.unshift(fi); }
   /* 키 없는 공개 API는 품질·안정성이 낮을 수 있어, 키가 있는 무료 풀을 먼저 쓰고 마지막에 시도한다 */
   const keyed = order.filter(k => !FREE_BACKENDS[k].keyless), kl = order.filter(k => FREE_BACKENDS[k].keyless);
+  /* 키 없는 API끼리는 번갈아 써서 한쪽 속도 제한에 덜 걸리게 한다 */
+  if (kl.length > 1) { const sh = (freeState.kr || 0) % kl.length; kl.push(...kl.splice(0, sh)); }
+  freeState.kr = (freeState.kr || 0) + 1;
   order.length = 0; order.push(...keyed, ...kl);
   for (let i = 0; i < n; i++) {
     const b = FREE_BACKENDS[order[i]];
@@ -1084,14 +1088,21 @@ async function callFree(room, ai, dm) {
     freeState.used[b.id] = modelIndex + 1;
     const model = b.models[modelIndex % b.models.length];
     try {
-      const text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model }, dm);
+      let text;
+      try { text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model }, dm); }
+      catch (e1) {
+        /* 키 없는 공개 API는 짧은 간격 제한(429)이 잦다: 몇 초 기다렸다 한 번만 다시 시도한다 */
+        if (!(b.keyless && e1.status === 429)) throw e1;
+        await new Promise(r => setTimeout(r, Math.min(8, Math.max(2, e1.retryAfter || KEYLESS_RETRY_S)) * 1000));
+        text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model }, dm);
+      }
       if (b.id !== 'freellmapi' && !b.keyless) freeState.rr = (order[i] + 1) % n;
       room.freeUsed = (room.freeUsed || 0) + 1;
       return text;
     } catch (e) {
       lastErr = e;
       const m = /API (\d+)/.exec(e.message), code = m ? Number(m[1]) : 0;
-      freeState.cool[b.id] = Date.now() + (code === 429 || code >= 500 || !code ? 60000 : 600000);
+      freeState.cool[b.id] = Date.now() + (b.keyless && (code === 429 || code >= 500 || !code) ? 15000 : code === 429 || code >= 500 || !code ? 60000 : 600000);
     }
   }
   if (tried && lastErr) {
@@ -1100,7 +1111,7 @@ async function callFree(room, ai, dm) {
       : code === 402 ? '무료 포함 사용량 또는 계정 요금제 한도를 확인하세요.'
       : code === 403 ? '이 모델의 계정 접근 권한을 확인하세요.'
       : code === 404 ? '모델 ID 또는 API 경로를 확인하세요.'
-      : code === 429 ? '무료 요청 한도 또는 속도 제한에 도달했습니다.'
+      : code === 429 ? '무료 AI가 지금 붐빕니다. 몇 초 뒤 "다시 시도"를 누르세요.'
       : code >= 500 ? '제공사에서 일시 오류가 발생했습니다.'
       : code ? '모델 설정이나 API 요청 형식을 확인하세요.'
       : '네트워크 연결 또는 제공사 설정을 확인하세요.';
@@ -1538,6 +1549,15 @@ function handle(ws, m) {
       pushHist(room); track('deliverable_restored');
       system(room, name + ' 님이 산출물 v' + h.v + '을(를) 되돌려 v' + room.deliv.v + '으로 저장했습니다.', 'DELIV_RESTORED');
       return broadcast(room, { t: 'deliv', deliv: room.deliv, hist: histMeta(room) });
+    }
+    case 'retryAI': {
+      /* 오류 난 AI에게 같은 대화를 한 번 더 시킨다(예산·크레딧은 평소처럼 차감) */
+      const ai = room.ais.find(a => a.id === m.id);
+      if (!ai || ai.muted) return;
+      if (ws.retryAt && Date.now() - ws.retryAt < 3000) return;
+      ws.retryAt = Date.now(); track('ai_retry');
+      orchestrate(room, [ai], ws.user ? ws.user.sub : '');
+      return;
     }
     case 'keytest': {
       /* 사용자 본인 키 확인: 아주 짧은 요청 한 번으로 키·모델이 동작하는지만 본다. 키는 저장·기록하지 않는다.
