@@ -14,10 +14,10 @@ const mock=http.createServer((q,r)=>{let b='';q.on('data',c=>b+=c);q.on('end',()
  s({t:'msg',text:'아무나'});await sleep(1500);
  check('all-PASS run: no AI message, no error, stops',!ev.some(e=>e.t==='msg'&&(e.msg.kind==='ai'||e.msg.code==='AI_ERROR')),JSON.stringify(ev.filter(e=>e.t==='msg').slice(-2)));
  check('prompt offers [PASS] + DM syntax',log[0].includes('[PASS]')&&log[0].includes('[DM @'));
- check('everyone passed once, then one AI was nudged to answer and the run ended (3 calls)',log.length===3,log.length);
+ check('no forced reply: each AI looked once and passed (2 calls)',log.length===2,log.length);
  mode='dm';log.length=0;
  s({t:'msg',text:'@첫째 말해봐'});await sleep(1500);
- check('mentioned AI prompt has NO pass option',!log[0].includes('[PASS]를')&&!log[0].includes('정확히 [PASS]'),log[0].slice(0,200));
+ check('mentioned AI is told it was called but may still pass',log.some(l=>l.includes('너를 @로 불렀다')),log.map(l=>l.slice(0,80)));
  const pub=ev.filter(e=>e.t==='msg'&&e.msg.kind==='ai');
  check('public part kept, DM stripped',pub.length>=1&&pub.every(e=>!e.msg.text.includes('[DM')));
  check('recipient prompt contains the AI note',log.some(l=>l.includes('비밀인데 이거')&&l.includes('쪽지')),log.length);
