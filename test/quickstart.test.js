@@ -21,7 +21,7 @@ const cnt = A => A.ev.filter(e => e.t === 'msg' && e.msg && e.msg.kind === 'ai')
     await send({ t: 'addAI', name: 'Bob', persona: '', provider: 'demo' });
     const n2 = cnt(A);
     await send({ t: 'msg', text: '둘 다 있을 때 멘션 없는 말' }); await sleep(1200);
-    check('two AIs: no mention means no reply', cnt(A) === n2, '');
+    check('two AIs: no mention means no reply (mention policy)', cnt(A) === n2, '');
     // AI끼리 대화 구경
     const B = await cl(port, 'qs2', 'Bea'); const sb = async o => { B.s(o); await sleep(800); };
     await sb({ t: 'spectate', text: '짜장면 vs 짬뽕' });

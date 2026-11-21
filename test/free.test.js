@@ -223,6 +223,27 @@ const sysMsgs = c => c.ev.filter(e => e.t === 'msg' && e.msg.kind === 'system').
   c.ws.send(JSON.stringify({ t: 'retryAI', id: aiId })); await sleep(900);
   check('retryAI makes the AI answer again', c.ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').length === before + 1, '');
   c.ws.close(); sv.kill(); P9.close(); L9.s.close();
+  // 10) 402(결제 필요) 백엔드는 오래 쉬고 다음 백엔드가 답한다. 잠깐 쉬는 중이면 '소진' 대신 '잠시 쉬는 중'이라고 알린다.
+  const P402 = http.createServer((req, res) => { req.on('data', () => {}); req.on('end', () => { res.writeHead(402, { 'content-type': 'application/json' }); res.end('{"error":{"message":"payment required"}}'); }); });
+  await new Promise(r => P402.listen(4115, '127.0.0.1', r));
+  const OK = await mock(4116, 'ok');
+  sv = startServer(3117, { FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'paywall', base: 'http://127.0.0.1:4115', models: ['x'], cap: 100 }, { id: 'okb', base: 'http://127.0.0.1:4116', models: ['y'], cap: 100 }]), FREE_ROOM_CAP: '10' });
+  await sleep(600);
+  c = await client(3117, 'Mia', 'room17');
+  c.ws.send(JSON.stringify({ t: 'addAI', name: '무료', persona: 'p', provider: 'free' })); await sleep(250);
+  for (const t of ['a', 'b', 'c']) { c.ws.send(JSON.stringify({ t: 'msg', text: '@무료 ' + t })); await sleep(600); }
+  const h = await (await fetch('http://127.0.0.1:3117/healthz')).json();
+  check('402 backend is benched for hours, the other backend answers every time', OK.log.length === 3 && c.ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').length === 3 && h.free.backends.find(x => x.id === 'paywall').cooling, JSON.stringify({ ok: OK.log.length, h: h.free }));
+  c.ws.close(); sv.kill(); P402.close(); OK.s.close(); await sleep(200);
+  const R = await mock(4117, '429');
+  sv = startServer(3118, { FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'busy', base: 'http://127.0.0.1:4117', models: ['z'], cap: 100 }]), FREE_ROOM_CAP: '10' });
+  await sleep(600);
+  c = await client(3118, 'Mia', 'room18');
+  c.ws.send(JSON.stringify({ t: 'addAI', name: '무료', persona: 'p', provider: 'free' })); await sleep(250);
+  c.ws.send(JSON.stringify({ t: 'msg', text: '@무료 하나' })); await sleep(700);
+  c.ws.send(JSON.stringify({ t: 'msg', text: '@무료 둘' })); await sleep(700);
+  check('while cooling, the error says "resting", not "used up"', sysMsgs(c).some(t => t.includes('잠시 쉬는 중')) && !sysMsgs(c).some(t => t.includes('소진')), sysMsgs(c).slice(-2));
+  c.ws.close(); sv.kill(); R.s.close();
   N.s.close();
   A.s.close(); G.s.close();
   console.log(results.every(Boolean) ? 'ALL OK' : 'SOME FAILED'); process.exit(0);

@@ -743,7 +743,9 @@
 ["최근 응답: {via}", "Last reply: {via}", "最近の応答: {via}", "最近回复：{via}", "Última respuesta: {via}"],
 ["데모 응답", "Demo reply", "デモ応答", "演示回复", "Respuesta de demostración"],
 ["무료 모델", "Free model", "無料モデル", "免费模型", "Modelo gratuito"],
-["데모", "Demo", "デモ", "演示", "Demo"]
+["데모", "Demo", "デモ", "演示", "Demo"],
+["무료 AI가 잠시 쉬는 중입니다. 잠시 뒤 \"다시 시도\"를 누르세요.", "The free AI is resting for a moment. Tap \"Try again\" shortly.", "無料AIが少し休憩中です。少し待って「再試行」を押してください。", "免费 AI 正在短暂休息。请稍后点击“重试”。", "La IA gratuita está descansando un momento. Pulsa «Reintentar» en breve."],
+["이 제공사의 무료 한도가 끝났거나 결제가 필요합니다. 다른 무료 모델로 넘어갑니다.", "This provider's free quota is used up or requires payment. Switching to another free model.", "このプロバイダーの無料枠が終わったか、支払いが必要です。別の無料モデルに切り替えます。", "该提供商的免费额度已用完或需要付费。将切换到其他免费模型。", "La cuota gratuita de este proveedor se agotó o requiere pago. Se cambia a otro modelo gratuito."]
 ];
   function pick() {
     var c = null, q = /[?&]lang=([a-z]{2})/.exec(location.search);
