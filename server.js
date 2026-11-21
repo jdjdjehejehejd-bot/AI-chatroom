@@ -1098,7 +1098,7 @@ async function callFree(room, ai, dm) {
         text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model }, dm);
       }
       if (b.id !== 'freellmapi' && !b.keyless) freeState.rr = (order[i] + 1) % n;
-      noteVia(room, ai, b.id + '/' + model);
+      noteVia(room, ai, model.startsWith(b.id + '/') ? model : b.id + '/' + model);
       room.freeUsed = (room.freeUsed || 0) + 1;
       return text;
     } catch (e) {
