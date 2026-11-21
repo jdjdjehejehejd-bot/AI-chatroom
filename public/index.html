@@ -112,6 +112,11 @@ label.lb { display:block; font-size:12px; font-weight:700; margin:14px 0 6px; co
 .room .nm small { color:var(--muted); font-size:12px; }
 .room .x { opacity:0; width:28px; height:28px; border-radius:8px; border:none; background:transparent; color:var(--muted); }
 .room:hover .x, .room:focus-within .x { opacity:1; }
+.freekeys { margin:0 0 6px; padding:10px 12px; border:1px dashed var(--edge); border-radius:12px; }
+.freekeys .row2 { margin-top:6px; }
+.keyguide { margin-top:10px; padding:10px 12px; border-radius:10px; background:var(--surface); border:1px solid var(--edge); font-size:13px; line-height:1.55; }
+.keyguide ol { margin:6px 0 4px; padding-left:18px; }
+.keyguide a { color:var(--accent); word-break:break-all; }
 .empty-list { text-align:center; padding:36px 20px; color:var(--muted); }
 .empty-list .art { position:relative; width:84px; height:56px; margin:0 auto 14px; }
 .empty-list .art i { position:absolute; top:0; width:40px; height:40px; border-radius:32%; border:1px solid var(--edge); }
@@ -615,6 +620,15 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
               <input class="field" id="ainame" maxlength="12" placeholder="예: 번역가" autocomplete="off">
               <label class="lb" for="aipersona">역할 / 성격 (비우면 자유 AI)</label>
               <input class="field" id="aipersona" maxlength="200" placeholder="비워 두면 정해진 역할 없이 스스로 말투를 만들어요. 예: 모든 말을 영어로 옮겨주는 AI" autocomplete="off">
+              <div class="freekeys" id="freekeys">
+                <div class="lb" style="margin-top:0">내 무료 키로 연결 (카드 없이 발급)</div>
+                <div class="row2" role="group" aria-label="무료 키 제공사">
+                  <button type="button" class="btn sm" data-fk="groq">Groq</button>
+                  <button type="button" class="btn sm" data-fk="google">Gemini</button>
+                  <button type="button" class="btn sm" data-fk="nvidia">NVIDIA</button>
+                  <button type="button" class="btn sm" data-fk="openrouter">OpenRouter</button>
+                </div>
+              </div>
               <label class="lb" for="aiprov">AI 제공사</label>
               <select class="field" id="aiprov">
                 <option value="free">무료 모델 (키 필요 없음)</option>
@@ -631,9 +645,13 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
               <p class="hint" id="freehint"></p>
               <div id="aiextra" hidden>
                 <label class="lb" for="aimodel">모델 이름</label>
-                <input class="field" id="aimodel" maxlength="80" placeholder="제공사의 모델 이름을 직접 입력" autocomplete="off">
+                <input class="field" id="aimodel" maxlength="80" placeholder="제공사의 모델 이름을 직접 입력" autocomplete="off" list="aimodels">
+                <datalist id="aimodels"></datalist>
                 <label class="lb" for="aikey" id="keylabel">개인 API 키 (선택)</label>
                 <input class="field" id="aikey" type="password" maxlength="300" placeholder="비우면 서버 설정 키 사용" autocomplete="off">
+                <div class="keyguide" id="keyguide" hidden></div>
+                <label class="consent" style="margin-top:8px"><input type="checkbox" id="aikeymem"><span>이 기기(브라우저)에 키 기억하기</span></label>
+                <div class="row2"><button type="button" class="btn sm" id="aikeytest">키 확인</button><span class="hint" id="aikeyres" role="status"></span></div>
                 <p class="hint">키는 서버 메모리에만 보관되고 다른 참가자에게 보이지 않으며 방이 정리되면 사라집니다. 서버를 거치므로 HTTPS로 운영되는 신뢰할 수 있는 서버에서만 입력하세요.</p>
               </div>
               <div style="margin-top:14px"><button class="btn primary sm" id="addai" type="submit">AI 초대</button></div>
@@ -1439,7 +1457,13 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       e.appendChild(ex2);
     } else if (!has) {
       var b0 = mk("button", "btn primary", _t("무료 AI 한 명으로 바로 시작")); b0.type = "button"; b0.id = "quickai"; b0.style.display = "block"; b0.style.margin = "0 auto 10px";
-      b0.addEventListener("click", function () { send({ t: "addAI", name: "AI", persona: "", provider: (meta && meta.free && meta.free.available) ? "free" : "demo" }); });
+      b0.addEventListener("click", function () {
+        if (meta && meta.free && meta.free.available) return send({ t: "addAI", name: "AI", persona: "", provider: "free" });
+        /* 서버 무료 풀이 없으면, 이 기기에 기억한 내 무료 키가 있을 때 그 키로 시작한다 */
+        var ks = keyStore(), p = ["groq", "google", "nvidia", "openrouter"].filter(function (x) { return ks[x]; })[0];
+        if (p) return send({ t: "addAI", name: "AI", persona: "", provider: p, model: FREEKEY[p].models[0], apiKey: ks[p] });
+        openInfo("ai"); $("invdet").open = true; toast(_t("이 서버에는 무료 모델이 없어요. 내 무료 키로 연결하면 바로 쓸 수 있어요."));
+      });
       e.appendChild(b0);
       var b1 =mk("button", "btn primary sm", _t("에셋 불러오기")); b1.type = "button"; b1.addEventListener("click", function () { openInfo("assets"); });
       var b2 = mk("button", "btn sm", _t("AI 초대")); b2.type = "button"; b2.style.marginLeft = "8px"; b2.addEventListener("click", function () { openInfo("ai"); $("invdet").open = true; $("ainame").focus(); });
@@ -2055,6 +2079,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       saveJson(m.asset, nm + ".aichat.json"); toast(_t("에셋 파일을 저장했습니다."));
     }
     else if (m.t === "delver") { viewVer = m.item; renderDeliv(); }
+    else if (m.t === "keytest") { $("aikeyres").textContent = (m.ok ? "✓ " : "✕ ") + _tx(m.text); $("aikeyres").style.color = m.ok ? "var(--ok, #1a7f37)" : "var(--danger, #c0392b)"; }
     else if (m.t === "compare") { cmp = m.compare || null; cmpBusy = false; renderDeliv(); }
     else if (m.t === "deliv") {
       deliv = m.deliv; dhist = m.hist || []; viewVer = null; renderDeliv();
@@ -2085,18 +2110,51 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var url = location.origin + location.pathname + "?room=" + roomId, fail = function () { toast(url); };
     try { navigator.clipboard.writeText(url).then(function () { toast(_t("초대 링크를 복사했습니다.")); }, fail); } catch (e) { fail(); }
   });
+  /* 사용자 본인 무료 키 안내. 모델 ID와 한도는 제공사가 자주 바꾸므로 추천값일 뿐이고 사용자가 고칠 수 있다(2026-11 확인, 2차 자료 포함) */
+  var FREEKEY = {
+    groq: { url: "https://console.groq.com/keys", models: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"], note: "무료 플랜은 모델당 하루 약 1,000회 수준입니다." },
+    google: { url: "https://aistudio.google.com/apikey", models: ["gemini-3.5-flash-lite", "gemini-3.6-flash"], note: "무료 한도가 작습니다(모델에 따라 하루 수십~수백 회). 무료 티어 입력은 Google 제품 개선에 쓰일 수 있습니다." },
+    nvidia: { url: "https://build.nvidia.com", models: ["deepseek-ai/deepseek-v4.1-flash", "openai/gpt-oss-20b", "google/gemma-4-31b-it"], note: "개인 체험·시제품용입니다. 휴대폰 인증이 필요하고 입력·출력이 기록되어 제품 개선에 쓰일 수 있습니다." },
+    openrouter: { url: "https://openrouter.ai/keys", models: ["openrouter/free"], note: "openrouter/free는 무료 모델 중 하나를 자동으로 고릅니다. 하루 약 50회(크레딧 구매 이력이 있으면 더 많음)." }
+  };
+  function keyStore() { try { return JSON.parse(store("mm_keys") || "{}") || {}; } catch (e) { return {}; } }
+  function keySave(p, k) { var o = keyStore(); if (k) o[p] = k; else delete o[p]; try { localStorage.setItem("mm_keys", JSON.stringify(o)); } catch (e) {} }
   function provChange() {
-    var v = $("aiprov").value;
+    var v = $("aiprov").value, fk = FREEKEY[v], dl = $("aimodels"), g = $("keyguide");
+    dl.textContent = ""; g.textContent = ""; g.hidden = !fk; $("aikeyres").textContent = "";
+    $("aikeytest").hidden = ["groq", "openrouter", "google", "nvidia", "mistral", "openai"].indexOf(v) < 0;
+    if (fk) {
+      fk.models.forEach(function (mo) { var o = document.createElement("option"); o.value = mo; dl.appendChild(o); });
+      var known = Object.keys(FREEKEY).some(function (k) { return FREEKEY[k].models.indexOf($("aimodel").value.trim()) >= 0; });
+      if (!$("aimodel").value.trim() || known) $("aimodel").value = fk.models[0];
+      g.appendChild(mk("b", "", _t("무료 키 받는 법")));
+      var ol = mk("ol"), li1 = mk("li"); li1.appendChild(document.createTextNode(_t("아래 페이지에 로그인해 API 키를 만드세요") + " ")); var a = mk("a", "", fk.url); a.href = fk.url; a.target = "_blank"; a.rel = "noopener"; li1.appendChild(a); ol.appendChild(li1);
+      ol.appendChild(mk("li", "", _t("만든 키를 아래 칸에 붙여 넣고 '키 확인'을 누르세요"))); ol.appendChild(mk("li", "", _t("'AI 초대'를 누르면 이 AI는 내 키로만 답합니다"))); g.appendChild(ol);
+      g.appendChild(mk("small", "", _t(fk.note)));
+    }
+    var saved = keyStore()[v];
+    if (saved && !$("aikey").value) $("aikey").value = saved;
+    $("aikeymem").checked = !!saved;
     $("aiextra").hidden = LIVE.indexOf(v) < 0;
     var byok = ["nvidia", "google", "mistral"].indexOf(v) >= 0;
     $("keylabel").textContent = byok ? _t("본인 API 키 (필수)") : _t("개인 API 키 (선택)");
     $("aikey").placeholder = byok ? _t("이 제공사는 본인 키만 사용할 수 있습니다") : _t("비우면 서버 설정 키 사용");
   }
-  $("aiprov").addEventListener("change", provChange);
+  $("aiprov").addEventListener("change", function () { $("aikey").value = ""; provChange(); });
+  document.querySelectorAll("[data-fk]").forEach(function (b) {
+    b.addEventListener("click", function () { $("aiprov").value = b.getAttribute("data-fk"); $("aikey").value = ""; provChange(); if (!$("ainame").value.trim()) $("ainame").value = b.textContent.trim(); ($("aikey").value ? $("addai") : $("aikey")).focus(); });
+  });
+  $("aikeytest").addEventListener("click", function () {
+    var k = $("aikey").value.trim(), mo = $("aimodel").value.trim();
+    if (!k) { $("aikeyres").textContent = _t("API 키를 입력하세요."); return; }
+    $("aikeyres").textContent = _t("확인 중…"); send({ t: "keytest", provider: $("aiprov").value, model: mo, apiKey: k });
+  });
   $("aiform").addEventListener("submit", function (e) {
     e.preventDefault();
+    var pv = $("aiprov").value, kk = $("aikey").value.trim();
+    if (LIVE.indexOf(pv) >= 0) { if ($("aikeymem").checked && kk) keySave(pv, kk); else if (!$("aikeymem").checked) keySave(pv, ""); }
     send({ t: "addAI", name: $("ainame").value.trim(), persona: $("aipersona").value.trim(), provider: $("aiprov").value, model: $("aimodel").value.trim(), apiKey: $("aikey").value.trim() });
-    $("ainame").value = ""; $("aipersona").value = ""; $("aikey").value = "";
+    $("ainame").value = ""; $("aipersona").value = ""; $("aikey").value = ""; provChange();
   });
   $("stminus").addEventListener("click", function () { $("stval").textContent = Math.max(1, Number($("stval").textContent) - 1); });
   $("stplus").addEventListener("click", function () { $("stval").textContent = Math.min(10, Number($("stval").textContent) + 1); });

@@ -191,6 +191,7 @@ const ENV_KEYS = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', ope
    Google의 공개 앱 범위에는 제한이 있다. Mistral Free 입력·응답은 학습에 쓰일 수 있어
    별도 무료 풀은 운영자가 계정에서 옵트아웃을 확인했다고 명시한 경우에만 아래에서 연다. */
 const BYOK_ONLY = new Set(['nvidia', 'google', 'mistral']);
+const KEYTEST_PROVIDERS = ['groq', 'openrouter', 'google', 'nvidia', 'mistral', 'openai'];
 
 /* 무료 모델 풀: 서버가 가진 무료 티어 키로 사용자 대신 호출한다. 무료 티어는 계정 전체 한도가 작으므로
    백엔드별 일일 상한, 방별 상한, 실패 시 다음 백엔드로 넘어가는 로직을 둔다.
@@ -221,7 +222,7 @@ const gatedFree = (id, o) => {
 };
 const FREE_BACKENDS = [
   { id: 'openrouter', keyEnv: 'OPENROUTER_API_KEY', base: BASES.openrouter,
-    models: csv(process.env.FREE_OPENROUTER_MODELS, 'qwen/qwen3.8-27b:free,nvidia/nemotron-3-super-120b-a12b:free,google/gemma-4-31b-it:free'),
+    models: csv(process.env.FREE_OPENROUTER_MODELS, 'openrouter/free'),
     cap: Number(process.env.FREE_CAP_OPENROUTER || 45) },
   { id: 'groq', keyEnv: 'GROQ_API_KEY', base: BASES.groq,
     models: csv(process.env.FREE_GROQ_MODELS, 'openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b'),
@@ -231,9 +232,9 @@ const FREE_BACKENDS = [
     cap: capFromEnv('FREE_CAP_MISTRAL', 30) }
 ];
 FREE_BACKENDS.push(
-  gatedFree('nvidia', { keyEnv: 'NVIDIA_API_KEY', ready: () => !!process.env.NVIDIA_API_KEY, base: () => BASES.nvidia, models: 'meta/llama-3.3-70b-instruct', cap: 100 }),
-  gatedFree('gemini', { keyEnv: 'GEMINI_API_KEY', ready: () => !!process.env.GEMINI_API_KEY, base: () => BASES.google, models: 'gemini-2.5-flash', cap: 50 }),
-  gatedFree('cerebras', { keyEnv: 'CEREBRAS_API_KEY', ready: () => !!process.env.CEREBRAS_API_KEY, base: () => process.env.CEREBRAS_BASE_URL || 'https://api.cerebras.ai/v1', models: 'llama-3.3-70b', cap: 100 }),
+  gatedFree('nvidia', { keyEnv: 'NVIDIA_API_KEY', ready: () => !!process.env.NVIDIA_API_KEY, base: () => BASES.nvidia, models: 'deepseek-ai/deepseek-v4.1-flash,openai/gpt-oss-20b', cap: 100 }),
+  gatedFree('gemini', { keyEnv: 'GEMINI_API_KEY', ready: () => !!process.env.GEMINI_API_KEY, base: () => BASES.google, models: 'gemini-3.5-flash-lite', cap: 50 }),
+  gatedFree('cerebras', { keyEnv: 'CEREBRAS_API_KEY', ready: () => !!process.env.CEREBRAS_API_KEY, base: () => process.env.CEREBRAS_BASE_URL || 'https://api.cerebras.ai/v1', models: 'gpt-oss-120b', cap: 100 }),
   gatedFree('cloudflare', { keyEnv: 'CLOUDFLARE_API_TOKEN', ready: () => !!process.env.CLOUDFLARE_API_TOKEN && /^[a-f0-9]{32}$/i.test(process.env.CLOUDFLARE_ACCOUNT_ID || ''),
     base: () => process.env.CLOUDFLARE_BASE_URL || ('https://api.cloudflare.com/client/v4/accounts/' + (process.env.CLOUDFLARE_ACCOUNT_ID || 'x') + '/ai/v1'), models: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', cap: 100 })
 );
@@ -1507,6 +1508,32 @@ function handle(ws, m) {
       pushHist(room); track('deliverable_restored');
       system(room, name + ' 님이 산출물 v' + h.v + '을(를) 되돌려 v' + room.deliv.v + '으로 저장했습니다.', 'DELIV_RESTORED');
       return broadcast(room, { t: 'deliv', deliv: room.deliv, hist: histMeta(room) });
+    }
+    case 'keytest': {
+      /* 사용자 본인 키 확인: 아주 짧은 요청 한 번으로 키·모델이 동작하는지만 본다. 키는 저장·기록하지 않는다.
+         주소는 서버가 정한 제공사 주소(BASES)만 쓰므로 사용자가 서버를 임의 주소로 보낼 수 없다 */
+      const prov = String(m.provider || '');
+      if (!KEYTEST_PROVIDERS.includes(prov)) return send(ws, { t: 'keytest', ok: false, text: '이 제공사는 키 확인을 지원하지 않습니다.' });
+      const key = cleanText(m.apiKey, 300), model = cleanText(m.model, 80);
+      if (!key || /\s/.test(key)) return send(ws, { t: 'keytest', ok: false, text: 'API 키를 입력하세요.' });
+      if (!model || !/^[A-Za-z0-9._:\/@-]+$/.test(model)) return send(ws, { t: 'keytest', ok: false, text: '모델 이름을 확인하세요.' });
+      const now = Date.now();
+      if (ws.keyTestAt && now - ws.keyTestAt < 5000) return send(ws, { t: 'keytest', ok: false, text: '잠시 뒤 다시 확인하세요.' });
+      ws.keyTestAt = now; track('key_test.' + prov);
+      (async () => {
+        try {
+          const r = await fetch(BASES[prov].replace(/\/+$/, '') + '/chat/completions', {
+            method: 'POST', signal: AbortSignal.timeout(20000),
+            headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
+            body: JSON.stringify({ model, messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 16 })
+          });
+          if (r.ok) { track('key_test_ok.' + prov); return send(ws, { t: 'keytest', ok: true, text: '키와 모델이 동작합니다.' }); }
+          const c = r.status;
+          send(ws, { t: 'keytest', ok: false, code: c, text: (c === 401 ? 'API 키가 맞지 않습니다.' : c === 403 ? '이 키로는 이 모델을 쓸 수 없습니다.' : c === 404 ? '모델 이름을 찾을 수 없습니다. 제공사 목록에서 확인하세요.'
+            : c === 402 ? '무료 사용량이나 요금제 한도를 확인하세요.' : c === 429 ? '요청 한도에 걸렸습니다. 키는 맞을 수 있으니 잠시 뒤 다시 시도하세요.' : c >= 500 ? '제공사 서버 오류입니다. 잠시 뒤 다시 시도하세요.' : '요청이 거절되었습니다.') + ' (HTTP ' + c + ')' });
+        } catch (e) { send(ws, { t: 'keytest', ok: false, text: '제공사에 연결하지 못했습니다.' }); }
+      })();
+      return;
     }
     case 'addAI': {
       const an = cleanText(m.name, 12), persona = cleanText(m.persona, LIMITS.persona);

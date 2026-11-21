@@ -1,0 +1,42 @@
+import sys
+from playwright.sync_api import sync_playwright
+B=sys.argv[1]; res=[]
+def check(n,c,i=""): res.append(bool(c)); print(("PASS " if c else "FAIL ")+n+(" | "+str(i) if (not c and i) else ""))
+def enter(pg, name):
+    pg.goto(B+"/"); pg.wait_for_selector("#jgo"); pg.fill("#jname",name); pg.check("#jconsent",force=True); pg.click("#jgo"); pg.wait_for_selector("#room:not([hidden])")
+def open_inv(pg):
+    if pg.locator("#invdet").get_attribute("open") is None: pg.click("#invdet summary")
+with sync_playwright() as p:
+    b=p.chromium.launch(args=["--no-sandbox"]); errs=[]
+    ctx=b.new_context(locale="ko-KR",bypass_csp=True,viewport={"width":1280,"height":800}); pg=ctx.new_page(); pg.on("pageerror",lambda e:errs.append(str(e)))
+    enter(pg,"Ann"); open_inv(pg)
+    check("free-key buttons shown", pg.locator("[data-fk]").count()==4)
+    pg.click("[data-fk=groq]")
+    check("Groq picks provider + recommended model", pg.input_value("#aiprov")=="groq" and pg.input_value("#aimodel")=="openai/gpt-oss-120b", (pg.input_value("#aiprov"),pg.input_value("#aimodel")))
+    g=pg.locator("#keyguide")
+    check("guide shows official key page link", g.is_visible() and g.locator("a[href='https://console.groq.com/keys'][target=_blank]").count()==1)
+    check("name prefilled", pg.input_value("#ainame")=="Groq")
+    check("model suggestions offered", pg.locator("#aimodels option").count()>=2)
+    pg.click("[data-fk=google]")
+    check("switching provider swaps recommended model", pg.input_value("#aimodel")=="gemini-3.5-flash-lite", pg.input_value("#aimodel"))
+    pg.click("[data-fk=groq]")
+    pg.fill("#aikey","gsk_test_123"); pg.check("#aikeymem"); pg.click("#aikeytest"); pg.wait_for_function("document.getElementById('aikeyres').textContent.length>3 && !/확인 중/.test(document.getElementById('aikeyres').textContent)",timeout=25000)
+    check("key check returns a result", len(pg.inner_text("#aikeyres"))>3, pg.inner_text("#aikeyres"))
+    pg.click("#addai"); pg.wait_for_function("document.querySelectorAll('#ais .ai-item').length==1")
+    check("AI invited with own key", "groq" in pg.inner_text("#ais").lower(), pg.inner_text("#ais"))
+    stored=pg.evaluate("localStorage.getItem('mm_keys')")
+    check("key remembered only when opted in", stored and "gsk_test_123" in stored, stored)
+    # 새 방: 기억한 키가 자동으로 채워지고, 서버 무료 풀이 없으면 빠른 시작이 내 키를 쓴다
+    enter(pg,"Ann2")
+    pg.click("#quickai"); pg.wait_for_function("document.querySelectorAll('#ais .ai-item').length==1")
+    check("quick start uses remembered free key when server has no free pool", "groq" in pg.inner_text("#ais").lower(), pg.inner_text("#ais"))
+    open_inv(pg); pg.click("[data-fk=groq]")
+    check("remembered key prefilled + box checked", pg.input_value("#aikey")=="gsk_test_123" and pg.is_checked("#aikeymem"))
+    pg.uncheck("#aikeymem"); pg.fill("#ainame","G2"); pg.click("#addai"); pg.wait_for_timeout(500)
+    check("unchecking forgets the key", "gsk_test_123" not in (pg.evaluate("localStorage.getItem('mm_keys')") or ""))
+    check("no page errors", not errs, errs)
+    ctx.close()
+    en=b.new_context(locale="en-US",bypass_csp=True,viewport={"width":1280,"height":800}); pe=en.new_page(); enter(pe,"Eve"); open_inv(pe); pe.click("[data-fk=nvidia]")
+    t=pe.inner_text("#keyguide"); check("English guide translated", "How to get a free key" in t and "가" not in t, t)
+    b.close()
+print("%d / %d"%(sum(res),len(res)))
