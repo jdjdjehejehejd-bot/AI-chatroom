@@ -1,0 +1,20 @@
+/* 암호화 설정(secrets.enc): 맞는 열쇠로만 열리고, 서버 환경변수가 파일보다 우선하며, 값이 로그에 나오지 않는다 */
+const S = require('../secrets'), fs = require('fs'), os = require('os'), path = require('path'), crypto = require('crypto');
+const res = []; const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + d)); };
+const key = crypto.randomBytes(32).toString('base64url'), other = crypto.randomBytes(32).toString('base64url');
+const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sec-')), 'secrets.enc');
+fs.writeFileSync(f, S.seal({ NVIDIA_API_KEY: 'nvapi-secret-xyz', FREE_NVIDIA_CONFIRMED: '1', bad_name: 'x' }, key));
+check('file does not contain the plaintext', !fs.readFileSync(f, 'utf8').includes('nvapi-secret-xyz'));
+const logs = []; const orig = console.log, oerr = console.error; console.log = (...a) => logs.push(a.join(' ')); console.error = (...a) => logs.push(a.join(' '));
+let env = { CONFIG_KEY: key, FREE_NVIDIA_CONFIRMED: '0' }; const r = S.load(env, f);
+let env2 = { CONFIG_KEY: other }; const r2 = S.load(env2, f);
+let env3 = {}; const r3 = S.load(env3, f);
+console.log = orig; console.error = oerr;
+check('right key loads values', env.NVIDIA_API_KEY === 'nvapi-secret-xyz' && r.loaded === 1, JSON.stringify(r));
+check('existing env var wins over file', env.FREE_NVIDIA_CONFIRMED === '0');
+check('invalid names ignored', !('bad_name' in env));
+check('wrong key loads nothing', !env2.NVIDIA_API_KEY && r2.loaded === 0);
+check('no CONFIG_KEY -> no-op', !env3.NVIDIA_API_KEY && r3.loaded === 0);
+check('values never logged', !logs.join('\n').includes('nvapi-secret-xyz'), logs);
+let threw = false; try { S.seal({}, 'short'); } catch (e) { threw = true; } check('short key rejected', threw);
+console.log(res.every(Boolean) ? 'ALL OK' : 'SOME FAILED'); process.exit(res.every(Boolean) ? 0 : 1);

@@ -5,6 +5,7 @@
  * - 발언 정책(mention / round / free), AI 연속 발언 한도, 방별 호출 예산
  * - AI 응답: ANTHROPIC_API_KEY 또는 OPENAI_API_KEY 환경변수가 있으면 실제 호출, 없으면 데모 응답
  */
+require('./secrets').load();   // 암호화된 설정(secrets.enc)을 CONFIG_KEY로 풀어 환경변수로 채운다. 다른 모든 설정보다 먼저.
 const http = require('http');
 const crypto = require('crypto');
 const { createStore } = require('./store');
