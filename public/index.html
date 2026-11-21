@@ -851,7 +851,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   var MAX_AI = 6, MAX_FILE = 12 * 1024;
   var ws = null, me = "", toastTimer = null, pendingAsset = null, applyCand = null;
   var meta = null, errAI = null, budgetAlert = false, joined = false;
-  var colors = {}, colorCount = 0, aiShown = 0, last = null, lastDay = "", typRow = null, typTimer = null;
+  var colors = {}, colorCount = 0, aiShown = 0, last = null, lastDay = "", typRows = {}, typTimers = {};
   var wide = function () { return window.matchMedia("(min-width: 1100px)").matches; };
 
   var SAMPLE = {
@@ -883,7 +883,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     return text;
   }
   var cmp = null, cmpBusy = false, cmpVoted = {}, cmpSwap = {}, rateDone = {}, notesOpen = {}, jmode = "", deliv = null, dview = "preview", dhist = [], viewVer = null;
-  var aidms = [], peekOpen = -1, dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typingWho = "", msgIndex = {}, lastTap = { id: 0, t: 0 };
+  var aidms = [], peekOpen = -1, dmThreads = {}, dmUnread = {}, dmOpen = "", dmTyping = {}, typing = {}, msgIndex = {}, lastTap = { id: 0, t: 0 };
   var POLNAME = { mention: _t("@멘션했을 때만"), round: _t("순서대로"), free: _t("AI가 알아서 판단") };
   var LIVE = ["anthropic", "openai", "openrouter", "groq", "google", "mistral", "nvidia"];
 
@@ -1087,7 +1087,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     if (rr) { rr.checked = true; jmode = pm; showFlow(); }
   })();
   function resetRoomState() {
-    meta = null; pipeDirty = false; deliv = null; dhist = []; viewVer = null; dmThreads = {}; dmUnread = {}; dmOpen = ""; dmTyping = {}; typingWho = ""; msgIndex = {}; closeProfile(); $("inbox").hidden = true; $("dm").hidden = true; dview = "preview"; errAI = null; budgetAlert = false; joined = false; colors = {}; colorCount = 0; aiShown = 0; last = null; lastDay = ""; typRow = null; me = "";
+    meta = null; pipeDirty = false; deliv = null; dhist = []; viewVer = null; dmThreads = {}; dmUnread = {}; dmOpen = ""; dmTyping = {}; typing = {}; msgIndex = {}; closeProfile(); $("inbox").hidden = true; $("dm").hidden = true; dview = "preview"; errAI = null; budgetAlert = false; joined = false; colors = {}; colorCount = 0; aiShown = 0; last = null; lastDay = ""; dropTyping(); me = "";
     $("log").textContent = ""; $("status").textContent = ""; $("text").value = ""; $("doc").value = ""; autosize(); closeInfo(); setTab("ai");
   }
   function goHome() {
@@ -1319,8 +1319,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   function renderStories(s) {
     var box = $("stories"); box.textContent = "";
     s.ais.forEach(function (ai) {
-      var b = mk("button", "cc c" + colorOf(ai.name) + (typingWho === ai.name ? " live" : "")); b.type = "button"; b.setAttribute("aria-label", _t("{name} 캐스트 카드", { name: dn(ai.name) })); b.dataset.ai = ai.id;
-      b.appendChild(avatarFor(ai)); b.appendChild(mk("b", "", dn(ai.name))); var sm = mk("small"); ccStatus(sm, typingWho === ai.name); if (ai.muted) { sm.textContent = _t("🔇 뮤트"); b.style.opacity = ".6"; } b.appendChild(sm);
+      var b = mk("button", "cc c" + colorOf(ai.name) + (typing[ai.name] ? " live" : "")); b.type = "button"; b.setAttribute("aria-label", _t("{name} 캐스트 카드", { name: dn(ai.name) })); b.dataset.ai = ai.id;
+      b.appendChild(avatarFor(ai)); b.appendChild(mk("b", "", dn(ai.name))); var sm = mk("small"); ccStatus(sm, !!typing[ai.name]); if (ai.muted) { sm.textContent = _t("🔇 뮤트"); b.style.opacity = ".6"; } b.appendChild(sm);
       b.addEventListener("click", function () { openProfile(ai.id); }); box.appendChild(b);
     });
     s.humans.forEach(function (n) {
@@ -1329,9 +1329,9 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var add = mk("button", "cc plus"); add.type = "button"; add.setAttribute("aria-label", _t("AI 초대")); add.appendChild(mk("div", "pl", "+")); add.appendChild(mk("small", "", _t("AI 초대")));
     add.addEventListener("click", function () { openInfo("ai"); $("invdet").open = true; }); box.appendChild(add);
   }
-  function setLive(who) {
-    typingWho = who || "";
-    document.querySelectorAll("#stories .cc[data-ai]").forEach(function (b) { var a = aiById(b.dataset.ai), on = !!a && a.name === typingWho; b.classList.toggle("live", on); ccStatus(b.querySelector("small"), on); });
+  /* 여러 AI가 동시에 입력할 수 있다: typing은 지금 입력 중인 AI 이름들의 집합 */
+  function setLive() {
+    document.querySelectorAll("#stories .cc[data-ai]").forEach(function (b) { var a = aiById(b.dataset.ai), on = !!a && !!typing[a.name]; b.classList.toggle("live", on); ccStatus(b.querySelector("small"), on); });
   }
   /* 프로필 */
   var pfLast = null;
@@ -1464,7 +1464,22 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     if (!any) { withMentions(el, text); return; }
     var rest = text.slice(i).trim(); if (rest) { var d2 = mk("div"); withMentions(d2, rest); el.appendChild(d2); }
   }
-  function dropTyping() { if (typRow) { typRow.remove(); typRow = null; } clearTimeout(typTimer); }
+  function dropTyping(who) {
+    Object.keys(typRows).forEach(function (n) { if (who && n !== who) return; typRows[n].remove(); delete typRows[n]; clearTimeout(typTimers[n]); delete typTimers[n]; delete typing[n]; });
+    if (!who) typing = {};
+  }
+  function showTyping(who) {
+    typing[who] = true;
+    if (!typRows[who]) {
+      var row = mk("div", "row typing first last c" + colorOf(who)), av = mk("div", "av", dn(who).charAt(0)); av.setAttribute("aria-hidden", "true");
+      var col = mk("div", "col"), b = mk("div", "bubble"); b.setAttribute("aria-label", _t("{name} 입력 중", { name: dn(who) })); b.appendChild(mk("i")); b.appendChild(mk("i")); b.appendChild(mk("i")); col.appendChild(b);
+      row.appendChild(av); row.appendChild(col); row.dataset.who = who; typRows[who] = row;
+    }
+    $("log").appendChild(typRows[who]); $("log").scrollTop = $("log").scrollHeight;
+    clearTimeout(typTimers[who]); typTimers[who] = setTimeout(function () { dropTyping(who); setLive(); }, 65000);
+  }
+  /* 새 메시지가 붙으면 입력 중 표시들은 다시 맨 아래로 */
+  function keepTypingLast() { var log = $("log"); Object.keys(typRows).forEach(function (n) { log.appendChild(typRows[n]); }); }
   function addMessage(m) {
     var log = $("log"), ts = m.ts || Date.now();
     var emp = log.querySelector(".empty"); if (emp) emp.remove();
@@ -2149,7 +2164,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       renderBlocked(m.blocked); renderMeta(m); renderMemory(m.memory); renderRooms(); if (!matchMedia("(pointer:coarse)").matches) $("text").focus();
     } else if (m.t === "meta") { renderMeta(m); }
     else if (m.t === "msg") {
-      dropTyping(); addMessage(m.msg);
+      if (m.msg.kind === "ai") dropTyping(m.msg.who); addMessage(m.msg); keepTypingLast(); setLive();
       if (document.hidden && m.msg.kind !== "system" && m.msg.who !== me) { unread++; document.title = "(" + unread + ") " + _t("AI 채팅방"); }
       if (m.msg.kind === "ai" && meta && meta.plan.ads && meta.adList.length && ++aiShown % 4 === 0) insertAd(meta.adList[(aiShown / 4 - 1) % meta.adList.length]);
       if (m.msg.kind === "ai" && errAI && errAI.name === m.msg.who) { errAI = null; renderStatus(); }
@@ -2175,13 +2190,10 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       var mm = msgIndex[m.id]; if (mm) { mm.hearts = m.hearts; var w = document.querySelector('.hearts[data-for="' + m.id + '"]'); if (w) fillHearts(w, mm); }
     }
     else if (m.t === "typing") {
-      dropTyping(); setLive(m.who);
-      if (m.who) {
-        var row = mk("div", "row typing first last c" + colorOf(m.who)), av = mk("div", "av", dn(m.who).charAt(0)); av.setAttribute("aria-hidden", "true");
-        var col = mk("div", "col"), b = mk("div", "bubble"); b.setAttribute("aria-label", _t("{name} 입력 중", { name: dn(m.who) })); b.appendChild(mk("i")); b.appendChild(mk("i")); b.appendChild(mk("i")); col.appendChild(b);
-        row.appendChild(av); row.appendChild(col); $("log").appendChild(row); $("log").scrollTop = $("log").scrollHeight; typRow = row;
-        typTimer = setTimeout(dropTyping, 65000);
-      }
+      /* on이 있으면 그 AI만 켜고 끈다(동시 입력). 없으면 예전 방식: 한 명만 입력 중(null이면 모두 끔) */
+      if ("on" in m) { if (m.on) showTyping(m.who); else dropTyping(m.who); }
+      else { dropTyping(); if (m.who) showTyping(m.who); }
+      setLive();
     }
     else if (m.t === "shared") { showShared(m); openInfo("deliv"); toast(_t("공유 링크를 만들었습니다.")); }
     else if (m.t === "assetfile") {

@@ -10,6 +10,11 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
   const mock = http.createServer((req, rq) => { let b = ''; req.on('data', c => b += c); req.on('end', () => {
     const j = JSON.parse(b || '{}'); const sys = (j.messages[0] || {}).content || ''; const optional = /\[PASS\]/.test(sys);
     log.push({ optional });
+    if (mode === 'race') {
+      const who = /너는 (\S+?)(이\(가\)|\.|,|이다|다\b)/.exec(sys); const name = (/이제 (\S+?)이\(가\) 말할 차례다/.exec(((j.messages[1] || {}).content) || '') || [])[1] || '';
+      const delay = name === '가' ? 900 : name === '다' ? 100 : 400;
+      return setTimeout(() => { rq.writeHead(200, { 'content-type': 'application/json' }); rq.end(JSON.stringify({ choices: [{ message: { content: name + ' 의견' } }] })); }, delay);
+    }
     const text = optional && (mode === 'allpass' || (mode === 'first-speaks' && log.filter(l => l.optional).length > 1)) ? '[PASS]' : '네, 제 생각은 이렇습니다.';
     rq.writeHead(200, { 'content-type': 'application/json' }); rq.end(JSON.stringify({ choices: [{ message: { content: text } }] }));
   }); });
@@ -35,6 +40,13 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     a0 = ais(); log.length = 0; mode = 'chatty';
     ws.send(JSON.stringify({ t: 'msg', text: '자유롭게 떠들어 봐' })); await sleep(2500);
     check('chatty AIs stop at the streak limit (4)', ais() - a0 === 4 && ev.some(e => e.t === 'msg' && e.msg.code === 'STREAK_LIMIT'), ais() - a0);
+    // 동시에 입력: 셋이 모두 '입력 중'이 된 뒤에 첫 답이 올라오고, 가장 빨리 끝난 AI(다)의 답이 먼저 올라온다
+    const n0 = ev.length; mode = 'race';
+    ws.send(JSON.stringify({ t: 'msg', text: '각자 한마디씩!' })); await sleep(2500);
+    const seq = ev.slice(n0).filter(e => (e.t === 'typing' && e.on) || (e.t === 'msg' && e.msg.kind === 'ai')).map(e => e.t === 'typing' ? 'T:' + e.who : 'M:' + e.msg.who);
+    const firstMsg = seq.findIndex(x => x.startsWith('M:'));
+    check('all three AIs type at the same time before any reply', ['가', '나', '다'].every(n => seq.slice(0, firstMsg).includes('T:' + n)), JSON.stringify(seq));
+    check('fastest AI posts first regardless of order (다 before 나 before 가)', seq.filter(x => x.startsWith('M:')).slice(0, 3).join(',') === 'M:다,M:나,M:가', JSON.stringify(seq));
     ws.close();
   } finally { sv.kill(); mock.close(); }
   console.log(res.every(Boolean) ? 'ALL OK' : 'SOME FAILED'); process.exit(res.every(Boolean) ? 0 : 1);

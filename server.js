@@ -272,6 +272,7 @@ try {
 } catch (e) { console.error('FREE_EXTRA_BACKENDS 형식 오류: 무시합니다.'); }
 const FREE_ROOM_CAP = Number(process.env.FREE_ROOM_CAP || 20);
 /* 새 방의 기본 발언 방식: free = 실제 채팅방처럼 AI가 끼어들지 스스로 판단(기본), mention = 부른 AI만 답함 */
+const PARALLEL_OFF = process.env.PARALLEL_TURNS === '0';
 const DEFAULT_POLICY = ['free', 'mention', 'round'].includes(process.env.DEFAULT_POLICY) ? process.env.DEFAULT_POLICY : 'free';
 const KEYLESS_RETRY_S = Number(process.env.KEYLESS_RETRY_S || 5);
 const freeState = { day: '', used: {}, cool: {}, rr: 0 };
@@ -1229,7 +1230,88 @@ function harvestDoc(room, ai, text) {
 }
 
 /* ---------- 오케스트레이션 ---------- */
+/* 동시 발언(자율 방식, 모드 없는 방): 실제 단체방처럼 AI들이 순서 없이 동시에 대화를 보고, 각자 끼어들지 정해 동시에 입력한다.
+   먼저 끝난 AI의 말이 먼저 올라오고, 한 '물결'이 끝나면 새 말을 본 AI들이 다시 동시에 판단한다(누가 @로 부르면 그 AI는 반드시 답함).
+   사람 한 마디에 AI 말은 연속 발언 한도(maxStreak)까지, 모두 넘기면 한 명에게 답을 맡긴다. 예산·크레딧은 호출마다 차감한다 */
+async function orchestrateParallel(room, first, sub) {
+  const gen = ++room.gen;
+  room.runErr = false; room.runDeliv = false; room.runCalls = 0; room.runTok = { in: 0, out: 0, missing: 0 }; room.stats.runs++; trackF('run_started', room);
+  room.streak = 0;
+  const openFloor = !first.length;
+  let posted = 0, stopped = false, limitNoted = false, nudged = false, dmTurns = 0;
+  const live = () => room.ais.filter(a => !a.muted);
+  const stop = (text, code) => { if (!stopped) { stopped = true; if (text) system(room, text, code); } };
+  async function turn(ai, mustSpeak, out) {
+    if (stopped || gen !== room.gen || !room.ais.includes(ai) || ai.muted) return;
+    if (room.budget.used >= room.budget.limit) { track('limit_reached'); return stop('이 방의 AI 호출 예산(' + room.budget.limit + '회)을 모두 사용했습니다.', 'BUDGET_EXHAUSTED'); }
+    if (sub && !charge(sub)) {
+      const c = creditInfo(sub); track('limit_reached'); sendCredits(room, sub);
+      return stop('요청한 분의 오늘 AI 호출 크레딧(' + c.limit + '회)을 모두 썼습니다. 한국 시간 자정에 다시 채워집니다.' + (c.plan === 'free' ? ' 플러스는 하루 ' + DAILY.plus + '회입니다.' : ''), 'CREDITS_EXHAUSTED');
+    }
+    if (sub) sendCredits(room, sub);
+    room.budget.used++; room.runCalls++; room.stats.calls++;
+    broadcast(room, { t: 'budget', budget: room.budget });
+    broadcast(room, { t: 'typing', who: ai.name, on: true });
+    ai.canPass = !mustSpeak;   // 한 물결 안에서 같은 AI의 호출은 하나뿐이라 AI마다 따로 둬도 섞이지 않는다
+    let text;
+    try { text = await generate(room, ai); }
+    catch (e) {
+      const em = redact(e.message, ai); room.runErr = true;
+      broadcast(room, { t: 'typing', who: ai.name, on: false });
+      return system(room, ai.name + ' 응답 오류: ' + em, 'AI_ERROR', { aiId: ai.id, aiName: ai.name, text: em });
+    }
+    broadcast(room, { t: 'typing', who: ai.name, on: false });
+    if (gen !== room.gen) return;
+    text = cleanText(text, 1500);
+    const couldPass = ai.canPass; ai.canPass = false;
+    if (isPass(text)) { if (couldPass || mustSpeak) room.stats.passes = (room.stats.passes || 0) + 1; return; }
+    if (stopped) return;
+    if (posted >= room.maxStreak) {
+      if (!limitNoted) { limitNoted = true; system(room, 'AI 연속 발언 한도(' + room.maxStreak + '회)에 도달했습니다. 사람이 말하면 이어집니다.', 'STREAK_LIMIT'); }
+      return;
+    }
+    room.lastAI = ai;
+    const ex = extractAIDMs(room, ai, text);
+    let changed = false;
+    for (const d of ex.dms) if (pushAIDM(room, ai, d.to, d.text)) { changed = true; if (!d.to.muted && dmTurns < 4) { out.mentioned.add(d.to); dmTurns++; } }
+    if (changed) broadcast(room, { t: 'aidms', list: aidmsView(room) });
+    text = ex.text.replace(/^\s*\[?PASS\]?\s*$/gim, '').trim();
+    const hn = harvestNotes(room, ai, text); text = hn.text;
+    if (text || (!ex.dms.length && !hn.n)) {
+      addMsg(room, 'ai', ai.name, text || '(응답 없음)');
+      funnel(room, 'ai_reply'); harvestDoc(room, ai, text); harvestDeliverable(room, ai, text);
+    }
+    posted++; room.streak++; out.spoke.add(ai);
+    room.stats.byAI[ai.name] = (room.stats.byAI[ai.name] || 0) + 1;
+    for (const m of mentioned(room, text, ai)) out.mentioned.add(m);
+  }
+  const mutedNoted = new Set();
+  const noteMuted = list => list.filter(a => a.muted && !mutedNoted.has(a.id)).forEach(a => { mutedNoted.add(a.id); system(room, a.name + '은(는) 뮤트 상태라 말하지 않습니다.', 'AI_MUTED_SKIP'); });
+  noteMuted(first);
+  let forced = first.filter(a => !a.muted), wave = 0;
+  while (!stopped && gen === room.gen && posted < room.maxStreak && wave < room.maxStreak + 2) {
+    wave++;
+    const optional = room.policy === 'free' ? live().filter(a => !forced.includes(a)) : [];
+    if (!forced.length && !optional.length) break;
+    const out = { spoke: new Set(), mentioned: new Set() };
+    await Promise.all([...forced.map(a => turn(a, true, out)), ...optional.map(a => turn(a, false, out))]);
+    if (gen !== room.gen) break;
+    if (!out.spoke.size) {
+      /* 아무도 부르지 않았는데 모두 넘기면 한 명에게만 답을 맡기고 마친다 */
+      if (openFloor && wave === 1 && !nudged && !stopped) { nudged = true; const nx = nextAI(room); if (nx) await turn(nx, true, out); }
+      break;
+    }
+    noteMuted([...out.mentioned]);
+    forced = [...out.mentioned].filter(a => room.ais.includes(a) && !a.muted);
+    if (room.policy !== 'free' && !forced.length) break;
+  }
+  if (gen !== room.gen) { trackF('run_cancelled', room); return; }
+  if (room.runErr) trackF('run_failed', room); else if (room.runCalls > 0) trackF('run_completed', room);
+  if (room.runDeliv) trackF('run_with_deliverable', room);
+  broadcast(room, { t: 'typing', who: null }); maybeSummarize(room, sub);
+}
 async function orchestrate(room, first, sub) {
+  if (!room.mode && room.policy === 'free' && !PARALLEL_OFF) return orchestrateParallel(room, first, sub);
   const gen = ++room.gen;
   const order = first.slice(), forced = new Set(first), mutedNoted = new Set();
   room.runErr = false; room.runDeliv = false; room.runCalls = 0; room.runTok = { in: 0, out: 0, missing: 0 }; room.stats.runs++; trackF('run_started', room);
