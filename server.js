@@ -1790,6 +1790,7 @@ const server = http.createServer((req, res) => {
     /* 배포 확인용: 어떤 커밋이 떠 있는지, 무료 풀이 켜졌는지(어느 백엔드인지만, 키는 절대 포함하지 않음) */
     freeTick();
     return json(200, { ok: true, rooms: rooms.size, persist: store.enabled,
+      secrets: require('./secrets').status(),
       version: (process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || '').slice(0, 7) || null, up: Math.round(process.uptime()),
       free: { available: freeAvailable(), backends: FREE_BACKENDS.filter(freeConfigured).map(b => ({ id: b.id, left: Math.max(0, b.cap - (freeState.used[b.id] || 0)), cooling: (freeState.cool[b.id] || 0) > Date.now() })) } });
   }

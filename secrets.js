@@ -20,18 +20,22 @@ function open(text, key) {
   d.setAuthTag(Buffer.from(j.tag, 'base64'));
   return JSON.parse(Buffer.concat([d.update(Buffer.from(j.data, 'base64')), d.final()]).toString('utf8'));
 }
+let status = { keySet: false, file: false, loaded: 0, reason: 'not run' };
 function load(env = process.env, file = FILE) {
-  if (!env.CONFIG_KEY) return { loaded: 0, reason: 'no CONFIG_KEY' };
-  if (!fs.existsSync(file)) return { loaded: 0, reason: 'no secrets.enc' };
+  status = { keySet: !!env.CONFIG_KEY, file: fs.existsSync(file), loaded: 0, reason: '' };
+  if (!env.CONFIG_KEY) return (status.reason = 'no CONFIG_KEY', status);
+  if (!status.file) return (status.reason = 'no secrets.enc', status);
+  if (!/^[A-Za-z0-9_-]{43}=?$/.test(String(env.CONFIG_KEY).trim())) return (status.reason = 'CONFIG_KEY format (43 chars expected, got ' + String(env.CONFIG_KEY).trim().length + ')', status);
   let obj;
   try { obj = open(fs.readFileSync(file, 'utf8'), env.CONFIG_KEY); }
-  catch (e) { console.error('secrets.enc를 열지 못했습니다(CONFIG_KEY가 맞는지 확인): 무시합니다.'); return { loaded: 0, reason: 'decrypt failed' }; }
-  let n = 0;
+  catch (e) { console.error('secrets.enc를 열지 못했습니다(CONFIG_KEY가 맞는지 확인): 무시합니다.'); status.reason = 'decrypt failed (wrong CONFIG_KEY)'; return status; }
+  let n = 0; const skipped = [];
   for (const [k, v] of Object.entries(obj || {})) {
     if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(k) || typeof v !== 'string') continue;
-    if (env[k] == null || env[k] === '') { env[k] = v; n++; }
+    if (env[k] == null || env[k] === '') { env[k] = v; n++; } else skipped.push(k);
   }
-  console.log('secrets.enc에서 설정 ' + n + '개를 불러왔습니다.');
-  return { loaded: n };
+  console.log('secrets.enc에서 설정 ' + n + '개를 불러왔습니다.' + (skipped.length ? ' 서버 환경변수가 우선해서 건너뜀: ' + skipped.join(', ') : ''));
+  status.loaded = n; status.overridden = skipped; status.reason = 'ok';
+  return status;
 }
-module.exports = { seal, open, load, FILE };
+module.exports = { seal, open, load, FILE, status: () => status };
