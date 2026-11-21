@@ -8,7 +8,7 @@ const shim=`<script>
 /* 미리보기: 실제 server.js를 브라우저 안에서 그대로 돌리고 WebSocket만 가짜로 연결한다. 데모 응답만 사용, 네트워크 호출 없음. */
 (function(){
   var handlers=null;
-  var process={env:{ALLOW_DEV_PLAN:'1',DEMO_DELAY_MS:'650'},on:function(){}};
+  var process={env:{ALLOW_DEV_PLAN:'1',FREE_KEYLESS:'0',DEMO_DELAY_MS:'650'},on:function(){}};
   var console2=console;
   function fakeRequire(n){
     if(n==='http')return{createServer:function(){return{listen:function(){},on:function(){}}}};

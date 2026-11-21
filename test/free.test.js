@@ -178,6 +178,32 @@ const sysMsgs = c => c.ev.filter(e => e.t === 'msg' && e.msg.kind === 'system').
   c.ws.send(JSON.stringify({ t: 'msg', text: '@라우터 폴백' })); await sleep(900);
   check('FreeLLMAPI failure falls back to the next free pool', FL2.log.length === 1 && FB.log.length === 1 && c.ev.some(e => e.t === 'msg' && e.msg.kind === 'ai' && /FREE-OK/.test(e.msg.text)), JSON.stringify({ fl: FL2.log, fb: FB.log }));
   c.ws.close(); sv.kill(); FL2.s.close(); FB.s.close();
+  // 8) Keyless public APIs (Pollinations, LLM7): on by default so a server with no keys still gives real answers; keyed pools go first.
+  const P = await mock(4109, 'ok'), L = await mock(4110, 'ok'), GK = await mock(4112, 'ok');
+  sv = startServer(3113, { FREE_KEYLESS: '1', POLLINATIONS_BASE_URL: 'http://127.0.0.1:4109/openai', LLM7_BASE_URL: 'http://127.0.0.1:4110/v1', FREE_ROOM_CAP: '10' });
+  await sleep(600);
+  c = await client(3113, 'Mia', 'room13');
+  const k0 = c.ev.filter(e => e.t === 'meta').pop();
+  check('keyless pool makes free available with no keys at all', k0 && k0.free.available, JSON.stringify(k0 && k0.free));
+  c.ws.send(JSON.stringify({ t: 'addAI', name: '공개', persona: 'p', provider: 'free' })); await sleep(250);
+  c.ws.send(JSON.stringify({ t: 'msg', text: '@공개 하나' })); await sleep(700);
+  c.ws.send(JSON.stringify({ t: 'msg', text: '@공개 둘' })); await sleep(700);
+  check('keyless: Pollinations without auth header, LLM7 with placeholder bearer', P.log.length + L.log.length === 2 && P.log.every(l => !l.auth && l.model === 'gpt-oss-20b' && l.url === '/openai/chat/completions') && L.log.every(l => l.auth === 'Bearer unused' && l.model === 'default'), JSON.stringify({ p: P.log, l: L.log }));
+  c.ws.close(); sv.kill(); await sleep(200);
+  P.log.length = 0; L.log.length = 0;
+  sv = startServer(3114, { FREE_KEYLESS: '1', POLLINATIONS_BASE_URL: 'http://127.0.0.1:4109/openai', LLM7_BASE_URL: 'http://127.0.0.1:4110/v1', GROQ_API_KEY: 'g', GROQ_BASE_URL: 'http://127.0.0.1:4112' });
+  await sleep(600);
+  c = await client(3114, 'Mia', 'room14');
+  c.ws.send(JSON.stringify({ t: 'addAI', name: '공개', persona: 'p', provider: 'free' })); await sleep(250);
+  for (const t of ['a', 'b']) { c.ws.send(JSON.stringify({ t: 'msg', text: '@공개 ' + t })); await sleep(700); }
+  check('keyed free pool (Groq) is preferred over keyless APIs', GK.log.length === 2 && P.log.length === 0 && L.log.length === 0, JSON.stringify({ g: GK.log.length, p: P.log.length, l: L.log.length }));
+  c.ws.close(); sv.kill(); await sleep(200);
+  sv = startServer(3115, { FREE_KEYLESS: '0' });
+  await sleep(600);
+  c = await client(3115, 'Mia', 'room15');
+  const k2 = c.ev.filter(e => e.t === 'meta').pop();
+  check('FREE_KEYLESS=0 turns keyless pool off', k2 && !k2.free.available, JSON.stringify(k2 && k2.free));
+  c.ws.close(); sv.kill(); P.s.close(); L.s.close(); GK.s.close();
   N.s.close();
   A.s.close(); G.s.close();
   console.log(results.every(Boolean) ? 'ALL OK' : 'SOME FAILED'); process.exit(0);

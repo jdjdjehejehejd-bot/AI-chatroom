@@ -724,7 +724,8 @@
 ["무료 사용량이나 요금제 한도를 확인하세요.", "Check your free usage or plan limits.", "無料利用枠またはプランの上限を確認してください。", "请检查免费用量或套餐限额。", "Revisa tu uso gratuito o los límites del plan."],
 ["요청 한도에 걸렸습니다. 키는 맞을 수 있으니 잠시 뒤 다시 시도하세요.", "Rate limit reached. The key may still be valid; try again shortly.", "リクエスト上限に達しました。キーは正しい可能性があるので、少し待って再試行してください。", "已达到请求上限。密钥可能是有效的，请稍后再试。", "Se alcanzó el límite de solicitudes. La clave puede ser válida; inténtalo de nuevo en breve."],
 ["제공사 서버 오류입니다. 잠시 뒤 다시 시도하세요.", "Provider server error. Try again shortly.", "プロバイダーのサーバーエラーです。少し待って再試行してください。", "提供商服务器错误，请稍后再试。", "Error del servidor del proveedor. Inténtalo de nuevo en breve."],
-["요청이 거절되었습니다.", "The request was rejected.", "リクエストが拒否されました。", "请求被拒绝。", "La solicitud fue rechazada."]
+["요청이 거절되었습니다.", "The request was rejected.", "リクエストが拒否されました。", "请求被拒绝。", "La solicitud fue rechazada."],
+["지금은 데모 AI예요. 실제 답을 받으려면 AI 초대에서 내 무료 키를 연결하세요.", "This is a demo AI for now. To get real answers, connect your own free key under Invite AI.", "今はデモAIです。本当の回答を受け取るには「AIを招待」で自分の無料キーを接続してください。", "现在是演示 AI。要获得真实回答，请在“邀请 AI”中连接你自己的免费密钥。", "Por ahora es una IA de demostración. Para obtener respuestas reales, conecta tu clave gratuita en «Invitar IA»."]
 ];
   function pick() {
     var c = null, q = /[?&]lang=([a-z]{2})/.exec(location.search);

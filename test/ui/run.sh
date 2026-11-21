@@ -2,6 +2,7 @@
 # 화면 테스트(Playwright, 한국어 로케일 기준). 필요: pip install playwright && playwright install chromium
 # 서버는 이 스크립트가 띄우고 끝나면 정리한다. 실행: bash test/ui/run.sh
 set -u
+export FREE_KEYLESS=0   # 테스트는 실제 외부 무료 API를 부르지 않는다
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$HERE/../.."; cd "$HERE"
 fail=0
 pids=""

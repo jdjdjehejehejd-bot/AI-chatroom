@@ -238,6 +238,17 @@ FREE_BACKENDS.push(
   gatedFree('cloudflare', { keyEnv: 'CLOUDFLARE_API_TOKEN', ready: () => !!process.env.CLOUDFLARE_API_TOKEN && /^[a-f0-9]{32}$/i.test(process.env.CLOUDFLARE_ACCOUNT_ID || ''),
     base: () => process.env.CLOUDFLARE_BASE_URL || ('https://api.cloudflare.com/client/v4/accounts/' + (process.env.CLOUDFLARE_ACCOUNT_ID || 'x') + '/ai/v1'), models: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', cap: 100 })
 );
+/* 키 없이 쓰는 공개 무료 API(Pollinations, LLM7): 계정·키가 없어도 동작해 서버에 아무 키가 없을 때도 실제 AI 답을 낼 수 있다.
+   2026-11-22 브라우저로 실제 호출해 확인. 둘 다 익명 한도가 공개되지 않았거나 줄어든 적이 있고 예고 없이 바뀔 수 있어
+   하루 상한을 두고 실패하면 다른 백엔드로 넘어간다. 입력은 해당 서비스로 전송된다(개인정보처리방침에 명시). FREE_KEYLESS=0이면 끈다 */
+if (process.env.FREE_KEYLESS !== '0') {
+  FREE_BACKENDS.push(
+    { id: 'pollinations', key: '', keyEnv: '', noKey: true, base: process.env.POLLINATIONS_BASE_URL || 'https://text.pollinations.ai/openai',
+      models: csv(process.env.FREE_POLLINATIONS_MODELS, 'gpt-oss-20b'), cap: capFromEnv('FREE_CAP_POLLINATIONS', 500), keyless: true },
+    { id: 'llm7', key: 'unused', keyEnv: '', base: process.env.LLM7_BASE_URL || 'https://api.llm7.io/v1',
+      models: csv(process.env.FREE_LLM7_MODELS, 'default'), cap: capFromEnv('FREE_CAP_LLM7', 300), keyless: true }
+  );
+}
 /* FreeLLMAPI(여러 무료 제공사를 하나의 OpenAI 호환 주소로 묶는 개인용 라우터)를 운영자가 이미 돌리고 있으면 주소와 통합 키만 넣어 연결한다.
    여러 제공사를 FreeLLMAPI가 알아서 돌려 쓰므로 가장 먼저 시도한다. 주소는 운영자만 정한다(https 또는 localhost) */
 (() => {
@@ -252,7 +263,7 @@ FREE_BACKENDS.push(
 try {
   const extra = JSON.parse(process.env.FREE_EXTRA_BACKENDS || '[]');
   (Array.isArray(extra) ? extra : []).forEach(e => {
-    if (e && !['mistral', 'nvidia', 'gemini', 'cerebras', 'cloudflare', 'freellmapi'].includes(e.id) && /^[a-z0-9_-]{2,20}$/.test(e.id) && /^https?:\/\//.test(e.base) && (!PRODUCTION || /^https:\/\//.test(e.base) || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(e.base)) && Array.isArray(e.models) && e.models.length && !FREE_BACKENDS.some(b => b.id === e.id)) {
+    if (e && !['mistral', 'nvidia', 'gemini', 'cerebras', 'cloudflare', 'freellmapi', 'pollinations', 'llm7'].includes(e.id) && /^[a-z0-9_-]{2,20}$/.test(e.id) && /^https?:\/\//.test(e.base) && (!PRODUCTION || /^https:\/\//.test(e.base) || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/.test(e.base)) && Array.isArray(e.models) && e.models.length && !FREE_BACKENDS.some(b => b.id === e.id)) {
       FREE_BACKENDS.push({ id: e.id, key: e.key ? String(e.key) : '', keyEnv: '', noKey: !e.key, base: String(e.base),
         models: e.models.map(String), cap: Number(e.cap) > 0 ? Number(e.cap) : 100 });
     }
@@ -1062,6 +1073,9 @@ async function callFree(room, ai, dm) {
   for (let i = 0; i < n; i++) order.push((freeState.rr + i) % n);
   const fi = FREE_BACKENDS.findIndex(x => x.id === 'freellmapi');
   if (fi >= 0) { order.splice(order.indexOf(fi), 1); order.unshift(fi); }
+  /* 키 없는 공개 API는 품질·안정성이 낮을 수 있어, 키가 있는 무료 풀을 먼저 쓰고 마지막에 시도한다 */
+  const keyed = order.filter(k => !FREE_BACKENDS[k].keyless), kl = order.filter(k => FREE_BACKENDS[k].keyless);
+  order.length = 0; order.push(...keyed, ...kl);
   for (let i = 0; i < n; i++) {
     const b = FREE_BACKENDS[order[i]];
     if (!freeUsable(b)) continue;
@@ -1071,7 +1085,7 @@ async function callFree(room, ai, dm) {
     const model = b.models[modelIndex % b.models.length];
     try {
       const text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model }, dm);
-      if (b.id !== 'freellmapi') freeState.rr = (order[i] + 1) % n;
+      if (b.id !== 'freellmapi' && !b.keyless) freeState.rr = (order[i] + 1) % n;
       room.freeUsed = (room.freeUsed || 0) + 1;
       return text;
     } catch (e) {

@@ -444,7 +444,8 @@ button.cc:active { transform:scale(.97); box-shadow:none; }
 a.btn{display:inline-flex;align-items:center;text-decoration:none}
 #joinform.gated #jgo{opacity:.45}
 .consent{display:flex;gap:8px;align-items:flex-start;margin-top:18px;font-size:13px;color:var(--muted);line-height:1.5}
-.consent input{margin-top:3px;flex:none}.consent a,.legalfoot a{color:var(--accent-text);text-decoration:underline}
+.consent input{margin-top:3px;flex:none}
+.keymem{display:flex;gap:8px;align-items:flex-start;margin-top:8px;font-size:13px;color:var(--muted);line-height:1.5}.keymem input{margin-top:3px;flex:none}.consent a,.legalfoot a{color:var(--accent-text);text-decoration:underline}
 .netbar{position:fixed;left:0;right:0;top:0;z-index:70;background:var(--warn-sf);color:var(--warn-tx);text-align:center;font-size:13px;padding:calc(6px + env(safe-area-inset-top,0px)) 12px 6px;border-bottom:1px solid var(--edge)}
 .langpick select{font:inherit;font-size:12px;padding:3px 6px;border:1px solid var(--edge);border-radius:8px;background:var(--surface);color:var(--ink)}
 .legalfoot{margin-top:16px;font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
@@ -650,7 +651,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
                 <label class="lb" for="aikey" id="keylabel">개인 API 키 (선택)</label>
                 <input class="field" id="aikey" type="password" maxlength="300" placeholder="비우면 서버 설정 키 사용" autocomplete="off">
                 <div class="keyguide" id="keyguide" hidden></div>
-                <label class="consent" style="margin-top:8px"><input type="checkbox" id="aikeymem"><span>이 기기(브라우저)에 키 기억하기</span></label>
+                <label class="keymem"><input type="checkbox" id="aikeymem"><span>이 기기(브라우저)에 키 기억하기</span></label>
                 <div class="row2"><button type="button" class="btn sm" id="aikeytest">키 확인</button><span class="hint" id="aikeyres" role="status"></span></div>
                 <p class="hint">키는 서버 메모리에만 보관되고 다른 참가자에게 보이지 않으며 방이 정리되면 사라집니다. 서버를 거치므로 HTTPS로 운영되는 신뢰할 수 있는 서버에서만 입력하세요.</p>
               </div>
@@ -1462,7 +1463,9 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
         /* 서버 무료 풀이 없으면, 이 기기에 기억한 내 무료 키가 있을 때 그 키로 시작한다 */
         var ks = keyStore(), p = ["groq", "google", "nvidia", "openrouter"].filter(function (x) { return ks[x]; })[0];
         if (p) return send({ t: "addAI", name: "AI", persona: "", provider: p, model: FREEKEY[p].models[0], apiKey: ks[p] });
-        openInfo("ai"); $("invdet").open = true; toast(_t("이 서버에는 무료 모델이 없어요. 내 무료 키로 연결하면 바로 쓸 수 있어요."));
+        /* 키도 없으면 데모 AI로 먼저 체험하게 하고, 실제 답을 원하면 내 무료 키를 연결하도록 안내한다 */
+        send({ t: "addAI", name: "AI", persona: "", provider: "demo" });
+        toast(_t("지금은 데모 AI예요. 실제 답을 받으려면 AI 초대에서 내 무료 키를 연결하세요."));
       });
       e.appendChild(b0);
       var b1 =mk("button", "btn primary sm", _t("에셋 불러오기")); b1.type = "button"; b1.addEventListener("click", function () { openInfo("assets"); });
