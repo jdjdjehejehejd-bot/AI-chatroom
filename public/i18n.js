@@ -1,4 +1,4 @@
-/* 자동 생성: scripts/build-i18n.py (원본은 i18n/engine.js + i18n/strings.tsv). 직접 고치지 마세요.
+/* 자동 생성: scripts/build-i18n.py (원본은 i18n/engine.js + i18n/strings.txt). 직접 고치지 마세요.
    한국어 문장이 곧 키다. _t(키, 값)은 화면 문구, _tx(문장)은 서버가 보낸 한국어 문장(고정 문장·{자리표시자} 문장)을 번역한다. */
 (function (g) {
   var LANGS = [["ko", "한국어"], ["en", "English"], ["ja", "日本語"], ["zh", "简体中文"], ["es", "Español"]];
@@ -8,6 +8,8 @@
 ["+ 새 방 만들기", "+ New room", "+ 新しいルーム", "+ 新建房间", "+ Nueva sala"],
 ["에셋 마켓 둘러보기", "Browse the asset market", "アセットマーケットを見る", "浏览资源市场", "Explorar el mercado de recursos"],
 ["최근 방", "Recent rooms", "最近のルーム", "最近的房间", "Salas recientes"],
+["휴지통", "Trash", "ゴミ箱", "回收站", "Papelera"],
+["옆으로 밀어 휴지통으로 이동", "Swipe sideways to move to Trash", "横にスワイプしてゴミ箱へ移動", "横向滑动移入回收站", "Desliza hacia un lado para mover a la papelera"],
 ["내 계정의 방", "Rooms in my account", "アカウントのルーム", "我账号里的房间", "Salas de mi cuenta"],
 ["사람 + 여러 AI", "People + several AIs", "人間 + 複数のAI", "人类 + 多个 AI", "Personas + varias IA"],
 ["방 만들기", "Create a room", "ルームを作る", "创建房间", "Crear una sala"],
@@ -185,6 +187,15 @@
 ["{n}일 전", "{n} d ago", "{n}日前", "{n} 天前", "hace {n} d"],
 ["아직 방이 없어요", "No rooms yet", "まだルームがありません", "还没有房间", "Aún no hay salas"],
 ["새 방을 만들고 AI를 초대해 보세요.", "Create a new room and invite some AIs.", "新しいルームを作ってAIを招待してみましょう。", "创建一个新房间并邀请 AI 吧。", "Crea una sala nueva e invita a algunas IA."],
+["{n}일 후 자동 삭제", "Auto-delete in {n} days", "{n}日後に自動削除", "{n} 天后自动删除", "Se eliminará automáticamente en {n} días"],
+["휴지통이 비어 있어요", "Trash is empty", "ゴミ箱は空です", "回收站为空", "La papelera está vacía"],
+["복원", "Restore", "復元", "恢复", "Restaurar"],
+["즉시 삭제", "Delete now", "今すぐ削除", "立即删除", "Eliminar ahora"],
+["방을 휴지통으로 이동했어요", "Moved the room to Trash", "ルームをゴミ箱に移動しました", "已将房间移入回收站", "Sala movida a la papelera"],
+["방을 복원했어요", "Restored the room", "ルームを復元しました", "已恢复房间", "Sala restaurada"],
+["방을 즉시 삭제했어요", "Deleted the room immediately", "ルームを今すぐ削除しました", "已立即删除房间", "Sala eliminada de inmediato"],
+["방을 즉시 삭제할까요?", "Delete this room now?", "このルームを今すぐ削除しますか？", "现在删除这个房间吗？", "¿Eliminar esta sala ahora?"],
+["휴지통에서 영구적으로 제거되며 복원할 수 없습니다.", "It will be permanently removed from Trash and cannot be restored.", "ゴミ箱から完全に削除され、復元できません。", "将从回收站永久移除，无法恢复。", "Se eliminará permanentemente de la papelera y no podrá restaurarse."],
 ["{name} 목록에서 지우기", "Remove {name} from the list", "{name}を一覧から削除", "从列表中移除 {name}", "Quitar {name} de la lista"],
 ["JSON 형식이 올바르지 않습니다.", "The JSON format is invalid.", "JSONの形式が正しくありません。", "JSON 格式不正确。", "El formato JSON no es válido."],
 ["에셋은 JSON 객체여야 합니다.", "An asset must be a JSON object.", "アセットはJSONオブジェクトである必要があります。", "资源必须是 JSON 对象。", "Un recurso debe ser un objeto JSON."],

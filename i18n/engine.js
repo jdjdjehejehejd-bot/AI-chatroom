@@ -1,4 +1,4 @@
-/* 자동 생성: scripts/build-i18n.py (원본은 i18n/engine.js + i18n/strings.tsv). 직접 고치지 마세요.
+/* 자동 생성: scripts/build-i18n.py (원본은 i18n/engine.js + i18n/strings.txt). 직접 고치지 마세요.
    한국어 문장이 곧 키다. _t(키, 값)은 화면 문구, _tx(문장)은 서버가 보낸 한국어 문장(고정 문장·{자리표시자} 문장)을 번역한다. */
 (function (g) {
   var LANGS = [["ko", "한국어"], ["en", "English"], ["ja", "日本語"], ["zh", "简体中文"], ["es", "Español"]];

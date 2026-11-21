@@ -53,6 +53,14 @@ with sync_playwright() as p:
     M.screenshot(path="ui_mob.png")
     M.click("#back"); M.wait_for_selector("#roomlist .room");
     check("mobile: back to list shows room", M.locator("#roomlist .room").count()==1)
+    check("room delete button removed", M.locator("#roomlist .x").count()==0)
+    r=M.locator("#roomlist .room").first; bb=r.bounding_box(); assert bb
+    M.mouse.move(bb["x"]+bb["width"]-20,bb["y"]+bb["height"]/2); M.mouse.down(); M.mouse.move(bb["x"]+20,bb["y"]+bb["height"]/2,steps=8); M.mouse.up(); M.wait_for_timeout(450)
+    check("swipe moves room to trash", M.locator("#roomlist .room").count()==0 and M.locator("#trashcount").inner_text()=="1")
+    M.click("#trashbtn"); M.wait_for_selector("#trashwrap:not([hidden])")
+    check("trash shows deleted room", M.locator("#trashlist .room-trash").count()==1)
+    M.locator("#trashlist .trash-actions .btn").first.click(); M.wait_for_timeout(250)
+    check("trash restore returns room", M.locator("#roomlist .room").count()==1 and M.locator("#trashlist .room-trash").count()==0)
     M.click("#roomlist .room"); M.wait_for_selector("#room:not([hidden])")
     check("reopen room from list without reload (auto join)", M.locator("#log .row").count()>=3)
     M.click("#back"); M.wait_for_selector("#roomlist .room")
