@@ -130,7 +130,7 @@ npm start          # http://localhost:3000
 이전 프로젝트(logtimeline)는 git 이력에 남아 있다: `git checkout b78f5a7`
 
 
-## 로그인 · 계정 · GitHub 연동 (모두 선택)
+## 로그인 · 계정 · GitHub·Notion 연동 (모두 선택)
 
 입장 화면에 설정된 로그인 방식만 나타난다. 로그인 없이도 쓸 수 있다. 계정 ID는 방식별 접두어(`google:`, `github:`, `email:`)로 구분하며, 같은 사람이 방식을 바꾸면 다른 계정으로 취급된다(자동 병합 없음).
 
@@ -138,15 +138,17 @@ npm start          # http://localhost:3000
 |---|---|
 | Google | `GOOGLE_CLIENT_ID` (웹 OAuth 클라이언트 ID) |
 | GitHub | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (GitHub OAuth App, 콜백 URL `<PUBLIC_URL>/auth/github/callback`) |
+| Notion | `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET` (Notion OAuth integration, 콜백 URL `<PUBLIC_URL>/auth/notion/callback`) |
 | 이메일 코드 | `RESEND_API_KEY` + `MAIL_FROM` (Resend 사용). 개발용으로 `EMAIL_DEV_LOG=1`이면 코드를 서버 콘솔에 출력 |
 | 공통 | `SESSION_SECRET`(고정값 필수), `PUBLIC_URL`(예: `https://example.com`), HTTPS 뒤에서는 `COOKIE_SECURE=1` |
 
 - **Google**: ID 토큰(JWT, RS256)을 서버가 Google 공개키(JWKS)로 서명·발급자·audience·만료까지 검증한다.
-- **GitHub**: 표준 OAuth 웹 흐름(state 쿠키로 CSRF 방지, 복귀 경로는 같은 사이트 경로만 허용).
+- **GitHub**: 표준 OAuth 웹 흐름(state 쿠키로 CSRF 방지, 복귀 경로는 같은 사이트 경로만 허용). 일반 로그인은 `read:user`, GitHub 연결은 Gist·저장소 기능을 위해 `gist repo` 권한을 요청한다.
+- **Notion**: 표준 OAuth 웹 흐름(state 쿠키로 CSRF 방지). 선택적으로 `NOTION_AUTH_URL`, `NOTION_TOKEN_URL`, `NOTION_API_URL`을 테스트용 주소로 바꿀 수 있다.
 - **이메일**: 6자리 코드를 보내고 10분 안에 입력. 코드는 해시로만 보관, 1회용, 5번 틀리면 폐기, 주소당 10분에 3회까지 발송.
 - **로그인 필수**: 위 로그인 방식이 하나라도 설정되어 있으면 로그인해야 방을 만들거나 입장할 수 있다(서버가 입장 요청을 거부하므로 화면 우회 불가). 로그인 방식이 하나도 없으면 막지 않는다. 끄려면 `REQUIRE_LOGIN=0`. 공유 링크(`/s/…`)는 로그인 없이 볼 수 있다.
 - **세션**: 서명된 HttpOnly 쿠키(30일). 비밀번호는 저장하지 않는다.
-- **계정에 GitHub 연동**: 로그인한 상태에서 "GitHub 연결"을 누르면 `gist` 권한만 요청한다(최소 권한). 토큰은 서버가 AES-GCM으로 암호화한 HttpOnly 쿠키에만 두고 브라우저 스크립트에는 노출하지 않으며, 연결은 그 계정에만 묶인다. 연결하면 "산출물/대화를 비공개 Gist로" 내보낼 수 있다. 연결 해제 버튼이 있다.
+- **계정에 GitHub·Notion 연동**: 로그인한 상태에서 연결 버튼을 누르면 OAuth 권한을 요청한다. 토큰은 서버가 AES-GCM으로 암호화한 HttpOnly 쿠키에만 두고 브라우저 스크립트에는 노출하지 않으며, 연결은 그 계정에만 묶인다. GitHub는 비공개 Gist 내보내기뿐 아니라 저장소 목록·브랜치·파일 읽기/쓰기·이슈 조회/생성을 지원하고, Notion은 검색·페이지 블록 가져오기·대화 내보내기와 선택적 자동 동기화를 지원한다. 자동 동기화는 방 설정에서 명시적으로 켜야 하며 기존 내용을 덮어쓰지 않고 새 블록을 추가한다. `NOTION_WEBHOOK_VERIFICATION_TOKEN`과 `GITHUB_WEBHOOK_SECRET`을 설정하면 웹훅 서명을 검증한다. 연결 해제 버튼이 있다.
 - **방장**: 로그인한 사람이 만든 방은 방장 전용 설정(AI 추가·삭제, 설정, 모드, 에셋, 공유, 뮤트, Gist 내보내기)이 방장에게만 열린다. 귓속말 키는 계정에서 파생되어 기기를 바꿔도 이어진다.
 - **Google Play**: Google은 앱 내 WebView 로그인을 막으므로 WebView 래핑 대신 PWA + Trusted Web Activity를 권장한다. 같은 이유로 GitHub OAuth도 외부 브라우저(Custom Tab) 흐름이어야 한다.
 - 실제 Google·GitHub·메일 서버로는 아직 검증하지 못했다. 모의 서버로만 테스트했다(`GOOGLE_JWKS_URL`, `GITHUB_AUTH_URL`, `GITHUB_TOKEN_URL`, `GITHUB_API_URL`, `RESEND_URL`로 대상 변경 가능).

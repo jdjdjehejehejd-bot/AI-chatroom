@@ -14,6 +14,7 @@ const adminPage = require('./admin');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
+const integrations = require('./integrations');
 
 const PORT = Number(process.env.PORT || 3000);
 /* ---------- Google 로그인 (선택): ID 토큰을 서버에서 검증하고 서명된 세션 쿠키를 발급한다 ---------- */
@@ -110,6 +111,10 @@ const GH_ID = (process.env.GITHUB_CLIENT_ID || '').trim(), GH_SECRET = (process.
 const GH_AUTH_URL = process.env.GITHUB_AUTH_URL || 'https://github.com/login/oauth/authorize';
 const GH_TOKEN_URL = process.env.GITHUB_TOKEN_URL || 'https://github.com/login/oauth/access_token';
 const GH_API = (process.env.GITHUB_API_URL || 'https://api.github.com').replace(/\/+$/, '');
+const NOTION_ID = (process.env.NOTION_CLIENT_ID || '').trim(), NOTION_SECRET = (process.env.NOTION_CLIENT_SECRET || '').trim();
+const NOTION_AUTH_URL = process.env.NOTION_AUTH_URL || 'https://api.notion.com/v1/oauth/authorize';
+const NOTION_TOKEN_URL = process.env.NOTION_TOKEN_URL || 'https://api.notion.com/v1/oauth/token';
+const NOTION_API = (process.env.NOTION_API_URL || 'https://api.notion.com/v1').replace(/\/+$/, '');
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, '');
 const RESEND_KEY = (process.env.RESEND_API_KEY || '').trim(), MAIL_FROM = process.env.MAIL_FROM || '';
 const RESEND_URL = process.env.RESEND_URL || 'https://api.resend.com/emails';
@@ -119,7 +124,7 @@ function providersOn() { return !!(GOOGLE_CLIENT_ID || (GH_ID && GH_SECRET) || e
 const loginRequired = () => providersOn() && process.env.REQUIRE_LOGIN !== '0';
 const emailEnabled = () => !!((RESEND_KEY && MAIL_FROM) || EMAIL_DEV_LOG);
 const getCookie = (h, n) => { const m = new RegExp('(?:^|;\\s*)' + n + '=([^;]+)').exec(h || ''); return m ? m[1] : ''; };
-const GH_COOKIE = 'aichat_gh', OAUTH_COOKIE = 'aichat_oauth';
+const GH_COOKIE = 'aichat_gh', NOTION_COOKIE = 'aichat_notion', OAUTH_COOKIE = 'aichat_oauth';
 const ghKey = () => crypto.createHash('sha256').update('gh|' + SESSION_SECRET).digest();
 function sealGH(o) {
   const iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', ghKey(), iv);
@@ -130,6 +135,20 @@ function openGH(v, sub) {
   try {
     const b = Buffer.from(v, 'base64url'), d = crypto.createDecipheriv('aes-256-gcm', ghKey(), b.subarray(0, 12));
     d.setAuthTag(b.subarray(12, 28));
+    const o = JSON.parse(Buffer.concat([d.update(b.subarray(28)), d.final()]).toString('utf8'));
+    return o && o.sub === sub && o.exp > Date.now() && typeof o.token === 'string' ? o : null;
+  } catch (e) { return null; }
+}
+function sealIntegration(o, prefix) {
+  const key = crypto.createHash('sha256').update(prefix + '|' + SESSION_SECRET).digest();
+  const iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ct = Buffer.concat([c.update(JSON.stringify(o), 'utf8'), c.final()]);
+  return b64u(Buffer.concat([iv, c.getAuthTag(), ct]));
+}
+function openIntegration(v, sub, prefix) {
+  try {
+    const b = Buffer.from(v, 'base64url'), key = crypto.createHash('sha256').update(prefix + '|' + SESSION_SECRET).digest();
+    const d = crypto.createDecipheriv('aes-256-gcm', key, b.subarray(0, 12)); d.setAuthTag(b.subarray(12, 28));
     const o = JSON.parse(Buffer.concat([d.update(b.subarray(28)), d.final()]).toString('utf8'));
     return o && o.sub === sub && o.exp > Date.now() && typeof o.token === 'string' ? o : null;
   } catch (e) { return null; }
@@ -538,14 +557,14 @@ function serializeRoom(room) {
     deliv: room.deliv, delivHist: room.delivHist || [], library: room.library, brand: room.brand, refunds: room.refunds, shareCount: room.shareCount, stats: room.stats, plan: room.plan, devPlan: !!room.devPlan, budget: room.budget,
     doc: room.doc, memory: room.memory || '', memoryAt: room.memoryAt || 0, ownerSub: room.ownerSub, ownerName: room.ownerName, seq: room.seq, freeUsed: room.freeUsed || 0,
     members: room.members || {}, banned: room.banned || [], created: room.created || Date.now(), lastActive: room.lastActive || Date.now(),
-    messages: room.messages.slice(-LIMITS.history),
+    messages: room.messages.slice(-LIMITS.history), integrations: room.integrations || {},
     ais: room.ais.map(a => ({ id: a.id, name: a.name, persona: a.persona, provider: a.provider, model: a.model, muted: !!a.muted, needsKey: !!a.apiKey, notes: a.notes || [] })),
     dms: [...room.dms].map(([k, t]) => [k, t]), aidms: [...room.aidms]
   };
 }
 function reviveRoom(d) {
   const room = newRoom(d.id);
-  for (const k of ['asset', 'rules', 'policy', 'maxStreak', 'mode', 'pipeline', 'pipelineDefault', 'deliv', 'delivHist', 'library', 'brand', 'refunds', 'shareCount', 'stats', 'plan', 'devPlan', 'budget', 'doc', 'memory', 'memoryAt', 'ownerSub', 'ownerName', 'seq', 'freeUsed', 'members', 'banned', 'created', 'lastActive', 'messages'])
+  for (const k of ['asset', 'rules', 'policy', 'maxStreak', 'mode', 'pipeline', 'pipelineDefault', 'deliv', 'delivHist', 'library', 'brand', 'refunds', 'shareCount', 'stats', 'plan', 'devPlan', 'budget', 'doc', 'memory', 'memoryAt', 'ownerSub', 'ownerName', 'seq', 'freeUsed', 'members', 'banned', 'created', 'lastActive', 'messages', 'integrations'])
     if (d[k] !== undefined) room[k] = d[k];
   room.keyLost = (d.ais || []).filter(a => a.needsKey).map(a => a.name);
   room.ais = (d.ais || []).map(a => ({ id: a.id, name: a.name, persona: a.persona, provider: a.provider === 'default' || !a.needsKey ? a.provider : 'default', model: a.needsKey ? '' : a.model, muted: !!a.muted, notes: Array.isArray(a.notes) ? a.notes.filter(x => typeof x === 'string').map(x => x.slice(0, NOTE_LEN)).slice(-NOTE_MAX) : [] }));
@@ -630,8 +649,30 @@ function newRoom(id) {
   return {
     id, asset: null, rules: '', clients: new Set(), ais: [], messages: [], seq: 0,
     policy: DEFAULT_POLICY, maxStreak: 4, streak: 0, lastAI: null, gen: 0,
-    ownerSub: '', ownerName: '', mode: null, pipeline: null, pipelineDefault: null, deliv: null, delivHist: [], library: [], brand: null, dms: new Map(), aidms: new Map(), shareCount: 0, refunds: 0, runCalls: 0, stats: { runs: 0, calls: 0, byAI: {} }, plan: 'free', budget: { used: 0, limit: PLANS.free.budgetDefault }, doc: '', cleanup: null, members: {}, banned: [], created: Date.now(), lastActive: Date.now(), memory: ''
+    ownerSub: '', ownerName: '', picture: '', mode: null, pipeline: null, pipelineDefault: null, deliv: null, delivHist: [], library: [], brand: null, dms: new Map(), aidms: new Map(), shareCount: 0, refunds: 0, runCalls: 0, stats: { runs: 0, calls: 0, byAI: {} }, plan: 'free', budget: { used: 0, limit: PLANS.free.budgetDefault }, doc: '', cleanup: null, members: {}, banned: [], integrations: {}, created: Date.now(), lastActive: Date.now(), memory: ''
   };
+}
+async function syncRoomExternal(room, tokens, force) {
+  const cfg = room.integrations || {}, gcfg = cfg.github, ncfg = cfg.notion;
+  if (!force && !((gcfg && gcfg.auto) || (ncfg && ncfg.auto))) return [];
+  const chat = room.messages.filter(x => x.kind !== 'system').slice(-100).map(x => '**' + x.who + '**: ' + x.text).join('\n\n');
+  const done = [];
+  if (gcfg && (force || gcfg.auto) && tokens.gh && integrations.repoName(gcfg.repo) && integrations.repoPath(gcfg.path)) {
+    const [owner, repo] = integrations.repoName(gcfg.repo).split('/'), pathName = integrations.repoPath(gcfg.path), branch = String(gcfg.branch || 'main').slice(0, 80);
+    const old = await integrations.github(tokens.gh, GH_API, '/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/contents/' + pathName.split('/').map(encodeURIComponent).join('/') + '?ref=' + encodeURIComponent(branch));
+    const body = Buffer.from('# AI 채팅방 ' + room.id + '\n\n' + chat + (room.deliv ? '\n\n## 산출물\n\n' + room.deliv.text : '')).toString('base64');
+    const put = await integrations.github(tokens.gh, GH_API, '/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/contents/' + pathName.split('/').map(encodeURIComponent).join('/'), { method: 'PUT', body: JSON.stringify({ message: 'Sync AI chatroom ' + room.id, content: body, branch, sha: old.response.ok && old.body.sha ? old.body.sha : undefined }) });
+    if (put.response.ok) done.push('GitHub');
+  }
+  if (ncfg && (force || ncfg.auto) && tokens.notion && /^[0-9a-f-]{20,}$/i.test(String(ncfg.pageId || ''))) {
+    const blocks = integrations.notionBlocks({ title: 'AI 채팅방 ' + room.id, chat, deliverable: room.deliv && room.deliv.text });
+    for (let i = 0; i < blocks.length; i += 100) {
+      const r = await integrations.notion(tokens.notion, NOTION_API, '/blocks/' + encodeURIComponent(ncfg.pageId) + '/children', { method: 'PATCH', body: JSON.stringify({ children: blocks.slice(i, i + 100), notifications: { mode: 'silent' } }) });
+      if (!r.response.ok) break;
+      if (i + 100 >= blocks.length) done.push('Notion');
+    }
+  }
+  return done;
 }
 
 /* ---------- 모드: Code / Brainstorm / Make. 역할이 정해진 AI들이 정해진 순서로 이어 받아 하나의 산출물을 만든다 ---------- */
@@ -1576,6 +1617,29 @@ function leave(ws) {
   system(room, name + ' 님이 나갔습니다.', 'MEMBER_LEAVE');
   broadcast(room, meta(room));
 }
+async function integrationCommand(ws, room, text) {
+  const parts = String(text || '').trim().split(/\s+/), root = parts[0].toLowerCase();
+  if (root === '/github' && parts[1] === 'repos') {
+    if (!ws.ghToken) return system(room, 'GitHub를 먼저 연결하세요.', 'INTEGRATION');
+    const r = await integrations.github(ws.ghToken, GH_API, '/user/repos?per_page=20&sort=updated'); if (!r.response.ok) return system(room, 'GitHub 저장소를 읽지 못했습니다.', 'INTEGRATION');
+    return system(room, 'GitHub 저장소:\n' + r.body.slice(0, 20).map(x => '- ' + x.full_name + (x.private ? ' (private)' : '')).join('\n'), 'INTEGRATION');
+  }
+  if (root === '/github' && parts[1] === 'issues') {
+    if (!ws.ghToken) return system(room, 'GitHub를 먼저 연결하세요.', 'INTEGRATION'); const r = await integrations.github(ws.ghToken, GH_API, '/issues?filter=all&state=open&per_page=10'); if (!r.response.ok) return system(room, 'GitHub 이슈를 읽지 못했습니다.', 'INTEGRATION');
+    return system(room, '열린 GitHub 이슈:\n' + r.body.filter(x => !x.pull_request).slice(0, 10).map(x => '- #' + x.number + ' ' + x.title + ' · ' + x.html_url).join('\n'), 'INTEGRATION');
+  }
+  if (root === '/github' && parts[1] === 'file') {
+    if (!ws.ghToken) return system(room, 'GitHub를 먼저 연결하세요.', 'INTEGRATION'); const repo = integrations.repoName(parts[2]), file = integrations.repoPath(parts.slice(3).join(' ')); if (!repo || !file) return system(room, '사용법: /github file owner/repo path/to/file', 'INTEGRATION'); const r = await integrations.github(ws.ghToken, GH_API, '/repos/' + repo + '/contents/' + file.split('/').map(encodeURIComponent).join('/')); if (!r.response.ok || !r.body.content) return system(room, 'GitHub 파일을 읽지 못했습니다.', 'INTEGRATION'); return system(room, 'GitHub 파일 ' + repo + '/' + file + ':\n```\n' + Buffer.from(String(r.body.content).replace(/\n/g, ''), 'base64').toString('utf8').slice(0, 7000) + '\n```', 'INTEGRATION');
+  }
+  if (root === '/notion' && parts[1] === 'search') {
+    if (!ws.notionToken) return system(room, 'Notion을 먼저 연결하세요.', 'INTEGRATION'); const r = await integrations.notion(ws.notionToken, NOTION_API, '/search', { method: 'POST', body: JSON.stringify({ query: cleanText(parts.slice(2).join(' '), 100), page_size: 10 }) }); if (!r.response.ok) return system(room, 'Notion 검색에 실패했습니다.', 'INTEGRATION'); return system(room, 'Notion 검색 결과:\n' + r.body.results.map(integrations.pageSummary).map(x => '- ' + x.title + ' · ' + x.id).join('\n'), 'INTEGRATION');
+  }
+  if (root === '/notion' && parts[1] === 'import') {
+    if (!ws.notionToken) return system(room, 'Notion을 먼저 연결하세요.', 'INTEGRATION'); const id = parts[2]; if (!/^[0-9a-f-]{20,}$/i.test(String(id || ''))) return system(room, '사용법: /notion import 페이지ID', 'INTEGRATION'); const r = await integrations.notion(ws.notionToken, NOTION_API, '/blocks/' + id + '/children?page_size=100'); if (!r.response.ok) return system(room, 'Notion 페이지를 읽지 못했습니다.', 'INTEGRATION'); room.doc = cleanText((room.doc ? room.doc + '\n\n' : '') + integrations.blocksToText(r.body.results), LIMITS.doc); return system(room, 'Notion 페이지 내용을 공유 문서로 가져왔습니다.', 'INTEGRATION');
+  }
+  if (root === '/notion' && parts[1] === 'export') { const done = await syncRoomExternal(room, { gh: ws.ghToken, notion: ws.notionToken }, true); return system(room, done.includes('Notion') ? 'Notion에 내보냈습니다.' : 'Notion 대상 페이지를 설정하고 다시 시도하세요.', 'INTEGRATION'); }
+  return system(room, '사용법: /github repos | /github issues | /github file owner/repo path | /notion search 검색어 | /notion import 페이지ID | /notion export', 'INTEGRATION');
+}
 function handle(ws, m) {
   if (!m || typeof m !== 'object') return;
   if (m.t === 'join') return join(ws, m);
@@ -1609,6 +1673,8 @@ function handle(ws, m) {
       addMsg(room, 'human', name, text, undefined, undefined, ws.user ? ws.user.sub : '');
       room.lastReq = text.slice(0, 1500);
       funnel(room, 'human_msg');
+      if (/^\/(github|notion)(?:\s|$)/i.test(text)) { integrationCommand(ws, room, text).catch(() => system(room, '연동 명령을 처리하지 못했습니다.', 'INTEGRATION')); return; }
+      if (room.integrations && ((room.integrations.github && room.integrations.github.auto) || (room.integrations.notion && room.integrations.notion.auto))) setTimeout(() => syncRoomExternal(room, { gh: ws.ghToken, notion: ws.notionToken }, false).catch(() => {}), 1200).unref();
       if (!room.ais.length) return;
       if (freeChatActive(room)) { chatHuman(room, text, ws.user ? ws.user.sub : ''); return; }
       const first = firstFor(room, text);
@@ -1960,7 +2026,7 @@ function sharePage(r) {
 }
 const PAGE_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' ws: wss: https://accounts.google.com; frame-src https://accounts.google.com; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; worker-src 'self'; manifest-src 'self'";
 const STATIC = { '/manifest.webmanifest': ['application/manifest+json', 3600], '/sw.js': ['text/javascript; charset=utf-8', 0], '/icon.svg': ['image/svg+xml', 86400], '/icon-192.png': ['image/png', 86400], '/icon-512.png': ['image/png', 86400], '/i18n.js': ['text/javascript; charset=utf-8', 300], '/icon-maskable-512.png': ['image/png', 86400] };
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const u = req.url.split('?')[0];
   res.setHeader('x-content-type-options', 'nosniff'); res.setHeader('referrer-policy', 'same-origin'); res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=(), payment=()');
   if (COOKIE_SECURE || req.headers['x-forwarded-proto'] === 'https') res.setHeader('strict-transport-security', 'max-age=15552000');
@@ -1983,12 +2049,14 @@ const server = http.createServer((req, res) => {
   const ck = (n, v, age) => n + '=' + v + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' + age + secure;
   const base = () => PUBLIC_URL || ((req.headers['x-forwarded-proto'] === 'https' || COOKIE_SECURE ? 'https' : 'http') + '://' + req.headers.host);
   const ghOf = me => { if (!me) return null; const o = openGH(getCookie(req.headers.cookie, GH_COOKIE), me.sub); return o ? o : null; };
-  if (u === '/auth/config' && req.method === 'GET') return json(200, { clientId: GOOGLE_CLIENT_ID, github: !!(GH_ID && GH_SECRET), email: emailEnabled(), required: loginRequired() });
+  const notionOf = me => { if (!me) return null; const o = openIntegration(getCookie(req.headers.cookie, NOTION_COOKIE), me.sub, 'notion'); return o ? o : null; };
+  if (u === '/auth/config' && req.method === 'GET') return json(200, { clientId: GOOGLE_CLIENT_ID, github: !!(GH_ID && GH_SECRET), notion: !!(NOTION_ID && NOTION_SECRET), email: emailEnabled(), required: loginRequired() });
   if (u === '/auth/me' && req.method === 'GET') {
     const me = readSession(req.headers.cookie), g = ghOf(me);
-    return json(200, { user: me ? { name: me.name, picture: me.pic, provider: me.sub.split(':')[0], consent: !!(accounts[me.sub] && accounts[me.sub].consentAt) } : null, github: g ? { login: g.login } : null, credits: me ? creditInfo(me.sub) : null });
+    const n = notionOf(me);
+    return json(200, { user: me ? { name: me.name, picture: me.pic, provider: me.sub.split(':')[0], consent: !!(accounts[me.sub] && accounts[me.sub].consentAt) } : null, github: g ? { login: g.login } : null, notion: n ? { workspace: n.workspace || '', pageId: n.pageId || '' } : null, credits: me ? creditInfo(me.sub) : null });
   }
-  if (u === '/auth/logout' && req.method === 'POST') { if (!sameOrigin(req)) return json(403, { error: 'origin' }); res.setHeader('set-cookie', [ck(COOKIE_NAME, '', 0), ck(GH_COOKIE, '', 0)]); return json(200, { ok: true }); }
+  if (u === '/auth/logout' && req.method === 'POST') { if (!sameOrigin(req)) return json(403, { error: 'origin' }); res.setHeader('set-cookie', [ck(COOKIE_NAME, '', 0), ck(GH_COOKIE, '', 0), ck(NOTION_COOKIE, '', 0)]); return json(200, { ok: true }); }
   if (galleryRoute(req, res, u, json)) return;
   if (u === '/healthz') {
     /* 배포 확인용: 어떤 커밋이 떠 있는지, 무료 풀이 켜졌는지(어느 백엔드인지만, 키는 절대 포함하지 않음) */
@@ -2066,7 +2134,7 @@ const server = http.createServer((req, res) => {
     if (!(GH_ID && GH_SECRET)) return json(404, { error: 'GitHub 로그인이 설정되지 않았습니다.' });
     const q = new URL(req.url, 'http://x').searchParams, mode = q.get('mode') === 'connect' ? 'connect' : 'login';
     const state = crypto.randomBytes(16).toString('hex');
-    res.writeHead(302, { 'set-cookie': ck(OAUTH_COOKIE, state + '.' + mode + '.' + b64u(safeReturn(q.get('r'))), 600), location: GH_AUTH_URL + '?' + new URLSearchParams({ client_id: GH_ID, redirect_uri: base() + '/auth/github/callback', scope: mode === 'connect' ? 'read:user gist' : 'read:user', state, allow_signup: 'true' }) });
+    res.writeHead(302, { 'set-cookie': ck(OAUTH_COOKIE, state + '.' + mode + '.' + b64u(safeReturn(q.get('r'))), 600), location: GH_AUTH_URL + '?' + new URLSearchParams({ client_id: GH_ID, redirect_uri: base() + '/auth/github/callback', scope: mode === 'connect' ? 'read:user gist repo' : 'read:user', state, allow_signup: 'true' }) });
     return res.end();
   }
   if (u === '/auth/github/callback' && req.method === 'GET') {
@@ -2095,6 +2163,29 @@ const server = http.createServer((req, res) => {
       if (mode === 'connect') cookies.push(ck(GH_COOKIE, sealGH({ sub, login: String(gu.login).slice(0, 40), token: tj.access_token, exp: Date.now() + SESSION_DAYS * 86400000 }), SESSION_DAYS * 86400));
       res.writeHead(302, { 'set-cookie': cookies, location: back }); res.end();
     })().catch(e => fail(e.message || '로그인에 실패했습니다.'));
+  }
+  if (u === '/auth/notion/disconnect' && req.method === 'POST') { if (!sameOrigin(req)) return json(403, { error: 'origin' }); res.setHeader('set-cookie', ck(NOTION_COOKIE, '', 0)); return json(200, { ok: true }); }
+  if (u === '/auth/notion/start' && req.method === 'GET') {
+    const me = readSession(req.headers.cookie);
+    if (!me) return json(401, { error: '먼저 로그인하세요.' });
+    if (!(NOTION_ID && NOTION_SECRET)) return json(404, { error: 'Notion 연동이 설정되지 않았습니다.' });
+    const state = crypto.randomBytes(16).toString('hex'), back = safeReturn(new URL(req.url, 'http://x').searchParams.get('r'));
+    res.writeHead(302, { 'set-cookie': ck(OAUTH_COOKIE, 'notion.' + state + '.' + b64u(back), 600), location: NOTION_AUTH_URL + '?' + new URLSearchParams({ client_id: NOTION_ID, redirect_uri: base() + '/auth/notion/callback', response_type: 'code', owner: 'user', state }) });
+    return res.end();
+  }
+  if (u === '/auth/notion/callback' && req.method === 'GET') {
+    const q = new URL(req.url, 'http://x').searchParams, parts = getCookie(req.headers.cookie, OAUTH_COOKIE).split('.'), state = parts[1], back = safeReturn(parts[2] ? Buffer.from(parts[2], 'base64url').toString() : '/');
+    const fail = msg => { res.writeHead(302, { 'set-cookie': ck(OAUTH_COOKIE, '', 0), location: back + (back.includes('?') ? '&' : '?') + 'autherr=' + encodeURIComponent(msg) }); res.end(); };
+    if (!state || q.get('state') !== state) return fail('Notion 연결 요청이 올바르지 않습니다.');
+    if (!q.get('code')) return fail('Notion 연결이 취소되었습니다.');
+    return (async () => {
+      const auth = Buffer.from(NOTION_ID + ':' + NOTION_SECRET).toString('base64');
+      const tr = await fetch(NOTION_TOKEN_URL, { method: 'POST', headers: { authorization: 'Basic ' + auth, accept: 'application/json', 'content-type': 'application/json' }, body: JSON.stringify({ grant_type: 'authorization_code', code: q.get('code'), redirect_uri: base() + '/auth/notion/callback' }), signal: AbortSignal.timeout(10000) });
+      const tj = await tr.json(); if (!tr.ok || !tj.access_token) throw new Error('Notion 토큰을 받지 못했습니다.');
+      const me = readSession(req.headers.cookie); if (!me) throw new Error('로그인이 필요합니다.');
+      const val = sealIntegration({ sub: me.sub, token: tj.access_token, workspace: String(tj.workspace_name || ''), pageId: String(tj.duplicated_template_id || ''), exp: Date.now() + SESSION_DAYS * 86400000 }, 'notion');
+      res.writeHead(302, { 'set-cookie': [ck(OAUTH_COOKIE, '', 0), ck(NOTION_COOKIE, val, SESSION_DAYS * 86400)], location: back }); res.end();
+    })().catch(e => fail(e.message || 'Notion 연결에 실패했습니다.'));
   }
   if (u === '/auth/email/start' && req.method === 'POST') {
     if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' });
@@ -2156,6 +2247,64 @@ const server = http.createServer((req, res) => {
       json(200, { url: out.html_url });
     }).catch(() => json(502, { error: 'Gist를 만들지 못했습니다.' }));
   }
+  const currentRoom = (me, id) => { const r = getRoom(String(id || '')); return r && me && [...r.clients].some(c => c.user && c.user.sub === me.sub) ? r : null; };
+  if (u === '/gh/repos' && req.method === 'GET') {
+    const me = readSession(req.headers.cookie), g = ghOf(me); if (!me || !g) return json(401, { error: 'GitHub 계정을 먼저 연결하세요.' });
+    const r = await integrations.github(g.token, GH_API, '/user/repos?per_page=100&sort=updated');
+    if (r.response.status === 401) return json(401, { error: 'GitHub 연결이 만료되었습니다.' });
+    return json(r.response.ok ? 200 : 502, { repos: r.response.ok ? r.body.map(x => ({ fullName: x.full_name, name: x.name, branch: x.default_branch, private: !!x.private, url: x.html_url })) : [], error: r.response.ok ? undefined : '저장소를 읽지 못했습니다.' });
+  }
+  if (u === '/gh/branches' && req.method === 'GET') {
+    const me = readSession(req.headers.cookie), g = ghOf(me), repo = integrations.repoName(new URL(req.url, 'http://x').searchParams.get('repo'));
+    if (!me || !g || !repo) return json(400, { error: 'GitHub 연결과 저장소가 필요합니다.' });
+    const r = await integrations.github(g.token, GH_API, '/repos/' + repo + '/branches?per_page=100');
+    return json(r.response.ok ? 200 : 502, { branches: r.response.ok ? r.body.map(x => x.name) : [], error: r.response.ok ? undefined : '브랜치를 읽지 못했습니다.' });
+  }
+  if (u === '/gh/file' && req.method === 'GET') {
+    const me = readSession(req.headers.cookie), g = ghOf(me), q = new URL(req.url, 'http://x').searchParams, repo = integrations.repoName(q.get('repo')), file = integrations.repoPath(q.get('path'));
+    if (!me || !g || !repo || !file) return json(400, { error: 'GitHub 연결·저장소·파일 경로가 필요합니다.' });
+    const r = await integrations.github(g.token, GH_API, '/repos/' + repo + '/contents/' + file.split('/').map(encodeURIComponent).join('/') + (q.get('ref') ? '?ref=' + encodeURIComponent(q.get('ref')) : ''));
+    if (!r.response.ok || !r.body.content) return json(r.response.status === 404 ? 404 : 502, { error: '파일을 읽지 못했습니다.' });
+    return json(200, { repo, path: file, sha: r.body.sha, content: Buffer.from(String(r.body.content).replace(/\n/g, ''), 'base64').toString('utf8').slice(0, 12000), url: r.body.html_url });
+  }
+  if (u === '/gh/file' && req.method === 'POST') {
+    if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' });
+    const me = readSession(req.headers.cookie), g = ghOf(me); if (!me || !g) return json(401, { error: 'GitHub 계정을 먼저 연결하세요.' });
+    return readBody(req, 140000).then(async b => { let j = {}; try { j = JSON.parse(b); } catch (e) {} const repo = integrations.repoName(j.repo), file = integrations.repoPath(j.path), branch = String(j.branch || 'main').slice(0, 80), content = String(j.content || ''); if (!repo || !file || !content || content.length > 100000) return json(400, { error: '저장소·경로·내용을 확인하세요.' }); const old = await integrations.github(g.token, GH_API, '/repos/' + repo + '/contents/' + file.split('/').map(encodeURIComponent).join('/') + '?ref=' + encodeURIComponent(branch)); const put = await integrations.github(g.token, GH_API, '/repos/' + repo + '/contents/' + file.split('/').map(encodeURIComponent).join('/'), { method: 'PUT', body: JSON.stringify({ message: cleanText(j.message || 'Update from AI chatroom', 120), content: Buffer.from(content).toString('base64'), branch, sha: old.response.ok ? old.body.sha : undefined }) }); if (!put.response.ok) return json(502, { error: 'GitHub 파일을 저장하지 못했습니다.' }); return json(200, { url: put.body.content && put.body.content.html_url, commit: put.body.commit && put.body.commit.html_url }); }).catch(() => json(502, { error: 'GitHub 파일 저장에 실패했습니다.' }));
+  }
+  if (u === '/gh/issues' && (req.method === 'GET' || req.method === 'POST')) {
+    const me = readSession(req.headers.cookie), g = ghOf(me); if (!me || !g) return json(401, { error: 'GitHub 계정을 먼저 연결하세요.' });
+    if (req.method === 'GET') { const r = await integrations.github(g.token, GH_API, '/issues?filter=all&state=open&per_page=30'); return json(r.response.ok ? 200 : 502, { issues: r.response.ok ? r.body.filter(x => !x.pull_request).map(x => ({ number: x.number, title: x.title, body: x.body || '', url: x.html_url, repo: x.repository_url })) : [], error: r.response.ok ? undefined : '이슈를 읽지 못했습니다.' }); }
+    return readBody(req, 12000).then(async b => { let j = {}; try { j = JSON.parse(b); } catch (e) {} const repo = integrations.repoName(j.repo); if (!repo || !j.title) return json(400, { error: '저장소와 제목이 필요합니다.' }); const r = await integrations.github(g.token, GH_API, '/repos/' + repo + '/issues', { method: 'POST', body: JSON.stringify({ title: cleanText(j.title, 200), body: cleanText(j.body, 6000), labels: Array.isArray(j.labels) ? j.labels.slice(0, 10).map(x => cleanText(x, 40)) : undefined }) }); return json(r.response.ok ? 200 : 502, r.response.ok ? { url: r.body.html_url, number: r.body.number } : { error: '이슈를 만들지 못했습니다.' }); });
+  }
+  if (u === '/notion/search' && req.method === 'GET') {
+    const me = readSession(req.headers.cookie), n = notionOf(me); if (!me || !n) return json(401, { error: 'Notion을 먼저 연결하세요.' }); const q = new URL(req.url, 'http://x').searchParams.get('q') || '';
+    const r = await integrations.notion(n.token, NOTION_API, '/search', { method: 'POST', body: JSON.stringify({ query: cleanText(q, 100), page_size: 50, sort: { direction: 'descending', timestamp: 'last_edited_time' } }) });
+    return json(r.response.ok ? 200 : 502, { pages: r.response.ok ? r.body.results.map(integrations.pageSummary) : [], error: r.response.ok ? undefined : 'Notion 검색에 실패했습니다.' });
+  }
+  if (u === '/notion/page' && req.method === 'GET') {
+    const me = readSession(req.headers.cookie), n = notionOf(me), id = new URL(req.url, 'http://x').searchParams.get('id'); if (!me || !n || !/^[0-9a-f-]{20,}$/i.test(String(id || ''))) return json(400, { error: 'Notion 연결과 페이지가 필요합니다.' });
+    const r = await integrations.notion(n.token, NOTION_API, '/blocks/' + encodeURIComponent(id) + '/children?page_size=100'); return json(r.response.ok ? 200 : 502, r.response.ok ? { text: integrations.blocksToText(r.body.results), next: r.body.next_cursor || null } : { error: 'Notion 페이지를 읽지 못했습니다.' });
+  }
+  if (u === '/notion/export' && req.method === 'POST') {
+    if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' }); const me = readSession(req.headers.cookie), n = notionOf(me); if (!me || !n) return json(401, { error: 'Notion을 먼저 연결하세요.' });
+    return readBody(req, 4096).then(async b => { let j = {}; try { j = JSON.parse(b); } catch (e) {} const room = currentRoom(me, j.room), pageId = String(j.pageId || (accounts[me.sub] && accounts[me.sub].integrations && accounts[me.sub].integrations.notion && accounts[me.sub].integrations.notion.pageId) || ''); if (!room || !/^[0-9a-f-]{20,}$/i.test(pageId)) return json(400, { error: '참여 중인 방과 Notion 페이지가 필요합니다.' }); const blocks = integrations.notionBlocks({ title: 'AI 채팅방 ' + room.id, chat: room.messages.filter(x => x.kind !== 'system').slice(-100).map(x => '**' + x.who + '**: ' + x.text).join('\n\n'), deliverable: room.deliv && room.deliv.text }); let ok = true; for (let i = 0; i < blocks.length; i += 100) { const r = await integrations.notion(n.token, NOTION_API, '/blocks/' + encodeURIComponent(pageId) + '/children', { method: 'PATCH', body: JSON.stringify({ children: blocks.slice(i, i + 100), notifications: { mode: 'silent' } }) }); if (!r.response.ok) { ok = false; break; } } if (!ok) return json(502, { error: 'Notion에 저장하지 못했습니다.' }); return json(200, { ok: true, pageId }); });
+  }
+  if (u === '/integrations/config' && (req.method === 'GET' || req.method === 'POST')) {
+    if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' }); const me = readSession(req.headers.cookie); if (!me) return json(401, { error: '로그인이 필요합니다.' });
+    if (req.method === 'GET') { const room = currentRoom(me, new URL(req.url, 'http://x').searchParams.get('room')); return json(room ? 200 : 404, room ? { integrations: room.integrations || {} } : { error: '방을 찾지 못했습니다.' }); }
+    return readBody(req, 4096).then(b => { let j = {}; try { j = JSON.parse(b); } catch (e) {} const room = currentRoom(me, j.room); if (!room || room.ownerSub !== me.sub) return json(403, { error: '방장만 연동 설정을 바꿀 수 있습니다.' }); const next = {}; if (j.github && integrations.repoName(j.github.repo) && integrations.repoPath(j.github.path)) next.github = { repo: integrations.repoName(j.github.repo), path: integrations.repoPath(j.github.path), branch: String(j.github.branch || 'main').slice(0, 80), auto: !!j.github.auto }; if (j.notion && /^[0-9a-f-]{20,}$/i.test(String(j.notion.pageId || ''))) next.notion = { pageId: String(j.notion.pageId), auto: !!j.notion.auto }; room.integrations = next; dirty.add(room.id); return json(200, { integrations: next }); });
+  }
+  if (u === '/integrations/sync' && req.method === 'POST') {
+    if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' }); const me = readSession(req.headers.cookie), g = ghOf(me), n = notionOf(me); if (!me) return json(401, { error: '로그인이 필요합니다.' });
+    return readBody(req, 2048).then(async b => { let j = {}; try { j = JSON.parse(b); } catch (e) {} const room = currentRoom(me, j.room); if (!room || room.ownerSub !== me.sub) return json(403, { error: '방장만 동기화할 수 있습니다.' }); const done = await syncRoomExternal(room, { gh: g && g.token, notion: n && n.token }, true); return json(200, { synced: done }); }).catch(() => json(502, { error: '동기화에 실패했습니다.' }));
+  }
+  if (u === '/webhooks/github' && req.method === 'POST') {
+    return readBody(req, 512000).then(b => { const secret = String(process.env.GITHUB_WEBHOOK_SECRET || ''), sig = String(req.headers['x-hub-signature-256'] || ''), want = 'sha256=' + crypto.createHmac('sha256', secret).update(b).digest('hex'); if (!secret || sig.length !== want.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(want))) return json(401, { error: 'invalid signature' }); let j = {}; try { j = JSON.parse(b); } catch (e) {} const full = j.repository && j.repository.full_name; if (full) for (const r of rooms.values()) if (r.integrations && r.integrations.github && r.integrations.github.repo === full) system(r, 'GitHub 변경 알림: ' + String(req.headers['x-github-event'] || 'event') + ' · ' + full, 'INTEGRATION'); return json(200, { ok: true }); }).catch(() => json(400, { error: 'bad webhook' }));
+  }
+  if (u === '/webhooks/notion' && req.method === 'POST') {
+    return readBody(req, 512000).then(b => { const secret = String(process.env.NOTION_WEBHOOK_VERIFICATION_TOKEN || ''), sig = String(req.headers['x-notion-signature'] || ''), want = 'sha256=' + crypto.createHmac('sha256', secret).update(b).digest('hex'); if (secret && (sig.length !== want.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(want)))) return json(401, { error: 'invalid signature' }); let j = {}; try { j = JSON.parse(b); } catch (e) {} if (j.verification_token) return json(200, { ok: true }); const id = j.entity && j.entity.id; if (id) for (const r of rooms.values()) if (r.integrations && r.integrations.notion && r.integrations.notion.pageId === id) system(r, 'Notion 페이지가 변경되었습니다. /notion import ' + id + ' 로 가져올 수 있습니다.', 'INTEGRATION'); return json(200, { ok: true }); }).catch(() => json(400, { error: 'bad webhook' }));
+  }
   if (u === '/auth/google' && req.method === 'POST') {
     if (!sameOrigin(req)) return json(403, { error: '허용되지 않은 요청입니다.' });
     if (authLimited(clientIp(req))) return json(429, { error: '잠시 뒤 다시 시도하세요.' });
@@ -2191,6 +2340,8 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => { const c = (wsPerIp.get(ip) || 1) - 1; if (c <= 0) wsPerIp.delete(ip); else wsPerIp.set(ip, c); });
   if (cnt > WS_PER_IP) { try { ws.send(JSON.stringify({ t: 'err', code: 'TOO_MANY', text: '이 네트워크에서 연결이 너무 많습니다. 잠시 뒤 다시 시도하세요.' })); } catch (e) {} return ws.close(); }
   ws.meta = null; ws.hits = []; ws.user = readSession(req && req.headers ? req.headers.cookie : "");
+  ws.ghToken = ws.user ? (openGH(getCookie(req.headers.cookie, GH_COOKIE), ws.user.sub) || {}).token : '';
+  ws.notionToken = ws.user ? (openIntegration(getCookie(req.headers.cookie, NOTION_COOKIE), ws.user.sub, 'notion') || {}).token : '';
   ws.on('message', raw => { let m; try { m = JSON.parse(raw); } catch (e) { return; } handle(ws, m); });
   ws.on('close', () => leave(ws));
   ws.on('error', () => {});

@@ -71,7 +71,7 @@ const mock=http.createServer((q,r)=>{let b='';q.on('data',c=>b+=c);q.on('end',()
   t('cross-origin -> 403',(await post('/gh/gist',{room:'gist1'},{cookie:jar(both),origin:'https://evil.com'})).status===403);
   t('non-participant -> 403',(await post('/gh/gist',{room:'nosuchroom'},{cookie:jar(both)})).status===403);
   r=await post('/auth/github/disconnect',{});t('disconnect clears gh cookie',/aichat_gh=;/.test(r.headers.get('set-cookie')||'')||/Max-Age=0/.test(r.headers.get('set-cookie')||''));
-  r=await post('/auth/logout',{});t('logout clears both',(r.headers.getSetCookie?r.headers.getSetCookie():[]).length===2);
+  r=await post('/auth/logout',{});t('logout clears all auth cookies',(r.headers.getSetCookie?r.headers.getSetCookie():[]).length===3);
  }catch(e){console.log('ERR',e);bad++}
  console.log(ok+' pass, '+bad+' fail');sv.kill();mock.close();process.exit(bad?1:0);
 })();

@@ -681,6 +681,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
         <section><h3>언어</h3><div id="langbox2"></div></section>
         <section><h3>계정</h3><div id="acct"></div></section>
         <section><h3>차단한 사용자</h3><div id="blklist"></div><p class="hint" style="margin-top:8px">메시지의 ⋯ 버튼으로 신고·차단할 수 있어요. 차단하면 그 사람의 메시지가 나에게만 숨겨집니다.</p></section>
+        <section id="intsec"><h3>외부 서비스 연동</h3><p class="hint" style="margin:0 0 10px">GitHub 저장소와 Notion 페이지를 채팅방의 대화·산출물과 연결합니다. 토큰은 서버의 암호화 쿠키에 보관됩니다.</p><div id="intstate"></div><div class="row2" style="margin-top:10px"><button type="button" class="btn sm" id="ghconnect">GitHub 연결</button><button type="button" class="btn sm" id="notionconnect">Notion 연결</button></div><label class="lb" for="intrepo">GitHub 저장소 (owner/repo)</label><input class="field" id="intrepo" placeholder="owner/repo"><label class="lb" for="intpath">저장 파일 경로</label><input class="field" id="intpath" placeholder="ai-chatroom/chat.md"><label class="lb" for="intbranch">브랜치</label><input class="field" id="intbranch" value="main"><label class="lb" for="intpage">Notion 페이지 ID</label><input class="field" id="intpage" placeholder="페이지 검색 결과의 ID"><label class="keymem"><input type="checkbox" id="intauto"><span>새 메시지마다 자동 동기화</span></label><div class="row2" style="margin-top:10px"><button type="button" class="btn primary sm" id="intsave">연동 저장</button><button type="button" class="btn sm" id="intsync">지금 동기화</button></div><div class="row2" style="margin-top:10px"><input class="field" id="notionq" placeholder="Notion 검색어"><button type="button" class="btn sm" id="notionsearch">Notion 검색</button></div><div id="intmsg" class="hint" role="status" style="margin-top:8px"></div></section>
         <section>
           <fieldset>
             <legend>AI 발언 방식</legend>
@@ -1100,6 +1101,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   function enterRoom(id) {
     if (joined || ws) goHome();
     roomId = id; inRoomUrl = true;
+    loadIntegrationConfig();
     try { history.replaceState(null, "", "?room=" + id); } catch (e) {}
     setEntry(); renderRooms(); setView("main");
     if ($("jname").value.trim()) go(); else $("jname").focus();
@@ -1110,7 +1112,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   $("entryback").addEventListener("click", function () { setView("list"); });
   $("back").addEventListener("click", goHome);
   /* 로그인: Google · GitHub · 이메일 코드 (서버에 설정된 것만 표시) + 계정에 GitHub 연동 */
-  var authUser = null, ghLink = null, authCfg = {};
+  var authUser = null, ghLink = null, notionLink = null, authCfg = {};
   function ret() { return encodeURIComponent(location.pathname + location.search); }
   var PROV = { google: "Google", github: "GitHub", email: _t("이메일") };
   function renderAuth() {
@@ -1136,7 +1138,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
         var dl = mk("a", "btn sm", _t("계정·데이터 삭제")); dl.href = "/delete-account"; dl.target = "_blank"; dl.rel = "noopener"; dz.appendChild(dl);
         sec.appendChild(dz); }
     }
-    renderGist();
+    renderGist(); renderIntegrations();
   }
   function ghButtons(gh) {
     gh.textContent = "";
@@ -1152,6 +1154,22 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var on = !!(authUser && ghLink);
     $("gistres").hidden = !on; $("gistchat").hidden = !on;
     $("gisthint").textContent = on ? _t("비공개 Gist로 GitHub에 저장해요. (연결된 계정: @{login})", { login: ghLink.login }) : authUser ? _t("설정 탭의 계정에서 GitHub를 연결하면 산출물·대화를 Gist로 내보낼 수 있어요.") : _t("로그인 후 GitHub를 연결하면 산출물·대화를 Gist로 내보낼 수 있어요.");
+  }
+  function renderIntegrations() {
+    var box = $("intstate"); if (!box) return; box.textContent = "";
+    box.appendChild(mk("div", "hint", authUser ? ((ghLink ? "GitHub: " + ghLink.login : "GitHub 미연결") + " · " + (notionLink ? "Notion: " + (notionLink.workspace || "연결됨") : "Notion 미연결")) : "로그인 후 외부 서비스를 연결할 수 있어요."));
+    $("ghconnect").hidden = !(authUser && authCfg.github); $("notionconnect").hidden = !(authUser && authCfg.notion);
+  }
+  function loadIntegrationConfig() {
+    if (!authUser || !roomId) return; fetch("/integrations/config?room=" + encodeURIComponent(roomId)).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { if (!j || !j.integrations) return; var g=j.integrations.github||{}, n=j.integrations.notion||{}; $("intrepo").value=g.repo||""; $("intpath").value=g.path||"ai-chatroom/chat.md"; $("intbranch").value=g.branch||"main"; $("intpage").value=n.pageId||""; $("intauto").checked=!!(g.auto||n.auto); }).catch(function () {});
+  }
+  function integrationPost(path, body) { return fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(function (r) { return r.json().then(function (j) { j._ok=r.ok; return j; }); }); }
+  function initIntegrations() {
+    $("ghconnect").addEventListener("click", function () { location.href="/auth/github/start?mode=connect&r="+ret(); });
+    $("notionconnect").addEventListener("click", function () { location.href="/auth/notion/start?r="+ret(); });
+    $("intsave").addEventListener("click", function () { integrationPost("/integrations/config", { room: roomId, github: { repo: $("intrepo").value, path: $("intpath").value, branch: $("intbranch").value, auto: $("intauto").checked }, notion: { pageId: $("intpage").value, auto: $("intauto").checked } }).then(function (j) { $("intmsg").textContent=j._ok?_t("연동 설정을 저장했어요"):_tx(j.error)||_t("저장하지 못했습니다."); }); });
+    $("intsync").addEventListener("click", function () { integrationPost("/integrations/sync", { room: roomId }).then(function (j) { $("intmsg").textContent=j._ok?("동기화 완료: "+(j.synced||[]).join(", ")):_tx(j.error)||_t("동기화하지 못했습니다."); }); });
+    $("notionsearch").addEventListener("click", function () { fetch("/notion/search?q="+encodeURIComponent($("notionq").value)).then(function(r){return r.json()}).then(function(j){$("intmsg").textContent=j.pages?j.pages.map(function(x){return x.title+" · "+x.id}).join("\n"):(_tx(j.error)||_t("검색하지 못했습니다."));}); });
   }
   function gistExport(kind) {
     var rid = (typeof roomId !== "undefined" ? roomId : ""); $("gistmsg").textContent = "";
@@ -1179,14 +1197,14 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       });
     });
     $("glogout").addEventListener("click", function () {
-      post("/auth/logout", {}).then(function () { authUser = null; ghLink = null; renderAuth(); try { google.accounts.id.disableAutoSelect(); } catch (e) {} });
+      post("/auth/logout", {}).then(function () { authUser = null; ghLink = null; notionLink = null; renderAuth(); try { google.accounts.id.disableAutoSelect(); } catch (e) {} });
     });
     $("gistres").addEventListener("click", function () { gistExport("result"); });
     $("gistchat").addEventListener("click", function () { gistExport("chat"); });
     fetch("/auth/config").then(function (r) { return r.json(); }).then(function (c) {
       authCfg = c; renderAuth();
       return fetch("/auth/me").then(function (r) { return r.json(); }).then(function (me) {
-        authUser = me.user; ghLink = me.github; credits = me.credits; renderAuth(); loadMyRooms(); renderCredits();
+        authUser = me.user; ghLink = me.github; notionLink = me.notion; credits = me.credits; renderAuth(); loadMyRooms(); renderCredits(); loadIntegrationConfig();
         if (!c.clientId) return;
         var sc = document.createElement("script"); sc.src = "https://accounts.google.com/gsi/client"; sc.async = true;
         sc.onload = function () {
@@ -1202,6 +1220,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     }).catch(function () {});
   }
   initAuth();
+  initIntegrations();
   function joinErr(t) { var e = $("jerr2"); e.textContent = t || ""; e.hidden = !t; }
   function assetJoinErr(t) { var e = $("jerr"); e.textContent = t || ""; e.hidden = !t; }
   function showJoinAsset() {
