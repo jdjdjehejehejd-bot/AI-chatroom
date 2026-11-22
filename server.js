@@ -177,6 +177,9 @@ const BUDGET_DEFAULT = Number(process.env.ROOM_CALL_BUDGET || 30);
 const BUDGET_MAX = Number(process.env.ROOM_CALL_BUDGET_MAX || 50);
 /* 방 단위 플랜. 방의 AI 인원수, AI 호출 예산, 프롬프트에 넣는 대화량, 서버 유료 모델 사용 여부, 광고 표시를 플랜이 정한다.
    결제는 아직 없고, 개발용 스위치(ALLOW_DEV_PLAN=1)로만 바꿀 수 있다 */
+/* 개발 모드(DEV_UNLIMITED=1): 개발·테스트 중에는 모든 방·계정을 플러스로 보고 호출·인원·무료 풀 한도를 푼다.
+   제공사 자체 한도(속도 제한 등)와 연결당 메시지 속도 제한(도배 방지)은 그대로다. 공개 전에는 반드시 끈다 */
+const DEV_UNLIMITED = process.env.DEV_UNLIMITED === '1';
 const UNLIMITED = 1000000; // 사실상 제한 없음(표시는 "무제한"). 결제가 붙기 전까지의 임시 정책
 const PLANS = {
   free: { label: '무료', ais: 5, budgetDefault: BUDGET_DEFAULT, budgetMax: BUDGET_MAX, ctx: 10, premium: false, ads: true, customPipeline: false, shareDays: 7, refund: false },
@@ -188,7 +191,7 @@ try {
   const ads = JSON.parse(process.env.HOUSE_ADS || 'null');
   if (Array.isArray(ads) && ads.length) HOUSE_ADS = ads.slice(0, 10).map(a => ({ text: String(a.text || '').slice(0, 80), url: /^https:\/\//.test(String(a.url || '')) ? String(a.url).slice(0, 300) : '' })).filter(a => a.text);
 } catch (e) { console.error('HOUSE_ADS 형식 오류: 기본 광고를 씁니다.'); }
-const planOf = room => PLANS[room.plan] || PLANS.free;
+const planOf = room => DEV_UNLIMITED ? PLANS.plus : (PLANS[room.plan] || PLANS.free);
 const NOTE_MAX = 8, NOTE_LEN = 120;
 const LIMITS = { rooms: 200, humans: 12, ais: 6, text: 1000, history: 300, doc: 8000, persona: 200 };
 const TURN_CHARS = 300;
@@ -289,7 +292,7 @@ try {
     }
   });
 } catch (e) { console.error('FREE_EXTRA_BACKENDS 형식 오류: 무시합니다.'); }
-const FREE_ROOM_CAP = Number(process.env.FREE_ROOM_CAP || 100);   // 방 하나가 공용 무료 풀을 다 쓰지 않게(실제로 올라간 AI 말 기준)
+const FREE_ROOM_CAP = DEV_UNLIMITED ? UNLIMITED : Number(process.env.FREE_ROOM_CAP || 100);   // 방 하나가 공용 무료 풀을 다 쓰지 않게(실제로 올라간 AI 말 기준)
 /* 새 방의 기본 발언 방식: free = 실제 채팅방처럼 AI가 끼어들지 스스로 판단(기본), mention = 부른 AI만 답함 */
 const PARALLEL_OFF = process.env.PARALLEL_TURNS === '0';
 const DEFAULT_POLICY = ['free', 'mention', 'round'].includes(process.env.DEFAULT_POLICY) ? process.env.DEFAULT_POLICY : 'free';
@@ -303,7 +306,7 @@ function freeTick() {
 }
 function freeUsable(b) {
   freeTick();
-  return freeConfigured(b) && (freeState.used[b.id] || 0) < b.cap && (freeState.cool[b.id] || 0) <= Date.now();
+  return freeConfigured(b) && (DEV_UNLIMITED || (freeState.used[b.id] || 0) < b.cap) && (freeState.cool[b.id] || 0) <= Date.now();
 }
 function freeLeft() {
   freeTick();
@@ -326,10 +329,11 @@ function acct(sub, name) {
   return a;
 }
 /* ---------- 계정 플랜과 일일 크레딧 ---------- */
-const DAILY = { free: Number(process.env.DAILY_FREE_CALLS || 60), plus: Number(process.env.DAILY_PLUS_CALLS || UNLIMITED) };
+const DAILY = { free: DEV_UNLIMITED ? UNLIMITED : Number(process.env.DAILY_FREE_CALLS || 60), plus: Number(process.env.DAILY_PLUS_CALLS || UNLIMITED) };
 const kstDay = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
 const nextResetAt = () => Math.floor((Date.now() + 9 * 3600000) / 86400000 + 1) * 86400000 - 9 * 3600000;
 function planOfAccount(sub) {
+  if (DEV_UNLIMITED) return 'plus';
   const a = accounts[sub]; if (!a) return 'free';
   if (a.planUntil && a.planUntil < Date.now()) { a.plan = 'free'; a.planUntil = 0; accountsDirty = true; }
   return PLANS[a.plan] ? a.plan : 'free';
@@ -592,7 +596,7 @@ function getRoom(id) {
   if (room || !store.enabled) return room;
   const d = store.read('rooms/' + id);
   if (!d) return undefined;
-  room = reviveRoom(d); rooms.set(id, room);
+  room = reviveRoom(d); if (DEV_UNLIMITED) { room.plan = 'plus'; room.budget.limit = Math.max(room.budget.limit, PLANS.plus.budgetDefault); } rooms.set(id, room);
   return room;
 }
 function flushStore() {
@@ -650,7 +654,7 @@ function newRoom(id) {
   return {
     id, asset: null, rules: '', clients: new Set(), ais: [], messages: [], seq: 0,
     policy: DEFAULT_POLICY, maxStreak: 4, streak: 0, lastAI: null, gen: 0,
-    ownerSub: '', ownerName: '', picture: '', mode: null, pipeline: null, pipelineDefault: null, deliv: null, delivHist: [], library: [], brand: null, dms: new Map(), aidms: new Map(), shareCount: 0, refunds: 0, runCalls: 0, stats: { runs: 0, calls: 0, byAI: {} }, plan: 'free', budget: { used: 0, limit: PLANS.free.budgetDefault }, doc: '', cleanup: null, members: {}, banned: [], integrations: {}, created: Date.now(), lastActive: Date.now(), memory: ''
+    ownerSub: '', ownerName: '', picture: '', mode: null, pipeline: null, pipelineDefault: null, deliv: null, delivHist: [], library: [], brand: null, dms: new Map(), aidms: new Map(), shareCount: 0, refunds: 0, runCalls: 0, stats: { runs: 0, calls: 0, byAI: {} }, plan: DEV_UNLIMITED ? 'plus' : 'free', budget: { used: 0, limit: (DEV_UNLIMITED ? PLANS.plus : PLANS.free).budgetDefault }, doc: '', cleanup: null, members: {}, banned: [], integrations: {}, created: Date.now(), lastActive: Date.now(), memory: ''
   };
 }
 async function syncRoomExternal(room, tokens, force) {
@@ -1285,7 +1289,7 @@ function harvestDoc(room, ai, text) {
    안전장치: 사람이 말한 뒤 AI 말은 연속 발언 한도(maxStreak)까지, 예산·크레딧은 판단 호출마다 차감한다 */
 /* 고정 횟수 제한 대신: AI들이 '사람이 말한 뒤 AI끼리 몇 번 말했는지'를 보고 스스로 마무리하고, 수다가 길어질수록 반응도 느려진다.
    비용 폭주를 막는 안전선(CHAT_SAFETY_MAX, 기본 24)만 둔다. 방에 사람이 아무도 없으면 AI끼리 떠들지 않는다 */
-const CHAT_SAFETY_MAX = Math.max(2, Number(process.env.CHAT_SAFETY_MAX || 24)), CHAT_SLOWDOWN_MS = Number(process.env.CHAT_SLOWDOWN_MS || 700);
+const CHAT_SAFETY_MAX = Math.max(2, Number(process.env.CHAT_SAFETY_MAX || (DEV_UNLIMITED ? 100 : 24))), CHAT_SLOWDOWN_MS = Number(process.env.CHAT_SLOWDOWN_MS || 700);
 const TYPE_MIN_MS = Number(process.env.CHAT_TYPE_MIN_MS || 600), TYPE_PER_CHAR_MS = Number(process.env.CHAT_TYPE_PER_CHAR_MS || 35), TYPE_MAX_MS = Number(process.env.CHAT_TYPE_MAX_MS || 4000);
 const JIT_MIN = Number(process.env.CHAT_JITTER_MIN_MS || 300), JIT_MAX = Math.max(JIT_MIN, Number(process.env.CHAT_JITTER_MAX_MS || 2500));
 function chatOf(room) { return room.chat || (room.chat = { busy: new Set(), again: new Set(), timers: new Map(), sinceHuman: 0, noted: false, limitNoted: false, sub: '', on: false, rethinks: {} }); }
@@ -2095,7 +2099,7 @@ const server = http.createServer(async (req, res) => {
     /* 배포 확인용: 어떤 커밋이 떠 있는지, 무료 풀이 켜졌는지(어느 백엔드인지만, 키는 절대 포함하지 않음) */
     freeTick();
     return json(200, { ok: true, rooms: rooms.size, persist: store.enabled,
-      secrets: require('./secrets').status(),
+      secrets: require('./secrets').status(), dev: DEV_UNLIMITED,
       version: (process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || '').slice(0, 7) || null, up: Math.round(process.uptime()),
       free: { available: freeAvailable(), backends: FREE_BACKENDS.filter(freeConfigured).map(b => ({ id: b.id, left: Math.max(0, b.cap - (freeState.used[b.id] || 0)), cooling: (freeState.cool[b.id] || 0) > Date.now() })) } });
   }
@@ -2385,6 +2389,7 @@ server.listen(PORT, () => {
   if (hasServerKey && !MANAGED_DAILY_CALLS && !MANAGED_DAILY_USD) console.warn('[경고] 서버 API 키가 설정돼 있는데 MANAGED_DAILY_CALLS / MANAGED_DAILY_USD가 모두 0(상한 없음)입니다. 공개하기 전에 하루 비용 상한을 정하세요.');
   if (hasServerKey && MANAGED_DAILY_USD > 0 && !Object.keys(PRICES).length) console.warn('[경고] MANAGED_DAILY_USD는 MODEL_PRICES 단가가 있어야 작동합니다. MODEL_PRICES가 비어 있어 금액 상한이 적용되지 않습니다.');
   console.log('AI 채팅방 서버 http://localhost:' + PORT + '  | AI 모드: ' + live + ' | 방당 예산 ' + BUDGET_DEFAULT + '회');
+  if (DEV_UNLIMITED) console.warn('[개발 모드] DEV_UNLIMITED=1: 모든 방·계정이 플러스이고 호출·인원·무료 풀 한도가 풀려 있습니다. 공개 전에 끄세요.');
   const fb = FREE_BACKENDS.filter(freeConfigured).map(b => b.id);
   console.log('무료 풀: ' + (fb.length ? fb.join(', ') : '없음(AI는 데모 응답)') + (process.env.RENDER_GIT_COMMIT ? ' | 커밋 ' + process.env.RENDER_GIT_COMMIT.slice(0, 7) : ''));
 });

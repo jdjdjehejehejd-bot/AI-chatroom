@@ -48,6 +48,8 @@ npm start          # http://localhost:3000
 | `MANAGED_DAILY_CALLS` | 운영자 서버 키로 나가는 유료 제공사 호출의 **하루(KST) 전체 상한**. 0이면 끔(기본). 플러스가 무제한인 동안 운영자 비용의 안전장치로 쓴다. 넘으면 해당 호출은 제공사로 나가지 않고 오류로 처리되며 개인 키·무료 모델·데모는 영향 없음. 관리자 요약에 오늘 호출 수가 나온다 |
 | `MANAGED_DAILY_USD` | 위와 같은 서버 키 호출의 **금액 기준 비상 차단**(USD, 기본 0=끔). `MODEL_PRICES` 단가가 있고 제공사가 usage를 보고한 호출만 합산한다(단가 없는 호출·실패 호출은 안 잡히고, 동시에 진행 중인 호출은 한도를 조금 넘길 수 있음). 호출 수 상한과 함께 쓴다 |
 
+**개발 모드(`DEV_UNLIMITED=1`, 현재 `secrets.enc`에 켜져 있음)**: 모든 방·계정을 플러스로 보고 AI 인원·방 예산·일일 크레딧·방 무료 한도·서버 무료 풀 일일 상한을 풉니다(자유 채팅 안전선은 100). 제공사 자체 한도와 연결당 메시지 속도 제한은 그대로입니다. 공개 전에는 `CONFIG_KEY=<열쇠> node scripts/seal-secrets.js DEV_UNLIMITED=`로 끕니다. `/healthz`의 `dev`로 확인합니다.
+
 **암호화된 설정(`secrets.enc`)**: 제공사 키 같은 비밀 값은 저장소의 `secrets.enc`에 AES-256-GCM으로 암호화해 두고, 서버에는 열쇠 `CONFIG_KEY` 하나만 환경변수로 넣는다. 호스팅을 옮겨도 `CONFIG_KEY`만 새 곳에 넣으면 된다. 서버 환경변수에 같은 이름이 있으면 그 값이 우선한다. 값 추가·변경: `CONFIG_KEY=<열쇠> node scripts/seal-secrets.js NAME=value`(빈 값이면 삭제). 현재 들어 있는 항목: NVIDIA 무료 풀(`NVIDIA_API_KEY`, `FREE_NVIDIA_CONFIRMED=1`, 모델 `nvidia/nemotron-3-ultra-550b-a55b`, 하루 상한 2000). 열쇠를 잃어버리면 파일은 못 열고, 키를 새로 받아 다시 만든다.
 
 **키 없는 공개 무료 API(기본 켜짐)**: 서버에 키가 하나도 없어도 [Pollinations](https://github.com/pollinations/pollinations)(`https://text.pollinations.ai/openai`, 모델 `gpt-oss-20b`)와 LLM7(`https://api.llm7.io/v1`, 모델 `default`)로 실제 답을 낸다. 2026-11-22 실제 호출로 동작을 확인했다. 익명 한도가 공개되지 않았거나 줄어든 적이 있고 예고 없이 바뀔 수 있어 하루 상한(`FREE_CAP_POLLINATIONS` 기본 500, `FREE_CAP_LLM7` 기본 300)을 두고, 키가 있는 무료 풀이 있으면 그쪽을 먼저 쓴다. 입력이 두 서비스로 전송되므로 개인정보처리방침에 적었다. 끄려면 `FREE_KEYLESS=0`. 모델은 `FREE_POLLINATIONS_MODELS`, `FREE_LLM7_MODELS`로 바꾼다.
