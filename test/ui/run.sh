@@ -3,7 +3,7 @@
 # 서버는 이 스크립트가 띄우고 끝나면 정리한다. 실행: bash test/ui/run.sh
 set -u
 export FREE_KEYLESS=0   # 테스트는 실제 외부 무료 API를 부르지 않는다
-export CHAT_JITTER_MIN_MS=0 CHAT_JITTER_MAX_MS=120 CHAT_TYPE_MIN_MS=0 CHAT_TYPE_PER_CHAR_MS=0
+export CHAT_JITTER_MIN_MS=0 CHAT_JITTER_MAX_MS=120 CHAT_TYPE_MIN_MS=0 CHAT_TYPE_PER_CHAR_MS=0 CHAT_SLOWDOWN_MS=0
 export DEFAULT_POLICY=${DEFAULT_POLICY:-mention}   # 기존 화면 테스트는 멘션 방식 기준(자율 방식은 autonomy 테스트가 따로 검증)
 HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$HERE/../.."; cd "$HERE"
 fail=0

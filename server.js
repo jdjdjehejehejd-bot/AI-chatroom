@@ -1116,7 +1116,8 @@ function demoReply(room, ai) {
   const k = room.messages.filter(m => m.kind === 'ai' && m.who === ai.name).length;
   const others = room.ais.filter(a => a !== ai), o = others.length ? others[k % others.length].name : null;
   const step = k % 3;
-  if (ai.canPass && (room.messages.length + room.ais.indexOf(ai)) % 3 === 0) return '[PASS]';
+  const spectating = room.messages.slice(-6).some(m => m.kind === 'human' && /^\[구경\]/.test(m.text || ''));
+  if (ai.canPass && !spectating && (room.messages.length + room.ais.indexOf(ai)) % 3 === 0) return '[PASS]';
   if (others.length && k === 1) return '[DM @' + o + '] (데모) 사람들 눈치채기 전에 방금 흐름 어떻게 보세요?\n[데모] 잠깐 생각 중입니다.';
   if (step === 0) return '[데모] \'' + t + '\' 에 대해 ' + ai.name + '의 입장에서 말씀드리면, 제 역할(' + ai.persona + ')상 이렇게 보입니다.';
   if (step === 1) return o ? '[데모] @' + o + ' 방금 흐름에 대해 어떻게 생각하세요?' : '[데모] 조금 더 구체적인 정보가 있으면 판단하기 쉽겠습니다.';
@@ -1309,13 +1310,14 @@ function chatIdle(room) {
   const st = chatOf(room);
   if (st.busy.size || st.timers.size || !st.on) return;
   st.on = false;
+  if (st.onIdle) { const f = st.onIdle; st.onIdle = null; f(); }
   if (room.runErr) trackF('run_failed', room); else if (room.runCalls > 0) trackF('run_completed', room);
   if (room.runDeliv) trackF('run_with_deliverable', room);
   broadcast(room, { t: 'typing', who: null }); maybeSummarize(room, st.sub);
 }
 function chatHuman(room, text, sub) {
   const st = chatOf(room);
-  st.sinceHuman = 0; st.noted = false; st.limitNoted = false; st.capNoted = false; st.sub = sub; st.rethinks = {};
+  st.sinceHuman = 0; st.noted = false; st.limitNoted = false; st.capNoted = false; st.sub = sub; st.rethinks = {}; st.capOverride = 0;
   if (!st.on) { st.on = true; room.runErr = false; room.runDeliv = false; room.runCalls = 0; room.runTok = { in: 0, out: 0, missing: 0 }; room.stats.runs++; trackF('run_started', room); }
   for (const a of mentioned(room, text, null)) if (a.muted) system(room, a.name + '은(는) 뮤트 상태라 말하지 않습니다.', 'AI_MUTED_SKIP');
   chatWake(room, null);
@@ -1323,8 +1325,8 @@ function chatHuman(room, text, sub) {
 async function chatThink(room, ai) {
   const st = chatOf(room);
   if (!freeChatActive(room) || !room.ais.includes(ai) || ai.muted) return chatIdle(room);
-  if (st.sinceHuman >= CHAT_SAFETY_MAX) {
-    if (!st.noted) { st.noted = true; system(room, 'AI들이 한참 이야기해서 잠시 쉽니다. 누가 말하면 다시 이어집니다.', 'STREAK_LIMIT'); }
+  if (st.sinceHuman >= (st.capOverride || CHAT_SAFETY_MAX)) {
+    if (!st.noted && !st.capOverride) { st.noted = true; system(room, 'AI들이 한참 이야기해서 잠시 쉽니다. 누가 말하면 다시 이어집니다.', 'STREAK_LIMIT'); }
     return chatIdle(room);
   }
   if (![...room.clients].some(c => c.readyState === 1)) return chatIdle(room);   // 보는 사람이 없으면 떠들지 않는다
@@ -1383,7 +1385,7 @@ async function chatThink(room, ai) {
   st.busy.delete(ai.id);
   if (gen !== room.gen || !freeChatActive(room)) return chatIdle(room);
   if (isPass(text)) room.stats.passes = (room.stats.passes || 0) + 1;
-  else if (st.sinceHuman >= CHAT_SAFETY_MAX) {
+  else if (st.sinceHuman >= (st.capOverride || CHAT_SAFETY_MAX)) {
     if (!st.noted) { st.noted = true; system(room, 'AI들이 한참 이야기해서 잠시 쉽니다. 누가 말하면 다시 이어집니다.', 'STREAK_LIMIT'); }
   } else {
     room.lastAI = ai;
@@ -1699,9 +1701,18 @@ function handle(ws, m) {
       room.lastReq = topic;
       funnel(room, 'human_msg'); track('spectate_started');
       const prevPolicy = room.policy, prevStreak = room.maxStreak;
-      room.policy = 'free'; room.maxStreak = turns;
-      /* 처음 둘은 반드시 말하고(PASS 불가), 이후는 AI가 알아서 이어 간다 */
-      orchestrate(room, live.slice(0, 2), ws.user ? ws.user.sub : '').finally(() => { room.policy = prevPolicy; room.maxStreak = prevStreak; broadcast(room, meta(room)); });
+      room.policy = 'free';
+      if (PARALLEL_OFF) {
+        room.maxStreak = turns;
+        orchestrate(room, live.slice(0, 2), ws.user ? ws.user.sub : '').finally(() => { room.policy = prevPolicy; room.maxStreak = prevStreak; broadcast(room, meta(room)); });
+        return;
+      }
+      /* 자유 채팅 엔진으로: AI들이 주제를 보고 각자 끼어들고, 올리기 전에 새 말을 다시 읽는다(서로 엇갈리지 않게).
+         횟수를 지정했을 때만 그만큼에서 멈추고, 아니면 AI가 알아서 마무리한다. 끝나면 원래 발언 방식으로 돌아간다 */
+      const st = chatOf(room);
+      chatHuman(room, topic, ws.user ? ws.user.sub : '');
+      st.capOverride = m.turns != null ? turns : 0;
+      st.onIdle = () => { room.policy = prevPolicy; room.maxStreak = prevStreak; broadcast(room, meta(room)); };
       return;
     }
     case 'msg': {

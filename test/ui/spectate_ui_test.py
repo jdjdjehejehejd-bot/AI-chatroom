@@ -16,9 +16,9 @@ with sync_playwright() as p:
     pg.fill("#ainame","둘째"); pg.fill("#aipersona","p"); pg.select_option("#aiprov","demo"); pg.click("#addai"); pg.wait_for_function("document.querySelectorAll('#ais .ai-item').length==2")
     check("two AIs: spectate chip appears", pg.locator("#spectate").count()==1)
     n0=pg.locator("#log .row").count()
-    pg.fill("#text","짜장면 vs 짬뽕"); pg.click("#spectate"); pg.wait_for_timeout(150)
-    check("several AIs show typing bubbles at the same time", pg.locator("#log .row.typing").count()>=2, pg.locator("#log .row.typing").count())
-    pg.wait_for_timeout(3850)
+    pg.evaluate("window.__typ=0; new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{ if(n.classList&&n.classList.contains('typing')) window.__typ++; }))).observe(document.getElementById('log'),{childList:true})")
+    pg.fill("#text","짜장면 vs 짬뽕"); pg.click("#spectate"); pg.wait_for_timeout(4000)
+    check("speaking AIs show a typing bubble before their line", pg.evaluate("window.__typ")>=1, pg.evaluate("window.__typ"))
     check("no typing bubbles left after the run", pg.locator("#log .row.typing").count()==0, pg.locator("#log .row.typing").count())
     n1=pg.locator("#log .row").count()-n0
     check("spectate produced a human line + >=2 AI lines", n1>=3, n1)
