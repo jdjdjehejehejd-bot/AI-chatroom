@@ -751,7 +751,8 @@
 ["연동 설정을 저장했어요", "Integration settings saved", "連携設定を保存しました", "已保存集成设置", "Se guardó la configuración de integración."],
 ["동기화하지 못했습니다.", "Could not sync", "同期できませんでした", "同步失败", "No se pudo sincronizar."],
 ["검색하지 못했습니다.", "Could not search", "検索できませんでした", "搜索失败", "No se pudo buscar."],
-["Notion에 내보냈습니다.", "Exported to Notion", "Notionに書き出しました", "已导出到 Notion", "Exportado a Notion."]
+["Notion에 내보냈습니다.", "Exported to Notion", "Notionに書き出しました", "已导出到 Notion", "Exportado a Notion."],
+["이 방의 무료 AI 대화량을 다 썼습니다. 내 무료 키로 연결한 AI를 초대하면 계속 이야기할 수 있어요.", "This room has used up its free AI chat allowance. Invite an AI connected with your own free key to keep talking.", "このルームの無料AI会話量を使い切りました。自分の無料キーで接続したAIを招待すると続けられます。", "本房间的免费 AI 对话量已用完。邀请用你自己免费密钥连接的 AI 即可继续聊天。", "Esta sala agotó su cupo de chat gratuito con IA. Invita a una IA conectada con tu propia clave gratuita para seguir hablando."]
 ];
   function pick() {
     var c = null, q = /[?&]lang=([a-z]{2})/.exec(location.search);

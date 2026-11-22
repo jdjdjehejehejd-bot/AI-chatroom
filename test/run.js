@@ -4,7 +4,7 @@ const { spawnSync } = require('child_process'), fs = require('fs'), path = requi
 const only = process.argv.slice(2);
 // npm test must never use a developer's real provider credentials. Mock-provider
 // tests set their own keys explicitly when spawning the server.
-const testEnv = { ...process.env, FREE_KEYLESS: '0', DEFAULT_POLICY: process.env.DEFAULT_POLICY || 'mention', CHAT_JITTER_MIN_MS: '0', CHAT_JITTER_MAX_MS: '120' };
+const testEnv = { ...process.env, FREE_KEYLESS: '0', DEFAULT_POLICY: process.env.DEFAULT_POLICY || 'mention', CHAT_JITTER_MIN_MS: '0', CHAT_JITTER_MAX_MS: '120', CHAT_TYPE_MIN_MS: '0', CHAT_TYPE_PER_CHAR_MS: '0' };
 for (const key of ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY', 'GROQ_API_KEY', 'GOOGLE_API_KEY', 'MISTRAL_API_KEY', 'NVIDIA_API_KEY', 'AI_MODEL', 'FREE_EXTRA_BACKENDS', 'MISTRAL_FREE_TRAINING_OPT_OUT_CONFIRMED', 'FREE_MISTRAL_MODELS', 'FREE_CAP_MISTRAL', 'GEMINI_API_KEY', 'CEREBRAS_API_KEY', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'FREE_NVIDIA_CONFIRMED', 'FREE_GEMINI_CONFIRMED', 'FREE_CEREBRAS_CONFIRMED', 'FREE_CLOUDFLARE_CONFIRMED', 'FREELLMAPI_URL', 'FREELLMAPI_KEY', 'FREELLMAPI_MODELS', 'FREE_CAP_FREELLMAPI', 'CONFIG_KEY']) delete testEnv[key];
 const files = fs.readdirSync(__dirname).filter(f => f.endsWith('.test.js') && (!only.length || only.some(o => f.startsWith(o)))).sort();
 let bad = 0;

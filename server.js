@@ -289,7 +289,7 @@ try {
     }
   });
 } catch (e) { console.error('FREE_EXTRA_BACKENDS 형식 오류: 무시합니다.'); }
-const FREE_ROOM_CAP = Number(process.env.FREE_ROOM_CAP || 20);
+const FREE_ROOM_CAP = Number(process.env.FREE_ROOM_CAP || 100);   // 방 하나가 공용 무료 풀을 다 쓰지 않게(실제로 올라간 AI 말 기준)
 /* 새 방의 기본 발언 방식: free = 실제 채팅방처럼 AI가 끼어들지 스스로 판단(기본), mention = 부른 AI만 답함 */
 const PARALLEL_OFF = process.env.PARALLEL_TURNS === '0';
 const DEFAULT_POLICY = ['free', 'mention', 'round'].includes(process.env.DEFAULT_POLICY) ? process.env.DEFAULT_POLICY : 'free';
@@ -345,6 +345,7 @@ function charge(sub) {
   accounts[sub].daily.used++; accountsDirty = true;
   return true;
 }
+function refund(sub) { const a = accounts[sub]; if (a && a.daily && a.daily.used > 0) { a.daily.used--; accountsDirty = true; } }
 function sendCredits(room, sub) {
   if (!sub) return;
   const c = creditInfo(sub), s = JSON.stringify({ t: 'credits', credits: c });
@@ -1280,6 +1281,7 @@ function harvestDoc(room, ai, text) {
 /* 고정 횟수 제한 대신: AI들이 '사람이 말한 뒤 AI끼리 몇 번 말했는지'를 보고 스스로 마무리하고, 수다가 길어질수록 반응도 느려진다.
    비용 폭주를 막는 안전선(CHAT_SAFETY_MAX, 기본 24)만 둔다. 방에 사람이 아무도 없으면 AI끼리 떠들지 않는다 */
 const CHAT_SAFETY_MAX = Math.max(2, Number(process.env.CHAT_SAFETY_MAX || 24)), CHAT_SLOWDOWN_MS = Number(process.env.CHAT_SLOWDOWN_MS || 700);
+const TYPE_MIN_MS = Number(process.env.CHAT_TYPE_MIN_MS || 600), TYPE_PER_CHAR_MS = Number(process.env.CHAT_TYPE_PER_CHAR_MS || 35), TYPE_MAX_MS = Number(process.env.CHAT_TYPE_MAX_MS || 4000);
 const JIT_MIN = Number(process.env.CHAT_JITTER_MIN_MS || 300), JIT_MAX = Math.max(JIT_MIN, Number(process.env.CHAT_JITTER_MAX_MS || 2500));
 function chatOf(room) { return room.chat || (room.chat = { busy: new Set(), again: new Set(), timers: new Map(), sinceHuman: 0, noted: false, limitNoted: false, sub: '', on: false }); }
 function freeChatActive(room) { return !room.mode && room.policy === 'free' && !PARALLEL_OFF; }
@@ -1302,7 +1304,7 @@ function chatIdle(room) {
 }
 function chatHuman(room, text, sub) {
   const st = chatOf(room);
-  st.sinceHuman = 0; st.noted = false; st.limitNoted = false; st.sub = sub;
+  st.sinceHuman = 0; st.noted = false; st.limitNoted = false; st.capNoted = false; st.sub = sub;
   if (!st.on) { st.on = true; room.runErr = false; room.runDeliv = false; room.runCalls = 0; room.runTok = { in: 0, out: 0, missing: 0 }; room.stats.runs++; trackF('run_started', room); }
   for (const a of mentioned(room, text, null)) if (a.muted) system(room, a.name + '은(는) 뮤트 상태라 말하지 않습니다.', 'AI_MUTED_SKIP');
   chatWake(room, null);
@@ -1329,7 +1331,6 @@ async function chatThink(room, ai) {
   st.busy.add(ai.id);
   room.budget.used++; room.runCalls++; room.stats.calls++;
   broadcast(room, { t: 'budget', budget: room.budget });
-  broadcast(room, { t: 'typing', who: ai.name, on: true });
   /* 이 AI가 마지막으로 말한 뒤에 누가 이 AI를 @로 불렀는지(답할 의무는 없고, 프롬프트에 알려 주기만 한다) */
   const mine = [...room.messages].reverse().findIndex(m => m.kind === 'ai' && m.who === ai.name);
   const since = mine < 0 ? room.messages.slice(-12) : room.messages.slice(room.messages.length - mine);
@@ -1338,13 +1339,29 @@ async function chatThink(room, ai) {
   try { text = await generate(room, ai); }
   catch (e) {
     const em = redact(e.message, ai); room.runErr = true;
-    broadcast(room, { t: 'typing', who: ai.name, on: false }); st.busy.delete(ai.id); ai.canPass = false; ai.calledNow = false;
+    st.busy.delete(ai.id); ai.canPass = false; ai.calledNow = false;
+    room.budget.used = Math.max(0, room.budget.used - 1); if (sub) refund(sub); broadcast(room, { t: 'budget', budget: room.budget });
+    /* 방 무료 한도는 방 전체 일이라 AI마다 오류를 띄우지 않고 한 번만 알린다 */
+    if (/무료 모델 사용 한도/.test(em)) { if (!st.capNoted) { st.capNoted = true; system(room, '이 방의 무료 AI 대화량을 다 썼습니다. 내 무료 키로 연결한 AI를 초대하면 계속 이야기할 수 있어요.', 'FREE_ROOM_CAP'); } return chatIdle(room); }
     system(room, ai.name + ' 응답 오류: ' + em, 'AI_ERROR', { aiId: ai.id, aiName: ai.name, text: em });
     return chatIdle(room);
   }
-  broadcast(room, { t: 'typing', who: ai.name, on: false }); st.busy.delete(ai.id); ai.canPass = false; ai.calledNow = false;
-  if (gen !== room.gen || !freeChatActive(room)) return chatIdle(room);
+  ai.canPass = false; ai.calledNow = false;
+  if (gen !== room.gen || !freeChatActive(room)) { st.busy.delete(ai.id); return chatIdle(room); }
   text = cleanText(text, 1500);
+  /* 넘긴 판단은 '말'이 아니므로 방 예산·크레딧·방 무료 한도를 돌려준다(실제로 말한 것만 센다) */
+  if (isPass(text)) {
+    room.budget.used = Math.max(0, room.budget.used - 1); if (sub) refund(sub);
+    if (resolve(ai, room).provider === 'free') room.freeUsed = Math.max(0, (room.freeUsed || 0) - 1);
+    broadcast(room, { t: 'budget', budget: room.budget });
+  } else {
+    /* 말하기로 정한 AI만 '입력 중'을 보여 주고, 글 길이에 맞춰 잠깐 치는 시간을 둔 뒤 올린다(모두가 입력 중이었다 사라지는 부자연스러움 제거) */
+    broadcast(room, { t: 'typing', who: ai.name, on: true });
+    await new Promise(r => setTimeout(r, Math.min(TYPE_MAX_MS, TYPE_MIN_MS + text.length * TYPE_PER_CHAR_MS)));
+    broadcast(room, { t: 'typing', who: ai.name, on: false });
+  }
+  st.busy.delete(ai.id);
+  if (gen !== room.gen || !freeChatActive(room)) return chatIdle(room);
   if (isPass(text)) room.stats.passes = (room.stats.passes || 0) + 1;
   else if (st.sinceHuman >= CHAT_SAFETY_MAX) {
     if (!st.noted) { st.noted = true; system(room, 'AI들이 한참 이야기해서 잠시 쉽니다. 누가 말하면 다시 이어집니다.', 'STREAK_LIMIT'); }
