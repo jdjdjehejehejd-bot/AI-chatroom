@@ -4,9 +4,9 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));const res=[];const check=(n,c,d
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'aichat-'));let out='';
 const start=()=>{const sv=spawn('node',['server.js'],{cwd:ROOT,env:Object.assign({},process.env,{PORT:'3321',DATA_DIR:dir,DEMO_DELAY_MS:'20',SESSION_SECRET:'as',EMAIL_DEV_LOG:'1',ADMIN_TOKEN:'adm',PUBLIC_URL:'http://127.0.0.1:3321',OPERATOR_NAME:'테스트운영',CONTACT_EMAIL:'help@example.com',REQUIRE_LOGIN:'0'})});sv.stdout.on('data',d=>out+=d);sv.stderr.on('data',d=>out+=d);return sv};
 const B='http://127.0.0.1:3321';
-const post=(p,o,h={})=>fetch(B+p,{method:'POST',headers:Object.assign({'content-type':'application/json'},h),body:JSON.stringify(o)});
+const post=(p,o,h={})=>fetch(B+p,{method:'POST',headers:Object.assign({'content-type':'application/json',origin:B},h),body:JSON.stringify(o)});
 async function login(email){await post('/auth/email/start',{email});await sleep(150);const code=[...out.matchAll(new RegExp(email.replace('.','\\.')+' 코드: (\\d{6})','g'))].pop()[1];const r=await post('/auth/email/verify',{email,code});return r.headers.getSetCookie().map(c=>c.split(';')[0]).join('; ')}
-const cl=(room,name,cookie,consent)=>new Promise(r=>{const ws=new WS('ws://127.0.0.1:3321/ws',{headers:cookie?{cookie}:{}});const ev=[];ws.on('message',d=>ev.push(JSON.parse(d)));ws.on('close',()=>ev.push({t:'_closed'}));ws.on('open',()=>{ws.send(JSON.stringify({t:'join',room,name,consent}));setTimeout(()=>r({ws,ev,s:o=>ws.send(JSON.stringify(o))}),400)})});
+const cl=(room,name,cookie,consent)=>new Promise(r=>{const ws=new WS('ws://127.0.0.1:3321/ws',{headers:cookie?{cookie,origin:B}:{}});const ev=[];ws.on('message',d=>ev.push(JSON.parse(d)));ws.on('close',()=>ev.push({t:'_closed'}));ws.on('open',()=>{ws.send(JSON.stringify({t:'join',room,name,consent}));setTimeout(()=>r({ws,ev,s:o=>ws.send(JSON.stringify(o))}),400)})});
 const msgs=c=>c.ev.filter(e=>e.t==='msg').map(e=>e.msg);
 (async()=>{
  let sv=start();await sleep(900);

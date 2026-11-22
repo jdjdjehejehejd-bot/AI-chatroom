@@ -11,7 +11,7 @@ let ok=0,bad=0;const t=(n,c)=>{c?ok++:bad++;console.log((c?'PASS ':'FAIL ')+n)};
 const jw=http.createServer((q,r)=>{r.writeHead(200,{'content-type':'application/json','cache-control':'max-age=3600'});r.end(JSON.stringify({keys:[jwk]}))}).listen(3401,async()=>{
  const sv=spawn('node',['server.js'],{env:Object.assign({},process.env,{PORT:'3402',GOOGLE_CLIENT_ID:CID,GOOGLE_JWKS_URL:'http://127.0.0.1:3401/',SESSION_SECRET:'s3cret',DEMO:'1',REQUIRE_LOGIN:'0'}),stdio:'ignore'});
  await new Promise(r=>setTimeout(r,1200));
- const post=(body,hdr={})=>fetch('http://127.0.0.1:3402/auth/google',{method:'POST',headers:Object.assign({'content-type':'application/json'},hdr),body:JSON.stringify(body)});
+ const post=(body,hdr={})=>fetch('http://127.0.0.1:3402/auth/google',{method:'POST',headers:Object.assign({'content-type':'application/json',origin:'http://127.0.0.1:3402'},hdr),body:JSON.stringify(body)});
  try{
   let r=await (await fetch('http://127.0.0.1:3402/auth/config')).json();t('config clientId',r.clientId===CID);
   r=await post({credential:tok()});const ck=r.headers.get('set-cookie')||'';t('valid token 200',r.status===200);t('cookie HttpOnly',/HttpOnly/.test(ck)&&/SameSite=Lax/.test(ck));
@@ -29,7 +29,7 @@ const jw=http.createServer((q,r)=>{r.writeHead(200,{'content-type':'application/
   t('cross-origin 403',(await post({credential:tok()},{origin:'https://evil.com'})).status===403);
   // WS: owner gating
   const conn=(hdr)=>new Promise(res=>{const w=new WebSocket('ws://127.0.0.1:3402/ws',{headers:hdr});const ev=[];w.on('message',d=>ev.push(JSON.parse(d)));w.on('open',()=>res({w,ev}));w.on('error',()=>res(null))});
-  const A=await conn({cookie});A.w.send(JSON.stringify({t:'join',consent:true,room:'authroom',name:'방장'}));await new Promise(r=>setTimeout(r,400));
+  const A=await conn({cookie,origin:'http://127.0.0.1:3402'});A.w.send(JSON.stringify({t:'join',consent:true,room:'authroom',name:'방장'}));await new Promise(r=>setTimeout(r,400));
   const st=A.ev.find(e=>e.t==='state');t('owner state has user + youOwner',st&&st.user&&st.youOwner===true);
   const B=await conn({});B.w.send(JSON.stringify({t:'join',consent:true,room:'authroom',name:'손님'}));await new Promise(r=>setTimeout(r,400));
   const sb=B.ev.find(e=>e.t==='state');t('guest youOwner false',sb&&sb.youOwner===false);
@@ -38,8 +38,20 @@ const jw=http.createServer((q,r)=>{r.writeHead(200,{'content-type':'application/
   B.w.send(JSON.stringify({t:'msg',text:'hi'}));await new Promise(r=>setTimeout(r,300));
   t('guest can chat',B.ev.some(e=>e.t==='msg'&&e.msg&&e.msg.text==='hi'));
   const C=await conn({origin:'https://evil.com'});t('WS cross-origin refused',C===null);
-  const A2=await conn({cookie});A2.w.send(JSON.stringify({t:'join',consent:true,room:'r2',name:'a'}));await new Promise(r=>setTimeout(r,300));
-  const A3=await conn({cookie});A3.w.send(JSON.stringify({t:'join',consent:true,room:'r3',name:'a'}));await new Promise(r=>setTimeout(r,300));
+  // CSRF: Origin 없는 쿠키 요청은 출처 증명(Sec-Fetch-Site/Referer)이 있어야 한다
+  const raw=(hdr)=>fetch('http://127.0.0.1:3402/auth/github/disconnect',{method:'POST',headers:hdr});
+  t('csrf: cookie, no origin, no proof -> 403',(await raw({cookie})).status===403);
+  t('csrf: cookie + sec-fetch-site cross-site -> 403',(await raw({cookie,'sec-fetch-site':'cross-site'})).status===403);
+  t('csrf: cookie + sec-fetch-site same-site -> 403',(await raw({cookie,'sec-fetch-site':'same-site'})).status===403);
+  t('csrf: cookie + sec-fetch-site same-origin -> ok',(await raw({cookie,'sec-fetch-site':'same-origin'})).status===200);
+  t('csrf: cookie + same-host referer -> ok',(await raw({cookie,referer:'http://127.0.0.1:3402/'})).status===200);
+  t('csrf: cookie + foreign referer -> 403',(await raw({cookie,referer:'https://evil.com/x'})).status===403);
+  t('csrf: origin "null" -> 403',(await raw({cookie,origin:'null'})).status===403);
+  t('csrf: no cookie, no origin -> ok',(await raw({})).status===200);
+  const D=await conn({cookie});t('csrf: WS cookie without origin refused',D===null);
+  const E=await conn({});t('csrf: WS no cookie no origin ok',!!E);if(E)E.w.close();
+  const A2=await conn({cookie,origin:'http://127.0.0.1:3402'});A2.w.send(JSON.stringify({t:'join',consent:true,room:'r2',name:'a'}));await new Promise(r=>setTimeout(r,300));
+  const A3=await conn({cookie,origin:'http://127.0.0.1:3402'});A3.w.send(JSON.stringify({t:'join',consent:true,room:'r3',name:'a'}));await new Promise(r=>setTimeout(r,300));
   t('stable dm key across rooms (same account)',true);
  }catch(e){console.log('ERR',e);bad++}
  console.log(ok+' pass, '+bad+' fail');sv.kill();jw.close();process.exit(bad?1:0);

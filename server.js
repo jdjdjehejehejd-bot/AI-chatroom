@@ -104,7 +104,19 @@ function readBody(req, max) {
     req.on('end', () => res(b)); req.on('error', rej);
   });
 }
-const sameOrigin = req => { const o = req.headers.origin; if (!o) return true; try { return new URL(o).host === req.headers.host; } catch (e) { return false; } };
+/* CSRF 방어: Origin이 있으면 반드시 같은 호스트여야 한다. Origin이 없을 때는
+   인증 쿠키가 없는 요청(서버 간 호출·헬스체크 등)만 통과시키고, 인증 쿠키가 실린 요청은
+   Sec-Fetch-Site(same-origin/none) 또는 같은 호스트의 Referer로 출처를 증명해야 한다. */
+const AUTH_COOKIE_RE = /(?:^|;\s*)(?:aichat_session|aichat_gh|aichat_notion)=/;
+const hostOf = v => { try { return new URL(v).host; } catch (e) { return null; } };
+const sameOrigin = req => {
+  const h = req.headers, o = h.origin;
+  if (o) return o !== 'null' && hostOf(o) === h.host;
+  if (!AUTH_COOKIE_RE.test(h.cookie || '')) return true;
+  const sfs = h['sec-fetch-site'];
+  if (sfs) return sfs === 'same-origin' || sfs === 'none';
+  return !!h.referer && hostOf(h.referer) === h.host;
+};
 const dmKeyFor = sub => hmac(SESSION_SECRET, 'dm|' + sub).toString('hex').slice(0, 32);
 /* ---------- GitHub 로그인·연동, 이메일 코드 로그인 ---------- */
 const GH_ID = (process.env.GITHUB_CLIENT_ID || '').trim(), GH_SECRET = (process.env.GITHUB_CLIENT_SECRET || '').trim();
@@ -1351,6 +1363,9 @@ function chatHuman(room, text, sub) {
 async function chatThink(room, ai) {
   const st = chatOf(room);
   if (!freeChatActive(room) || !room.ais.includes(ai) || ai.muted) return chatIdle(room);
+  /* 마지막으로 판단(말하거나 넘김)한 뒤로 다른 참가자가 새로 한 말이 없으면 볼 것이 없다: 호출하지 않는다.
+     (동시에 생각하던 AI가 같은 대화를 두 번 판단해 혼자 연달아 말하던 경쟁 상태의 원인. 호출 비용도 아낀다) */
+  if (ai.chatSeen != null && lastOtherSeq(room, ai) === ai.chatSeen) return chatIdle(room);
   if (st.sinceHuman >= (st.capOverride || CHAT_SAFETY_MAX)) {
     if (!st.noted && !st.capOverride) { st.noted = true; system(room, 'AI들이 한참 이야기해서 잠시 쉽니다. 누가 말하면 다시 이어집니다.', 'STREAK_LIMIT'); }
     return chatIdle(room);
@@ -1399,7 +1414,7 @@ async function chatThink(room, ai) {
      새 대화를 다시 읽고 판단한다. 둘이 같은 말을 하거나 차례를 가로채던 문제를 막는다(한 사람 말마다 AI당 3번까지) */
   const stale = () => lastOtherSeq(room, ai) !== seen;
   const rethink = () => { giveBack(); st.busy.delete(ai.id); st.rethinks[ai.id] = (st.rethinks[ai.id] || 0) + 1; if (st.rethinks[ai.id] <= 3) chatSchedule(room, ai); else st.again.delete(ai.id); chatIdle(room); };
-  if (isPass(text)) giveBack();
+  if (isPass(text)) { giveBack(); ai.chatSeen = seen; }
   else {
     if (stale()) return rethink();
     /* 말하기로 정한 AI만 '입력 중'을 보여 주고, 글 길이에 맞춰 잠깐 치는 시간을 둔 뒤 올린다 */
@@ -1424,7 +1439,7 @@ async function chatThink(room, ai) {
     if (text) {
       addMsg(room, 'ai', ai.name, text);
       funnel(room, 'ai_reply'); harvestDoc(room, ai, text); harvestDeliverable(room, ai, text);
-      st.sinceHuman++; room.streak = st.sinceHuman;
+      st.sinceHuman++; room.streak = st.sinceHuman; ai.chatSeen = seen;
       room.stats.byAI[ai.name] = (room.stats.byAI[ai.name] || 0) + 1;
       chatWake(room, ai);   // 새 말을 본 다른 AI들이 또 각자 반응할 수 있다
     }

@@ -6,7 +6,7 @@ jobs:
   server:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy: { matrix: { node: [20, 22] } }
+    strategy: { fail-fast: false, matrix: { node: [20, 22] } }   # 한 버전이 실패해도 다른 버전 결과를 끝까지 본다
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

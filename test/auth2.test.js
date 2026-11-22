@@ -14,7 +14,7 @@ const mock=http.createServer((q,r)=>{let b='';q.on('data',c=>b+=c);q.on('end',()
  const sv=spawn('node',['server.js'],{cwd:ROOT,env:Object.assign({},process.env,{PORT:'3303',SESSION_SECRET:'s3',DEMO_DELAY_MS:'20',GITHUB_CLIENT_ID:'ghid',GITHUB_CLIENT_SECRET:'ghsec',GITHUB_AUTH_URL:'http://127.0.0.1:4301/gh/authorize',GITHUB_TOKEN_URL:'http://127.0.0.1:4301/gh/token',GITHUB_API_URL:'http://127.0.0.1:4301/gh/api',RESEND_API_KEY:'rk',MAIL_FROM:'a@b.co',RESEND_URL:'http://127.0.0.1:4301/mail',PUBLIC_URL:'http://127.0.0.1:3303'}),stdio:'ignore'});
  await sleep(900);
  const B='http://127.0.0.1:3303';
- const post=(p,o,h={})=>fetch(B+p,{method:'POST',headers:Object.assign({'content-type':'application/json'},h),body:JSON.stringify(o)});
+ const post=(p,o,h={})=>fetch(B+p,{method:'POST',headers:Object.assign({'content-type':'application/json',origin:B},h),body:JSON.stringify(o)});
  const cookies=r=>(r.headers.getSetCookie?r.headers.getSetCookie():[]).map(c=>c.split(';')[0]).filter(c=>!/=$/.test(c));
  const jar=cs=>cs.join('; ');
  try{
@@ -59,7 +59,7 @@ const mock=http.createServer((q,r)=>{let b='';q.on('data',c=>b+=c);q.on('end',()
   t('anonymous join refused (LOGIN_REQUIRED)',aev.some(e=>e.t==='err'&&e.code==='LOGIN_REQUIRED')&&!aev.some(e=>e.t==='state'));
   t('config reports required',(await (await fetch(B+'/auth/config')).json()).required===true);
   // gist export
-  const ws=new WebSocket('ws://127.0.0.1:3303/ws',{headers:{cookie:jar(both)}});const ev=[];ws.on('message',d=>ev.push(JSON.parse(d)));await new Promise(r=>ws.on('open',r));
+  const ws=new WebSocket('ws://127.0.0.1:3303/ws',{headers:{cookie:jar(both),origin:B}});const ev=[];ws.on('message',d=>ev.push(JSON.parse(d)));await new Promise(r=>ws.on('open',r));
   ws.send(JSON.stringify({t:'join',consent:true,room:'gist1',name:'Ben',mode:'code'}));await sleep(400);
   t('no deliverable yet -> 400',(await post('/gh/gist',{room:'gist1'},{cookie:jar(both)})).status===400);
   ws.send(JSON.stringify({t:'msg',text:'피보나치 함수'}));await sleep(3500);

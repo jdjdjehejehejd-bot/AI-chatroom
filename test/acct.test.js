@@ -4,9 +4,9 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));const res=[];const check=(n,c,d
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'aichat-'));let out='';
 const start=()=>{const sv=spawn('node',['server.js'],{cwd:ROOT,env:Object.assign({},process.env,{PORT:'3309',DATA_DIR:dir,DEMO_DELAY_MS:'20',SESSION_SECRET:'as',EMAIL_DEV_LOG:'1',ADMIN_TOKEN:'adm-token-xyz',DAILY_FREE_CALLS:'3',DAILY_PLUS_CALLS:'50',PUBLIC_URL:'http://127.0.0.1:3309'})});sv.stdout.on('data',d=>out+=d);return sv};
 const B='http://127.0.0.1:3309';
-const post=(p,o,h={})=>fetch(B+p,{method:'POST',headers:Object.assign({'content-type':'application/json'},h),body:JSON.stringify(o)});
+const post=(p,o,h={})=>fetch(B+p,{method:'POST',headers:Object.assign({'content-type':'application/json',origin:B},h),body:JSON.stringify(o)});
 async function login(email){await post('/auth/email/start',{email});await sleep(150);const code=[...out.matchAll(new RegExp(email.replace('.','\\.')+' 코드: (\\d{6})','g'))].pop()[1];const r=await post('/auth/email/verify',{email,code});return r.headers.getSetCookie().map(c=>c.split(';')[0]).join('; ')}
-const cl=(room,name,cookie)=>new Promise(r=>{const ws=new WS('ws://127.0.0.1:3309/ws',{headers:{cookie}});const ev=[];ws.on('message',d=>ev.push(JSON.parse(d)));ws.on('open',()=>{ws.send(JSON.stringify({t:'join',consent:true,room,name}));setTimeout(()=>r({ws,ev}),400)})});
+const cl=(room,name,cookie)=>new Promise(r=>{const ws=new WS('ws://127.0.0.1:3309/ws',{headers:{cookie,origin:B}});const ev=[];ws.on('message',d=>ev.push(JSON.parse(d)));ws.on('open',()=>{ws.send(JSON.stringify({t:'join',consent:true,room,name}));setTimeout(()=>r({ws,ev}),400)})});
 (async()=>{
  let sv=start();await sleep(900);
  const cookie=await login('ben@example.com');
