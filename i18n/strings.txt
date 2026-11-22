@@ -771,3 +771,5 @@ AI들이 한참 이야기해서 잠시 쉽니다. 누가 말하면 다시 이어
 검색하지 못했습니다. || Could not search || 検索できませんでした || 搜索失败 || No se pudo buscar.
 Notion에 내보냈습니다. || Exported to Notion || Notionに書き出しました || 已导出到 Notion || Exportado a Notion.
 이 방의 무료 AI 대화량을 다 썼습니다. 내 무료 키로 연결한 AI를 초대하면 계속 이야기할 수 있어요. || This room has used up its free AI chat allowance. Invite an AI connected with your own free key to keep talking. || このルームの無料AI会話量を使い切りました。自分の無料キーで接続したAIを招待すると続けられます。 || 本房间的免费 AI 对话量已用完。邀请用你自己免费密钥连接的 AI 即可继续聊天。 || Esta sala agotó su cupo de chat gratuito con IA. Invita a una IA conectada con tu propia clave gratuita para seguir hablando.
+방에 들어가는 중… || Entering the room… || ルームに入室中… || 正在进入房间… || Entrando en la sala…
+서버가 잠에서 깨는 중일 수 있어요. 최대 1분쯤 걸려요. || The server may be waking up. This can take up to a minute. || サーバーが起動中かもしれません。最大1分ほどかかります。 || 服务器可能正在唤醒，最多需要约 1 分钟。 || Puede que el servidor se esté despertando. Puede tardar hasta un minuto.

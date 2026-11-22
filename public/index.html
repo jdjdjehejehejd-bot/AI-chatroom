@@ -130,6 +130,12 @@ label.lb { display:block; font-size:12px; font-weight:700; margin:14px 0 6px; co
 .keyguide { margin-top:10px; padding:10px 12px; border-radius:10px; background:var(--surface); border:1px solid var(--edge); font-size:13px; line-height:1.55; }
 .keyguide ol { margin:6px 0 4px; padding-left:18px; }
 .keyguide a { color:var(--accent); word-break:break-all; }
+.joinwait { display:none; margin:auto; text-align:center; color:var(--muted); }
+.joinwait b { display:block; color:var(--ink); font-size:15px; margin:12px 0 4px; }
+.joinwait .spin { width:28px; height:28px; margin:0 auto; border-radius:50%; border:3px solid var(--edge); border-top-color:var(--accent); animation:jw 0.8s linear infinite; }
+@keyframes jw { to { transform:rotate(360deg); } }
+#entrypane.joining .joinwait { display:block; }
+#entrypane.joining .entry { display:none; }
 .empty-list { text-align:center; padding:36px 20px; color:var(--muted); }
 .empty-list .art { position:relative; width:84px; height:56px; margin:0 auto 14px; }
 .empty-list .art i { position:absolute; top:0; width:40px; height:40px; border-radius:32%; border:1px solid var(--edge); }
@@ -514,6 +520,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 
   <main id="main">
     <section class="pane" id="entrypane">
+      <div class="joinwait" id="joinwait" role="status" aria-live="polite"><div class="spin" aria-hidden="true"></div><b id="joinwaitt">방에 들어가는 중…</b><small id="joinwaits"></small></div>
       <form class="entry" id="joinform">
         <button class="icon" id="entryback" type="button" aria-label="목록으로" style="margin:-10px 0 4px -12px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
         <div class="eyebrow" style="margin-bottom:8px">사람 + 여러 AI</div>
@@ -1093,7 +1100,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   }
   function goHome() {
     clearTimeout(retryTimer); netbar(""); if (ws) { ws.onclose = null; ws.onerror = null; try { ws.close(); } catch (e) {} ws = null; }
-    resetRoomState(); roomId = ""; inRoomUrl = false; pendingAsset = null; showJoinAsset(); jmode = ""; document.querySelector('input[name="jmode"][value=""]').checked = true;
+    setJoining(false); resetRoomState(); roomId = ""; inRoomUrl = false; pendingAsset = null; showJoinAsset(); jmode = ""; document.querySelector('input[name="jmode"][value=""]').checked = true;
     try { history.replaceState(null, "", location.pathname); } catch (e) {}
     $("room").hidden = true; $("entrypane").hidden = false; document.title = _t("AI 채팅방");
     setEntry(); renderRooms(); setView("list");
@@ -1110,7 +1117,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     if (!$('jname').value.trim() && store("consent") === "1") {
       $('jname').value = _t("게스트 {id}", { id: rand(4) });
     }
-    if ($("jname").value.trim() && ($("jconsent").checked || store("consent") === "1" || (authUser && authUser.consent))) go();
+    if ($("jname").value.trim() && ($("jconsent").checked || store("consent") === "1" || (authUser && authUser.consent))) { if (store("consent") === "1") $("jconsent").checked = true; go(); }
     else $("jname").focus();
   }
   if (inRoomUrl) setView("main");
@@ -1262,13 +1269,19 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   })();
   $("jconsent").checked = store("consent") === "1";
 
+  /* 입장하는 동안에는 입력 화면 대신 '들어가는 중'만 보인다(입력 화면이 잠깐 떴다 사라지던 문제). 서버가 잠에서 깨는 중이면 안내를 덧붙인다 */
+  var joinWaitTimer = null;
+  function setJoining(on) {
+    $("entrypane").classList.toggle("joining", !!on); clearTimeout(joinWaitTimer); $("joinwaits").textContent = "";
+    if (on) joinWaitTimer = setTimeout(function () { $("joinwaits").textContent = _t("서버가 잠에서 깨는 중일 수 있어요. 최대 1분쯤 걸려요."); }, 4000);
+  }
   function go() {
     var name = $("jname").value.trim();
     if (!name) { joinErr(_t("이름을 입력하세요.")); return; }
     if (!$("jconsent").checked && !(authUser && authUser.consent)) { joinErr(_t("이용약관과 개인정보처리방침에 동의해 주세요.")); return; }
     store("consent", "1"); store("nick", name);
     if (!inRoomUrl) { roomId = rand(6); try { history.replaceState(null, "", "?room=" + roomId); } catch (e) {} }
-    $("jgo").disabled = true; joinErr("");
+    $("jgo").disabled = true; joinErr(""); setJoining(true);
     connect(name, true);
   }
   var lastName = "", retry = 0, retryTimer = null, firstJoin = null;
@@ -1285,9 +1298,9 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     sock.onclose = function () {
       if (ws !== sock) return;
       if (joined) { netbar(_t("연결이 끊어졌어요. 다시 연결하는 중…")); retry++; retryTimer = setTimeout(function () { if (joined) connect(lastName, false); }, Math.min(15000, 800 * Math.pow(1.7, retry))); }
-      else $("jgo").disabled = false;
+      else { $("jgo").disabled = false; setJoining(false); }
     };
-    sock.onerror = function () { if (!joined) { joinErr(_t("서버에 연결하지 못했습니다.")); $("jgo").disabled = false; } };
+    sock.onerror = function () { if (!joined) { joinErr(_t("서버에 연결하지 못했습니다.")); $("jgo").disabled = false; setJoining(false); } };
   }
   window.addEventListener("online", function () { if (joined && ws && ws.readyState !== 1 && ws.readyState !== 0) { clearTimeout(retryTimer); connect(lastName, false); } });
   $("joinform").addEventListener("submit", function (e) { e.preventDefault(); if (authCfg.required && !authUser) { joinErr(_t("로그인한 뒤에 시작할 수 있어요.")); return; } go(); });
@@ -2182,7 +2195,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 
   function onMsg(m) {
     if (m.t === "state") {
-      me = m.you; joined = true;
+      me = m.you; joined = true; setJoining(false);
       $("entrypane").hidden = true; $("room").hidden = false; setView("main");
       $("log").textContent = ""; last = null; lastDay = ""; m.messages.forEach(addMessage);
       $("doc").value = m.doc || ""; deliv = m.deliv || null; dhist = m.dhist || []; viewVer = null; dmThreads = m.dms || {}; aidms = m.aidms || []; cmp = m.compare || null; credits = m.credits || credits; youOwner = m.youOwner !== false; renderCredits(); renderPub(); loadMyRooms();
@@ -2244,7 +2257,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       if (cmpBusy) { cmpBusy = false; renderDeliv(); }
       if (m.code === "KICKED" || m.code === "ROOM_DELETED" || m.code === "TOO_MANY") { joined = false; try { history.replaceState(null, "", location.pathname); } catch (e) {} alert_(_tx(m.text)); setTimeout(function () { location.href = location.pathname; }, 1200); return; }
       if (m.code === "CONSENT_REQUIRED") { $("jconsent").checked = false; }
-      if (!joined) { joinErr(_tx(m.text)); $("jgo").disabled = false; } else toast(_tx(m.text));
+      if (!joined) { setJoining(false); joinErr(_tx(m.text)); $("jgo").disabled = false; } else toast(_tx(m.text));
     }
   }
 
