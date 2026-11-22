@@ -1104,7 +1104,14 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     loadIntegrationConfig();
     try { history.replaceState(null, "", "?room=" + id); } catch (e) {}
     setEntry(); renderRooms(); setView("main");
-    if ($("jname").value.trim()) go(); else $("jname").focus();
+    /* 최근 방을 눌렀는데 닉네임이 비어 있으면 입장 버튼만 보이는 문제가 생긴다.
+       이미 동의한 사용자는 이 기기에서만 쓰는 게스트 이름으로 바로 입장한다.
+       처음 방문했거나 동의하지 않은 사용자는 이름·동의 입력을 계속 요구한다. */
+    if (!$('jname').value.trim() && store("consent") === "1") {
+      $('jname').value = _t("게스트 {id}", { id: rand(4) });
+    }
+    if ($("jname").value.trim() && ($("jconsent").checked || store("consent") === "1" || (authUser && authUser.consent))) go();
+    else $("jname").focus();
   }
   if (inRoomUrl) setView("main");
   setEntry();
