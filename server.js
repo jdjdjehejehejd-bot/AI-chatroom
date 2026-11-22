@@ -994,6 +994,7 @@ function buildPrompt(room, ai, dm) {
     (room.ais.length > 1 ? '다른 AI에게만 몰래 말하려면 줄을 "[DM @이름] 내용"으로 쓴다(최대 2줄, 받은 AI가 답할 수 있고 사람도 몰래 볼 수 있다). ' : '') +
     (ai.canPass && ai.calledNow ? '\n누군가 방금 너를 @로 불렀다. 보통은 답하는 게 자연스럽지만 꼭 그래야 하는 건 아니다. 할 말이 없으면 정확히 [PASS] 한 단어만 출력한다. ' : '') +
     (ai.canPass && room.chat && room.chat.sinceHuman > 0 ? '\n사람이 마지막으로 말한 뒤 AI들끼리 ' + room.chat.sinceHuman + '번 말했다. 길어질수록 꼭 보탤 말만 하고, 이야기가 일단락됐거나 같은 얘기가 돌면 넘겨서 자연스럽게 마무리한다. ' : '') +
+    (ai.canPass ? '\n사람이 정한 진행 방식(차례, 순서, 게임 규칙)이 있으면 반드시 따른다. 네 차례가 아니면 [PASS]. 다른 참가자의 차례나 말을 대신하지 않고, 이미 나온 답과 같은 말을 하지 않는다. 채팅이므로 **굵게** 같은 마크다운 꾸밈은 쓰지 않는다. ' : '') +
     (ai.canPass && !ai.calledNow ? '\n여기는 단체 채팅방이고 지금 너를 직접 부르지 않았다. 사람처럼 끼어들 이유가 있을 때만 말한다: 질문이 너에게 하는 말 같거나, 아직 아무도 답하지 않은 질문이거나, 새 정보·다른 관점·맞장구·농담처럼 대화에 보탤 게 있을 때. 이미 나온 말을 되풀이하거나 할 말이 없으면 정확히 [PASS] 한 단어만 출력한다. ' : '') +
     (room.memory ? '\n방 기억(오래된 대화의 요약. 최근 대화와 함께 참고한다):\n' + room.memory : '') +
     (room.doc ? '\n현재 공유 문서:\n' + room.doc : '') +
@@ -1283,7 +1284,9 @@ function harvestDoc(room, ai, text) {
 const CHAT_SAFETY_MAX = Math.max(2, Number(process.env.CHAT_SAFETY_MAX || 24)), CHAT_SLOWDOWN_MS = Number(process.env.CHAT_SLOWDOWN_MS || 700);
 const TYPE_MIN_MS = Number(process.env.CHAT_TYPE_MIN_MS || 600), TYPE_PER_CHAR_MS = Number(process.env.CHAT_TYPE_PER_CHAR_MS || 35), TYPE_MAX_MS = Number(process.env.CHAT_TYPE_MAX_MS || 4000);
 const JIT_MIN = Number(process.env.CHAT_JITTER_MIN_MS || 300), JIT_MAX = Math.max(JIT_MIN, Number(process.env.CHAT_JITTER_MAX_MS || 2500));
-function chatOf(room) { return room.chat || (room.chat = { busy: new Set(), again: new Set(), timers: new Map(), sinceHuman: 0, noted: false, limitNoted: false, sub: '', on: false }); }
+function chatOf(room) { return room.chat || (room.chat = { busy: new Set(), again: new Set(), timers: new Map(), sinceHuman: 0, noted: false, limitNoted: false, sub: '', on: false, rethinks: {} }); }
+/* 이 AI가 아닌 참가자(사람·다른 AI)가 마지막으로 올린 말의 번호. 시스템 알림은 대화가 아니므로 뺀다 */
+function lastOtherSeq(room, ai) { for (let i = room.messages.length - 1; i >= 0; i--) { const m = room.messages[i]; if (m.kind !== 'system' && m.who !== ai.name) return m.id; } return 0; }
 function freeChatActive(room) { return !room.mode && room.policy === 'free' && !PARALLEL_OFF; }
 function chatSchedule(room, ai, extra) {
   const st = chatOf(room);
@@ -1304,7 +1307,7 @@ function chatIdle(room) {
 }
 function chatHuman(room, text, sub) {
   const st = chatOf(room);
-  st.sinceHuman = 0; st.noted = false; st.limitNoted = false; st.capNoted = false; st.sub = sub;
+  st.sinceHuman = 0; st.noted = false; st.limitNoted = false; st.capNoted = false; st.sub = sub; st.rethinks = {};
   if (!st.on) { st.on = true; room.runErr = false; room.runDeliv = false; room.runCalls = 0; room.runTok = { in: 0, out: 0, missing: 0 }; room.stats.runs++; trackF('run_started', room); }
   for (const a of mentioned(room, text, null)) if (a.muted) system(room, a.name + '은(는) 뮤트 상태라 말하지 않습니다.', 'AI_MUTED_SKIP');
   chatWake(room, null);
@@ -1329,6 +1332,7 @@ async function chatThink(room, ai) {
   if (sub) sendCredits(room, sub);
   const gen = room.gen;
   st.busy.add(ai.id);
+  const seen = lastOtherSeq(room, ai);   // 이 AI가 읽고 생각하기 시작한 시점의 대화
   room.budget.used++; room.runCalls++; room.stats.calls++;
   broadcast(room, { t: 'budget', budget: room.budget });
   /* 이 AI가 마지막으로 말한 뒤에 누가 이 AI를 @로 불렀는지(답할 의무는 없고, 프롬프트에 알려 주기만 한다) */
@@ -1350,15 +1354,23 @@ async function chatThink(room, ai) {
   if (gen !== room.gen || !freeChatActive(room)) { st.busy.delete(ai.id); return chatIdle(room); }
   text = cleanText(text, 1500);
   /* 넘긴 판단은 '말'이 아니므로 방 예산·크레딧·방 무료 한도를 돌려준다(실제로 말한 것만 센다) */
-  if (isPass(text)) {
+  const giveBack = () => {
     room.budget.used = Math.max(0, room.budget.used - 1); if (sub) refund(sub);
     if (resolve(ai, room).provider === 'free') room.freeUsed = Math.max(0, (room.freeUsed || 0) - 1);
     broadcast(room, { t: 'budget', budget: room.budget });
-  } else {
-    /* 말하기로 정한 AI만 '입력 중'을 보여 주고, 글 길이에 맞춰 잠깐 치는 시간을 둔 뒤 올린다(모두가 입력 중이었다 사라지는 부자연스러움 제거) */
+  };
+  /* 사람처럼: 생각하는 사이(또는 치는 사이) 다른 사람이 말을 올렸으면, 낡은 생각을 그대로 올리지 않고
+     새 대화를 다시 읽고 판단한다. 둘이 같은 말을 하거나 차례를 가로채던 문제를 막는다(한 사람 말마다 AI당 3번까지) */
+  const stale = () => lastOtherSeq(room, ai) !== seen;
+  const rethink = () => { giveBack(); st.busy.delete(ai.id); st.rethinks[ai.id] = (st.rethinks[ai.id] || 0) + 1; if (st.rethinks[ai.id] <= 3) chatSchedule(room, ai); else st.again.delete(ai.id); chatIdle(room); };
+  if (isPass(text)) giveBack();
+  else {
+    if (stale()) return rethink();
+    /* 말하기로 정한 AI만 '입력 중'을 보여 주고, 글 길이에 맞춰 잠깐 치는 시간을 둔 뒤 올린다 */
     broadcast(room, { t: 'typing', who: ai.name, on: true });
     await new Promise(r => setTimeout(r, Math.min(TYPE_MAX_MS, TYPE_MIN_MS + text.length * TYPE_PER_CHAR_MS)));
     broadcast(room, { t: 'typing', who: ai.name, on: false });
+    if (stale()) return rethink();
   }
   st.busy.delete(ai.id);
   if (gen !== room.gen || !freeChatActive(room)) return chatIdle(room);

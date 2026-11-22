@@ -14,6 +14,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     let text = '[PASS]', delay = 30;
     if (mode === 'chatty') text = name + ' 의견';
     if (mode === 'one' && name === '나' && log.filter(l => l.name === '나').length === 1) text = '나는 이렇게 생각해';
+    if (mode === 'dup') { const ctx = ((j.messages[1] || {}).content) || ''; text = /랑데부/.test(ctx) ? '[PASS]' : '랑데부'; delay = name === '가' ? 80 : 350; }
     if (mode === 'race') { text = name + ' 의견'; delay = name === '가' ? 300 : name === '다' ? 100 : 200; }
     setTimeout(() => { rq.writeHead(200, { 'content-type': 'application/json' }); rq.end(JSON.stringify({ choices: [{ message: { content: text } }] })); }, delay);
   }); });
@@ -41,7 +42,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     ws.send(JSON.stringify({ t: 'msg', text: '@나 너한테 묻는 거야' })); await sleep(1500);
     check('@mention is a hint, not an order: mentioned AI is told, and may still pass', ais() - a0 === 0 && log.find(l => l.name === '나').called && !log.find(l => l.name === '가').called, JSON.stringify(log));
     a0 = ais(); log.length = 0; mode = 'chatty';
-    ws.send(JSON.stringify({ t: 'msg', text: '자유롭게 떠들어 봐' })); await sleep(4000);
+    ws.send(JSON.stringify({ t: 'msg', text: '자유롭게 떠들어 봐' })); await sleep(9000);
     check('no fixed 4-line cap: AIs keep going while they have something to say, stopped only by the safety line (7 here)', ais() - a0 === 7 && ev.some(e => e.t === 'msg' && e.msg.code === 'STREAK_LIMIT'), ais() - a0);
     check('prompt tells AIs how long they have been chatting so they can wind down', log.some(l => l.wind), '');
     const n0 = ev.length; mode = 'race';
@@ -49,9 +50,16 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     const seq = ev.slice(n0).filter(e => (e.t === 'typing' && e.on) || (e.t === 'msg' && e.msg.kind === 'ai')).map(e => e.t === 'typing' ? 'T:' + e.who : 'M:' + e.msg.who);
     const firstMsg = seq.findIndex(x => x.startsWith('M:'));
     check('the three speakers type at the same time before any reply', ['가', '나', '다'].every(n => seq.slice(0, firstMsg).includes('T:' + n)), JSON.stringify(seq));
-    check('fastest posts first, no fixed order (다, 나, 가)', seq.filter(x => x.startsWith('M:')).slice(0, 3).join(',') === 'M:다,M:나,M:가', JSON.stringify(seq));
-    await sleep(500);
+    const ms = seq.filter(x => x.startsWith('M:'));
+    check('after one posts, the others re-read before posting (no pile-up of stale replies)', ms.length >= 2 && ms.every((x, i) => i === 0 || x !== ms[i - 1]), JSON.stringify(seq));
+    await sleep(6000);
     check('typing indicators cleared when the room goes quiet', ev.slice(n0).some(e => e.t === 'typing' && e.who === null), '');
+    // 같은 대화를 보고 동시에 생각해도, 먼저 올라온 말이 있으면 낡은 생각을 버리고 다시 읽는다(중복 답 방지)
+    mode = 'allpass'; await sleep(4000);   // 앞 대화가 완전히 잦아든 뒤
+    const d0 = ev.length; mode = 'dup';
+    ws.send(JSON.stringify({ t: 'msg', text: '끝말잇기 다음 단어?' })); await sleep(3000);
+    const dups = ev.slice(d0).filter(e => e.t === 'msg' && e.msg.kind === 'ai' && e.msg.text === '랑데부').length;
+    check('no duplicate answers: a stale draft is re-thought after someone else posts', dups === 1, dups + ' ' + JSON.stringify(ev.slice(d0).filter(e => e.t === 'err' || e.t === 'msg').map(e => e.t === 'err' ? 'ERR:' + e.text : e.msg.who + ':' + e.msg.text)) + JSON.stringify(log.slice(-6)));
     ws.close();
     // 방 무료 한도에 닿으면 AI마다 오류를 띄우지 않고 한 번만 알린다
     const sv2 = spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: '3322', DEFAULT_POLICY: 'free', CHAT_JITTER_MIN_MS: '0', CHAT_JITTER_MAX_MS: '40', CHAT_TYPE_MIN_MS: '0', CHAT_TYPE_PER_CHAR_MS: '0', FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'mk', base: 'http://127.0.0.1:4121', models: ['m'], cap: 900 }]), FREE_ROOM_CAP: '2', REQUIRE_LOGIN: '0', SESSION_SECRET: 's' }), stdio: 'ignore' });
