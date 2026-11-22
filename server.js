@@ -435,7 +435,7 @@ function computeKpi(ev) {
   const rate = (sfx) => { let rated = 0, useful = 0; for (let n = 1; n <= 5; n++) { const c = g('rating.' + n + sfx); rated += c; if (n >= 4) useful += c; } return { rated, useful, usefulRate: ratio(useful, rated) }; };
   const costUsd = pre('cost_micro.') / 1e6, unpriced = pre('cost_unpriced.'), missing = pre('tok_missing.');
   const realCalls = pre('call_ok.') + pre('call_err.');
-  const failedCalls = pre('call_err.');
+  const failedCalls = pre('call_err.') - g('call_err.free');   // 무료 풀 실패는 과금이 없으므로 비용 미확인으로 치지 않는다
   const costStatus = realCalls === 0 ? 'no_real_calls' : (unpriced === 0 && missing === 0 && failedCalls === 0 ? 'fully_priced' : 'incomplete');
   const adopted = g('deliv_adopted'), rt = rate('');
   const round4 = x => Math.round(x * 10000) / 10000;
@@ -457,7 +457,7 @@ function computeKpi(ev) {
     returns: { d1: g('room_return.d1'), d2_7: g('room_return.d2_7'), d8p: g('room_return.d8p') },
     providerErrorRate: ratio(pre('call_err.'), realCalls),
     managed: { today: managedToday(), dailyCap: MANAGED_DAILY_CALLS || null, usdToday: Math.round(managedUsdToday() * 10000) / 10000, usdCap: MANAGED_DAILY_USD || null, blockedTotal: g('managed_blocked') },
-    cost: { status: costStatus, usd: round4(costUsd), perAdoptedUsd: adopted > 0 && costUsd > 0 ? round4(costUsd / adopted) : null, perUsefulUsd: rt.useful > 0 && costUsd > 0 ? round4(costUsd / rt.useful) : null, realCalls, unpricedCalls: unpriced, tokMissingCalls: missing, failedCallsUnverified: failedCalls },
+    cost: { status: costStatus, usd: round4(costUsd), perAdoptedUsd: adopted > 0 && costUsd > 0 ? round4(costUsd / adopted) : null, perUsefulUsd: rt.useful > 0 && costUsd > 0 ? round4(costUsd / rt.useful) : null, realCalls, freeCalls: pre('cost_free.'), unpricedCalls: unpriced, tokMissingCalls: missing, failedCallsUnverified: failedCalls },
     byFlow
   };
 }
@@ -1059,9 +1059,10 @@ function resolve(ai, room) {
    예) MODEL_PRICES='{"openai/<모델>":{"in":0.5,"out":1.5}}'  MODEL_PRICES_VERSION='2026-10-24 공식 가격표 확인'
    실패한 호출은 보통 usage가 없어 토큰·비용에 잡히지 않는다(재시도·실패 비용은 과소 집계될 수 있음). */
 const PRICES = (() => { try { const j = JSON.parse(process.env.MODEL_PRICES || '{}'); return j && typeof j === 'object' ? j : {}; } catch (e) { console.error('MODEL_PRICES 형식 오류: 무시합니다.'); return {}; } })();
-function noteUsage(room, prov, model, tin, tout, managed) {
+function noteUsage(room, prov, model, tin, tout, managed, free) {
   const p = /^[a-z0-9_-]{1,20}$/.test(prov) ? prov : 'other', st = room && room.stats;
   if (!Number.isFinite(tin) || !Number.isFinite(tout) || tin < 0 || tout < 0) {
+    if (free) return track('cost_free.' + p);   // 무료 호출은 토큰 보고가 없어도 비용이 0원으로 확정이라 '집계 불가'로 세지 않는다
     if (st) st.tokMissing = (st.tokMissing || 0) + 1;
     if (room && room.runTok) room.runTok.missing++;
     return track('tok_missing.' + p);
@@ -1070,6 +1071,9 @@ function noteUsage(room, prov, model, tin, tout, managed) {
   if (st) { st.tokIn = (st.tokIn || 0) + tin; st.tokOut = (st.tokOut || 0) + tout; }
   if (room && room.runTok) { room.runTok.in += tin; room.runTok.out += tout; }
   track('tok_in.' + p, tin); track('tok_out.' + p, tout);
+  /* 무료 풀(무료 등급·키 없는 공개 API) 호출은 운영자 과금이 0원으로 확정된 호출이다: '단가 없음'이 아니라 0원으로 센다.
+     (제공사가 무료 정책을 바꿔 과금하면 402로 실패하고 해당 백엔드는 쉬게 된다) */
+  if (free) return track('cost_free.' + p);
   const pr = PRICES[p + '/' + model];
   if (pr && pr.in >= 0 && pr.out >= 0) { const mc = Math.round(tin * pr.in + tout * pr.out); track('cost_micro.' + p, mc); if (managed) track('managed_cost_micro', mc); }   // 토큰 × (USD/100만 토큰) = 마이크로달러
   else track('cost_unpriced.' + p);
@@ -1096,7 +1100,7 @@ async function callChat(room, ai, cfg, dm) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { const er = new Error('API ' + r.status + ': ' + ((j.error && j.error.message) || '응답 오류')); er.status = r.status; er.retryAfter = Number(r.headers.get('retry-after')) || 0; throw er; }
   const u = j.usage || {};
-  noteUsage(room, cfg.provider || 'free', cfg.model, u.prompt_tokens, u.completion_tokens, cfg.managed);
+  noteUsage(room, cfg.provider || 'free', cfg.model, u.prompt_tokens, u.completion_tokens, cfg.managed, cfg.free);
   return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
 }
 const FONTS = { gothic: 'Noto Sans KR,sans-serif', serif: 'Noto Serif KR,serif', round: 'Jua,Noto Sans KR,sans-serif' };
@@ -1181,12 +1185,12 @@ async function callFree(room, ai, dm, opts = {}) {
     freeState.used[b.id] = (freeState.used[b.id] || 0) + 1;
     try {
       let text;
-      try { text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model }, dm); }
+      try { text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model, provider: 'free_' + b.id, free: true }, dm); }
       catch (e1) {
         /* 키 없는 공개 API는 짧은 간격 제한(429)이 잦다: 몇 초 기다렸다 한 번만 다시 시도한다 */
         if (!(b.keyless && e1.status === 429)) throw e1;
         await new Promise(r => setTimeout(r, Math.min(8, Math.max(2, e1.retryAfter || KEYLESS_RETRY_S)) * 1000));
-        text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model }, dm);
+        text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model, provider: 'free_' + b.id, free: true }, dm);
       }
       /* 생각만 하다 답을 못 낸 모델(본문이 비었음)은 실패로 보고 그 모델만 잠시 쉬게 한다 */
       if (!String(text || '').trim()) { const er = new Error('API 0: 빈 응답'); er.empty = true; throw er; }
@@ -1254,7 +1258,9 @@ async function maybeSummarize(room, sub) {
 /* 전역 비용 차단기: 운영자 서버 키로 나가는 유료 제공사 호출(개인 API 키·무료 모델·데모는 제외)을 하루(KST) 합계로 제한한다.
    MANAGED_DAILY_CALLS=0(기본)이면 끄고, 양수를 넣으면 넘는 호출은 제공사로 보내지 않고 오류로 처리한다.
    MANAGED_DAILY_USD(기본 0=끔)는 같은 호출의 금액 기준 비상 차단이다. MODEL_PRICES 단가가 있고 제공사가 usage를 보고한 호출만 합산되므로(단가 없는 호출·실패 호출은 안 잡힘) 호출 수 상한과 함께 쓴다. 집계 이벤트(managed_call.*)를 기준으로 세므로 재시작 뒤에도 이어진다. */
-const MANAGED_DAILY_CALLS = Number(process.env.MANAGED_DAILY_CALLS || 0);
+/* 개발 모드에서는 모든 방이 플러스(서버 유료 모델 사용 가능)가 되므로, 운영자가 상한을 따로 정하지 않았다면
+   서버 키로 대신 내는 호출에 하루 300회 안전 상한을 건다(0으로 명시하면 끌 수 있음). 무료 풀·개인 키는 해당 없음 */
+const MANAGED_DAILY_CALLS = Number(process.env.MANAGED_DAILY_CALLS != null && process.env.MANAGED_DAILY_CALLS !== '' ? process.env.MANAGED_DAILY_CALLS : (DEV_UNLIMITED ? 300 : 0));
 const MANAGED_DAILY_USD = Number(process.env.MANAGED_DAILY_USD || 0);
 const managedUsdToday = () => ((events[kstDay()] || {}).managed_cost_micro || 0) / 1e6;
 const managedToday = () => Object.entries(events[kstDay()] || {}).filter(([k]) => k.startsWith('managed_call.')).reduce((a, [, v]) => a + v, 0);
@@ -2151,7 +2157,7 @@ const server = http.createServer(async (req, res) => {
     /* 배포 확인용: 어떤 커밋이 떠 있는지, 무료 풀이 켜졌는지(어느 백엔드인지만, 키는 절대 포함하지 않음) */
     freeTick();
     return json(200, { ok: true, rooms: rooms.size, persist: store.enabled,
-      secrets: require('./secrets').status(), dev: DEV_UNLIMITED,
+      secrets: require('./secrets').status(), dev: DEV_UNLIMITED, managedDailyCap: MANAGED_DAILY_CALLS || null,
       version: (process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || '').slice(0, 7) || null, up: Math.round(process.uptime()),
       free: { available: freeAvailable(), backends: FREE_BACKENDS.filter(freeConfigured).map(b => ({ id: b.id, left: Math.max(0, b.cap - (freeState.used[b.id] || 0)), cooling: (freeState.cool[b.id] || 0) > Date.now() })) } });
   }

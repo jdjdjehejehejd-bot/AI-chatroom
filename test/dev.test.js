@@ -17,7 +17,7 @@ const run = async (port, env) => {
   const on = await run(3331, { DEV_UNLIMITED: '1' });
   check('dev mode: room is plus (unlimited budget)', on.meta.plan.id === 'plus' && on.meta.budget.limit >= 1000000, JSON.stringify({ plan: on.meta.plan.id, b: on.meta.budget }));
   check('dev mode: more than 5 AIs allowed', on.meta.ais.length === 7, on.meta.ais.length + ' ' + on.errs);
-  check('dev mode: room free cap lifted, healthz says dev', on.meta.free.roomCap >= 1000000 && on.h.dev === true, JSON.stringify(on.meta.free));
+  check('dev mode: room free cap lifted, healthz says dev', on.meta.free.roomCap >= 1000000 && on.h.dev === true && on.h.managedDailyCap === 300, JSON.stringify(on.meta.free));
   const off = await run(3332, { DEV_UNLIMITED: '0' });
   check('dev mode off: normal free limits (5 AIs, budget 30)', off.meta.plan.id === 'free' && off.meta.ais.length === 5 && off.meta.budget.limit === 30 && off.h.dev === false, JSON.stringify({ p: off.meta.plan.id, n: off.meta.ais.length, b: off.meta.budget }));
   console.log(res.every(Boolean) ? 'ALL OK' : 'SOME FAILED'); process.exit(res.every(Boolean) ? 0 : 1);

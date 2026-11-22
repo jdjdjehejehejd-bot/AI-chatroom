@@ -45,12 +45,12 @@ npm start          # http://localhost:3000
 | `FREE_EXTRA_BACKENDS` | 운영자가 OpenAI 호환 백엔드를 추가하는 JSON. 예: `[{"id":"ovh","base":"https://.../v1","models":["gpt-oss-120b"],"cap":100}]`, 키가 필요하면 `"key"` 추가. `mistral` ID는 예약되어 이 경로에서 무시됨 |
 | `FREE_CAP_OPENROUTER` / `FREE_CAP_GROQ` | 서버 프로세스 기준 일일 호출 상한(기본 45 / 900, UTC 초기화). 재시작·복제 서버마다 초기화되므로 제공사 한도도 함께 적용됨 |
 | `FREE_ROOM_CAP` | 방당 무료 호출 상한(기본 20) |
-| `MANAGED_DAILY_CALLS` | 운영자 서버 키로 나가는 유료 제공사 호출의 **하루(KST) 전체 상한**. 0이면 끔(기본). 플러스가 무제한인 동안 운영자 비용의 안전장치로 쓴다. 넘으면 해당 호출은 제공사로 나가지 않고 오류로 처리되며 개인 키·무료 모델·데모는 영향 없음. 관리자 요약에 오늘 호출 수가 나온다 |
+| `MANAGED_DAILY_CALLS` | 운영자 서버 키로 나가는 유료 제공사 호출의 **하루(KST) 전체 상한**. 0이면 끔(기본; 단 `DEV_UNLIMITED=1`이고 값을 따로 정하지 않으면 300). 플러스가 무제한인 동안 운영자 비용의 안전장치로 쓴다. 넘으면 해당 호출은 제공사로 나가지 않고 오류로 처리되며 개인 키·무료 모델·데모는 영향 없음. 관리자 요약에 오늘 호출 수가 나온다 |
 | `MANAGED_DAILY_USD` | 위와 같은 서버 키 호출의 **금액 기준 비상 차단**(USD, 기본 0=끔). `MODEL_PRICES` 단가가 있고 제공사가 usage를 보고한 호출만 합산한다(단가 없는 호출·실패 호출은 안 잡히고, 동시에 진행 중인 호출은 한도를 조금 넘길 수 있음). 호출 수 상한과 함께 쓴다 |
 
 **AI마다 다른 모델(무료 풀)**: 키가 있는 무료 풀의 모델 목록에서 같은 방의 다른 AI가 덜 쓰는 모델을 골라 AI마다 고정한다(성격이 일정하고, 모델마다 관점이 달라 대화가 다양해짐). 고정 모델이 시간 초과·서버 오류·빈 응답을 내면 그 모델만 잠시 쉬고 같은 키의 다른 모델이 대신하며, 결제·인증·속도 제한 같은 계정 단위 오류만 백엔드 전체를 쉬게 한다. 현재 NVIDIA 모델(2026-11-22 실제 측정, 응답 2~19초): `nemotron-3.5-super-vl-120b`, `nemotron-3-ultra-550b`, `nemotron-3.5-lightning-30b`, `minimax-m3.1-flash`. Mistral Large·GLM(30~40초)·Kimi(40초 넘게 응답 없음)는 느려서 뺐다.
 
-**개발 모드(`DEV_UNLIMITED=1`, 현재 `secrets.enc`에 켜져 있음)**: 모든 방·계정을 플러스로 보고 AI 인원·방 예산·일일 크레딧·방 무료 한도·서버 무료 풀 일일 상한을 풉니다(자유 채팅 안전선은 100). 제공사 자체 한도와 연결당 메시지 속도 제한은 그대로입니다. 공개 전에는 `CONFIG_KEY=<열쇠> node scripts/seal-secrets.js DEV_UNLIMITED=`로 끕니다. `/healthz`의 `dev`로 확인합니다.
+**개발 모드(`DEV_UNLIMITED=1`, 현재 `secrets.enc`에 켜져 있음)**: 모든 방·계정을 플러스로 보고 AI 인원·방 예산·일일 크레딧·방 무료 한도·서버 무료 풀 일일 상한을 풉니다(자유 채팅 안전선은 100). 제공사 자체 한도와 연결당 메시지 속도 제한은 그대로입니다. 공개 전에는 `CONFIG_KEY=<열쇠> node scripts/seal-secrets.js DEV_UNLIMITED=`로 끕니다. `/healthz`의 `dev`로 확인합니다. 개발 모드에서도 서버 유료 키 호출에는 하루 300회 안전 상한이 기본으로 걸립니다(`MANAGED_DAILY_CALLS`로 변경, `/healthz`의 `managedDailyCap`).
 
 **암호화된 설정(`secrets.enc`)**: 제공사 키 같은 비밀 값은 저장소의 `secrets.enc`에 AES-256-GCM으로 암호화해 두고, 서버에는 열쇠 `CONFIG_KEY` 하나만 환경변수로 넣는다. 호스팅을 옮겨도 `CONFIG_KEY`만 새 곳에 넣으면 된다. 서버 환경변수에 같은 이름이 있으면 그 값이 우선한다. 값 추가·변경: `CONFIG_KEY=<열쇠> node scripts/seal-secrets.js NAME=value`(빈 값이면 삭제). 현재 들어 있는 항목: NVIDIA 무료 풀(`NVIDIA_API_KEY`, `FREE_NVIDIA_CONFIRMED=1`, 모델 `nvidia/nemotron-3-ultra-550b-a55b`, 하루 상한 2000). 열쇠를 잃어버리면 파일은 못 열고, 키를 새로 받아 다시 만든다.
 
@@ -147,6 +147,7 @@ npm start          # http://localhost:3000
 | 공통 | `SESSION_SECRET`(고정값 필수), `PUBLIC_URL`(예: `https://example.com`), HTTPS 뒤에서는 `COOKIE_SECURE=1` |
 
 - **Google**: ID 토큰(JWT, RS256)을 서버가 Google 공개키(JWKS)로 서명·발급자·audience·만료까지 검증한다.
+- **CSRF**: 상태를 바꾸는 POST와 WebSocket 연결은 `Origin`이 있으면 같은 호스트여야 하고(`null` 거부), `Origin`이 없는데 로그인 쿠키가 실려 있으면 `Sec-Fetch-Site: same-origin/none` 또는 같은 호스트 `Referer`가 있어야 한다. 쿠키 없는 요청(서버 간 호출 등)은 영향 없음. 쿠키는 HttpOnly·SameSite=Lax.
 - **GitHub**: 표준 OAuth 웹 흐름(state 쿠키로 CSRF 방지, 복귀 경로는 같은 사이트 경로만 허용). 일반 로그인은 `read:user`, GitHub 연결은 Gist·저장소 기능을 위해 `gist repo` 권한을 요청한다.
 - **Notion**: 표준 OAuth 웹 흐름(state 쿠키로 CSRF 방지). 선택적으로 `NOTION_AUTH_URL`, `NOTION_TOKEN_URL`, `NOTION_API_URL`을 테스트용 주소로 바꿀 수 있다.
 - **이메일**: 6자리 코드를 보내고 10분 안에 입력. 코드는 해시로만 보관, 1회용, 5번 틀리면 폐기, 주소당 10분에 3회까지 발송.
@@ -237,7 +238,7 @@ npm start          # http://localhost:3000
 **KPI 계측(익명)**: 깔때기(`first_human_msg`·`first_ai_reply`·`first_deliverable`·`first_share`), 복사 성공(`copy_success`)·복사 실패·다운로드 클릭(저장 성공 아님), 채택(`deliv_adopted`, 버전당 한 번), 유용성 1~5점(`rating.N`), 방 재방문(`room_return.*`)을 흐름(free/모드)별로 센다. 같은 버전의 같은 행동은 한 번만 받고, 없는 버전·허용되지 않은 이름은 버린다. 비용 상태는 `no_real_calls`/`fully_priced`/`incomplete`로 구분한다. 정의와 한계는 `docs/VALIDATION.md`.
 
 **제공사 호출 지표**: 제공사별 성공·실패 횟수와 누적 지연(ms)을 익명 집계(`call_ok.<제공사>`, `call_err.<제공사>`, `ms.<제공사>`)로 남긴다. 평균 지연 = `ms ÷ (ok+err)`. 모델 이름·키·내용은 기록하지 않는다. 
-**토큰·비용 계측**: 제공사 응답의 `usage`만 기록한다(`tok_in.<제공사>`, `tok_out.<제공사>`). usage가 없는 호출은 추정하지 않고 `tok_missing`으로 센다. 비용은 운영자가 `MODEL_PRICES`(JSON, 100만 토큰당 USD, 키 `제공사/모델`)와 `MODEL_PRICES_VERSION`(가격 확인 날짜·출처)을 넣은 모델만 `cost_micro`(마이크로달러)로 계산하고, 나머지는 `cost_unpriced`로 센다. 단가는 코드에 넣지 않았다. 한계: 실패한 호출은 보통 usage가 없어 비용이 과소 집계되며, 실제 제공사 응답으로는 아직 검증하지 않았다(`scripts/smoke-providers.js`로 확인 필요). 실행 영수증과 정보 패널 통계에도 제공사 보고 기준 토큰이 표시된다.
+**토큰·비용 계측**: 제공사 응답의 `usage`만 기록한다(`tok_in.<제공사>`, `tok_out.<제공사>`). usage가 없는 호출은 추정하지 않고 `tok_missing`으로 센다. 비용은 운영자가 `MODEL_PRICES`(JSON, 100만 토큰당 USD, 키 `제공사/모델`)와 `MODEL_PRICES_VERSION`(가격 확인 날짜·출처)을 넣은 모델만 `cost_micro`(마이크로달러)로 계산하고, 나머지는 `cost_unpriced`로 센다. 서버 무료 풀(무료 등급·키 없는 공개 API) 호출은 운영자 과금이 0원이므로 `cost_free.<백엔드>`로 따로 세고 '단가 없음/집계 불가'로 치지 않는다(관리자 요약 `cost.freeCalls`). 단가는 코드에 넣지 않았다. 한계: 실패한 호출은 보통 usage가 없어 비용이 과소 집계되며, 실제 제공사 응답으로는 아직 검증하지 않았다(`scripts/smoke-providers.js`로 확인 필요). 실행 영수증과 정보 패널 통계에도 제공사 보고 기준 토큰이 표시된다.
 
 **방 권한** (`test/permissions.test.js`로 고정)
 

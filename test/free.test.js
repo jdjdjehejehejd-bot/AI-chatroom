@@ -44,7 +44,7 @@ const sysMsgs = c => c.ev.filter(e => e.t === 'msg' && e.msg.kind === 'system').
   sv.kill(); await sleep(200);
 
   // 2) OpenRouter 429 -> Groq 로 넘어감, 방 한도 3회
-  sv = startServer(3102, { OPENROUTER_API_KEY: 'orkey', OPENROUTER_BASE_URL: 'http://127.0.0.1:4101', GROQ_API_KEY: 'gqkey', GROQ_BASE_URL: 'http://127.0.0.1:4102', FREE_ROOM_CAP: '3' });
+  sv = startServer(3102, { OPENROUTER_API_KEY: 'orkey', OPENROUTER_BASE_URL: 'http://127.0.0.1:4101', GROQ_API_KEY: 'gqkey', GROQ_BASE_URL: 'http://127.0.0.1:4102', FREE_ROOM_CAP: '3', ADMIN_TOKEN: 'adm' });
   await sleep(600);
   c = await client(3102, 'Ben', 'room2');
   c.ws.send(JSON.stringify({ t: 'addAI', name: '무료', persona: 'p', provider: 'free', apiKey: 'zzz' })); await sleep(300);
@@ -58,6 +58,8 @@ const sysMsgs = c => c.ev.filter(e => e.t === 'msg' && e.msg.kind === 'system').
   check('groq used server key and first configured model', G.log[0] && G.log[0].auth === 'Bearer gqkey' && G.log[0].url === '/chat/completions' && G.log[0].model === 'openai/gpt-oss-120b', JSON.stringify(G.log));
   check('user model ignored', !G.log.concat(A.log).some(l => l.model === 'evil-model'));
   c.ws.send(JSON.stringify({ t: 'msg', text: '@무료 또' })); await sleep(700);
+  const kp = (await (await fetch('http://127.0.0.1:3102/admin/events', { headers: { authorization: 'Bearer adm' } })).json()).kpi;
+  check('cost: free-pool calls counted as $0 (not unpriced/missing)', kp.cost.freeCalls >= 2 && kp.cost.unpricedCalls === 0 && kp.cost.tokMissingCalls === 0 && kp.cost.usd === 0, JSON.stringify(kp.cost));
   check('openrouter in cooldown (not retried)', A.log.length === 1, A.log.length);
   check('2 replies so far', aiMsgs(c).length === 2, aiMsgs(c));
   c.ws.send(JSON.stringify({ t: 'msg', text: '@무료 셋' })); await sleep(700);
