@@ -48,6 +48,8 @@ npm start          # http://localhost:3000
 | `MANAGED_DAILY_CALLS` | 운영자 서버 키로 나가는 유료 제공사 호출의 **하루(KST) 전체 상한**. 0이면 끔(기본). 플러스가 무제한인 동안 운영자 비용의 안전장치로 쓴다. 넘으면 해당 호출은 제공사로 나가지 않고 오류로 처리되며 개인 키·무료 모델·데모는 영향 없음. 관리자 요약에 오늘 호출 수가 나온다 |
 | `MANAGED_DAILY_USD` | 위와 같은 서버 키 호출의 **금액 기준 비상 차단**(USD, 기본 0=끔). `MODEL_PRICES` 단가가 있고 제공사가 usage를 보고한 호출만 합산한다(단가 없는 호출·실패 호출은 안 잡히고, 동시에 진행 중인 호출은 한도를 조금 넘길 수 있음). 호출 수 상한과 함께 쓴다 |
 
+**AI마다 다른 모델(무료 풀)**: 키가 있는 무료 풀의 모델 목록에서 같은 방의 다른 AI가 덜 쓰는 모델을 골라 AI마다 고정한다(성격이 일정하고, 모델마다 관점이 달라 대화가 다양해짐). 고정 모델이 시간 초과·서버 오류·빈 응답을 내면 그 모델만 잠시 쉬고 같은 키의 다른 모델이 대신하며, 결제·인증·속도 제한 같은 계정 단위 오류만 백엔드 전체를 쉬게 한다. 현재 NVIDIA 모델(2026-11-22 실제 측정, 응답 2~19초): `nemotron-3.5-super-vl-120b`, `nemotron-3-ultra-550b`, `nemotron-3.5-lightning-30b`, `minimax-m3.1-flash`. Mistral Large·GLM(30~40초)·Kimi(40초 넘게 응답 없음)는 느려서 뺐다.
+
 **개발 모드(`DEV_UNLIMITED=1`, 현재 `secrets.enc`에 켜져 있음)**: 모든 방·계정을 플러스로 보고 AI 인원·방 예산·일일 크레딧·방 무료 한도·서버 무료 풀 일일 상한을 풉니다(자유 채팅 안전선은 100). 제공사 자체 한도와 연결당 메시지 속도 제한은 그대로입니다. 공개 전에는 `CONFIG_KEY=<열쇠> node scripts/seal-secrets.js DEV_UNLIMITED=`로 끕니다. `/healthz`의 `dev`로 확인합니다.
 
 **암호화된 설정(`secrets.enc`)**: 제공사 키 같은 비밀 값은 저장소의 `secrets.enc`에 AES-256-GCM으로 암호화해 두고, 서버에는 열쇠 `CONFIG_KEY` 하나만 환경변수로 넣는다. 호스팅을 옮겨도 `CONFIG_KEY`만 새 곳에 넣으면 된다. 서버 환경변수에 같은 이름이 있으면 그 값이 우선한다. 값 추가·변경: `CONFIG_KEY=<열쇠> node scripts/seal-secrets.js NAME=value`(빈 값이면 삭제). 현재 들어 있는 항목: NVIDIA 무료 풀(`NVIDIA_API_KEY`, `FREE_NVIDIA_CONFIRMED=1`, 모델 `nvidia/nemotron-3-ultra-550b-a55b`, 하루 상한 2000). 열쇠를 잃어버리면 파일은 못 열고, 키를 새로 받아 다시 만든다.

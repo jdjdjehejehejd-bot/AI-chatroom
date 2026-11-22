@@ -244,6 +244,28 @@ const sysMsgs = c => c.ev.filter(e => e.t === 'msg' && e.msg.kind === 'system').
   c.ws.send(JSON.stringify({ t: 'msg', text: '@무료 둘' })); await sleep(700);
   check('while cooling, the error says "resting", not "used up"', sysMsgs(c).some(t => t.includes('잠시 쉬는 중')) && !sysMsgs(c).some(t => t.includes('소진')), sysMsgs(c).slice(-2));
   c.ws.close(); sv.kill(); R.s.close();
+  // 11) AI마다 다른 모델 고정 + 한 모델이 고장 나면 그 모델만 쉬고 같은 키의 다른 모델로 대신
+  const MM = []; let brokenModel = '';
+  const PM = http.createServer((req, res) => { let bb = ''; req.on('data', c => bb += c); req.on('end', () => {
+    const j = JSON.parse(bb || '{}'); const who = (/이제 (\S+?)이\(가\)/.exec((j.messages[1] || {}).content || '') || [])[1] || '?'; MM.push({ who, model: j.model });
+    res.setHeader('content-type', 'application/json');
+    if (j.model === brokenModel) { res.writeHead(500); return res.end('{"error":{"message":"boom"}}'); }
+    res.writeHead(200); res.end(JSON.stringify({ choices: [{ message: { content: who + ' via ' + j.model } }] })); }); });
+  await new Promise(r => PM.listen(4118, '127.0.0.1', r));
+  sv = startServer(3119, { FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'multi', base: 'http://127.0.0.1:4118', models: ['m1', 'm2', 'm3'], cap: 500, key: 'k' }]), FREE_ROOM_CAP: '100' });
+  await sleep(600);
+  c = await client(3119, 'Mia', 'room19');
+  for (const n of ['가', '나', '다']) { c.ws.send(JSON.stringify({ t: 'addAI', name: n, persona: 'p', provider: 'free' })); await sleep(200); }
+  for (const n of ['가', '나', '다', '가', '나', '다']) { c.ws.send(JSON.stringify({ t: 'msg', text: '@' + n + ' 안녕' })); await sleep(500); }
+  const byAI = {}; MM.forEach(x => { (byAI[x.who] = byAI[x.who] || new Set()).add(x.model); });
+  const pinned = ['가', '나', '다'].map(n => [...(byAI[n] || [])]);
+  check('each AI keeps one model, and the three AIs use three different models', pinned.every(p => p.length === 1) && new Set(pinned.map(p => p[0])).size === 3, JSON.stringify(pinned));
+  await sleep(5200); brokenModel = pinned[0][0]; MM.length = 0;   // 연결당 메시지 속도 제한(5초 8개)을 피해 잠시 쉼
+  c.ws.send(JSON.stringify({ t: 'msg', text: '@가 다시' })); await sleep(700);
+  c.ws.send(JSON.stringify({ t: 'msg', text: '@나 너는?' })); await sleep(700);
+  const fell = MM.filter(x => x.who === '가'), other = MM.filter(x => x.who === '나');
+  check('broken model: that AI falls back to another model of the same key; other AIs unaffected', fell.length === 2 && fell[0].model === brokenModel && fell[1].model !== brokenModel && other.length === 1 && other[0].model === pinned[1][0], JSON.stringify(MM));
+  c.ws.close(); sv.kill(); PM.close();
   N.s.close();
   A.s.close(); G.s.close();
   console.log(results.every(Boolean) ? 'ALL OK' : 'SOME FAILED'); process.exit(0);

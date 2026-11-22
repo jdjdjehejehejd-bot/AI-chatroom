@@ -297,12 +297,24 @@ const FREE_ROOM_CAP = DEV_UNLIMITED ? UNLIMITED : Number(process.env.FREE_ROOM_C
 const PARALLEL_OFF = process.env.PARALLEL_TURNS === '0';
 const DEFAULT_POLICY = ['free', 'mention', 'round'].includes(process.env.DEFAULT_POLICY) ? process.env.DEFAULT_POLICY : 'free';
 const KEYLESS_RETRY_S = Number(process.env.KEYLESS_RETRY_S || 5);
-const freeState = { day: '', used: {}, cool: {}, rr: 0 };
+const freeState = { day: '', used: {}, cool: {}, mcool: {}, rr: 0 };
+const modelCooling = (b, m) => (freeState.mcool[b.id + '|' + m] || 0) > Date.now();
+/* AI마다 다른 (백엔드, 모델)을 고정해 둔다: 모델마다 말투·관점이 달라 여러 AI가 함께 있는 의미가 살고, 한 AI의 성격이 일정해진다.
+   키가 있는 무료 풀의 모델들 중 같은 방의 다른 AI가 덜 쓰는 것을 고른다. 고정 모델이 막히면 잠깐 다른 모델이 대신한다 */
+function pinFor(room, ai) {
+  const pairs = [];
+  for (const b of FREE_BACKENDS) if (!b.keyless && freeConfigured(b)) for (const m of b.models) pairs.push({ b: b.id, m });
+  if (!pairs.length) return null;
+  if (ai.freePin && pairs.some(p => p.b === ai.freePin.b && p.m === ai.freePin.m)) return ai.freePin;
+  const used = {}; for (const o of room.ais) if (o !== ai && o.freePin) { const k = o.freePin.b + '|' + o.freePin.m; used[k] = (used[k] || 0) + 1; }
+  pairs.sort((p, q) => (used[p.b + '|' + p.m] || 0) - (used[q.b + '|' + q.m] || 0));
+  return (ai.freePin = { b: pairs[0].b, m: pairs[0].m });
+}
 const freeKey = b => b.key || (b.keyEnv && process.env[b.keyEnv]) || '';
 const freeConfigured = b => Array.isArray(b.models) && b.models.length > 0 && Number.isSafeInteger(b.cap) && b.cap > 0 && (b.noKey || !!freeKey(b));
 function freeTick() {
   const day = new Date().toISOString().slice(0, 10);
-  if (freeState.day !== day) { freeState.day = day; freeState.used = {}; freeState.cool = {}; }
+  if (freeState.day !== day) { freeState.day = day; freeState.used = {}; freeState.cool = {}; freeState.mcool = {}; }
 }
 function freeUsable(b) {
   freeTick();
@@ -1138,13 +1150,23 @@ async function callFree(room, ai, dm, opts = {}) {
   if (kl.length > 1) { const sh = (freeState.kr || 0) % kl.length; kl.push(...kl.splice(0, sh)); }
   freeState.kr = (freeState.kr || 0) + 1;
   order.length = 0; order.push(...keyed, ...kl);
-  for (let i = 0; i < n; i++) {
-    const b = FREE_BACKENDS[order[i]];
+  /* 시도 목록: ① 이 AI에게 고정된 (백엔드, 모델) ② 나머지 백엔드마다 쉬지 않는 모델 하나씩 */
+  const pin = pinFor(room, ai), tries = [];
+  if (pin) { const pb = FREE_BACKENDS.find(x => x.id === pin.b); if (pb && freeUsable(pb) && pb.models.includes(pin.m) && !modelCooling(pb, pin.m)) tries.push([pb, pin.m]); }
+  for (const k of order) {
+    const b = FREE_BACKENDS[k];
+    if (!freeUsable(b)) continue;
+    const start = freeState.used[b.id] || 0;
+    for (let j = 0; j < b.models.length; j++) {
+      const mdl = b.models[(start + j) % b.models.length];
+      if (modelCooling(b, mdl) || tries.some(t => t[0] === b && t[1] === mdl)) continue;
+      tries.push([b, mdl]); break;
+    }
+  }
+  for (const [b, model] of tries) {
     if (!freeUsable(b)) continue;
     tried++;
-    const modelIndex = freeState.used[b.id] || 0;
-    freeState.used[b.id] = modelIndex + 1;
-    const model = b.models[modelIndex % b.models.length];
+    freeState.used[b.id] = (freeState.used[b.id] || 0) + 1;
     try {
       let text;
       try { text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model }, dm); }
@@ -1154,17 +1176,21 @@ async function callFree(room, ai, dm, opts = {}) {
         await new Promise(r => setTimeout(r, Math.min(8, Math.max(2, e1.retryAfter || KEYLESS_RETRY_S)) * 1000));
         text = await callChat(room, ai, { base: b.base.replace(/\/+$/, ''), key: freeKey(b), model }, dm);
       }
-      if (b.id !== 'freellmapi' && !b.keyless) freeState.rr = (order[i] + 1) % n;
+      /* 생각만 하다 답을 못 낸 모델(본문이 비었음)은 실패로 보고 그 모델만 잠시 쉬게 한다 */
+      if (!String(text || '').trim()) { const er = new Error('API 0: 빈 응답'); er.empty = true; throw er; }
+      if (b.id !== 'freellmapi' && !b.keyless) freeState.rr = (FREE_BACKENDS.indexOf(b) + 1) % n;
       noteVia(room, ai, model.startsWith(b.id + '/') ? model : b.id + '/' + model);
       room.freeUsed = (room.freeUsed || 0) + 1;
       return text;
     } catch (e) {
       lastErr = e;
       const m = /API (\d+)/.exec(e.message), code = m ? Number(m[1]) : 0;
-      /* 쉬는 시간: 결제 필요(402)·인증(401/403)은 오래(같은 날 다시 시도해도 소용없음), 모델 없음(404)은 1시간,
-         속도 제한·일시 오류·시간 초과는 짧게 */
-      freeState.cool[b.id] = Date.now() + (code === 402 || code === 401 || code === 403 ? 6 * 3600000 : code === 404 ? 3600000
-        : b.keyless ? 15000 : 20000);
+      /* 계정 단위 문제(결제 402·인증 401/403·속도 제한 429)는 백엔드 전체를 쉬게 하고,
+         모델 단위 문제(시간 초과·서버 오류·모델 없음·빈 응답)는 그 모델만 쉬게 한다(같은 키의 다른 모델은 계속 쓴다) */
+      if (code === 402 || code === 401 || code === 403) freeState.cool[b.id] = Date.now() + 6 * 3600000;
+      else if (code === 429) freeState.cool[b.id] = Date.now() + (b.keyless ? 15000 : 20000);
+      else if (b.models.length > 1) freeState.mcool[b.id + '|' + model] = Date.now() + (code === 404 ? 3600000 : e.empty ? 600000 : 60000);
+      else freeState.cool[b.id] = Date.now() + (code === 404 ? 3600000 : b.keyless ? 15000 : 20000);
     }
   }
   if (tried && lastErr) {
