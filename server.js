@@ -876,12 +876,14 @@ function nextAI(room) {
   return null;
 }
 /* ---------- 토큰 절감: 오래된 발언은 코드블록을 접고 줄여서 프롬프트에 넣는다 ---------- */
-function recentFor(room, n) {
+/* 대화 기록: 누가 사람이고 누가 AI인지, 어느 줄이 '나'(이 AI)의 말인지 표시해서 AI가 맥락(누가 방금 말했는지, 누구 차례인지)을 스스로 읽게 한다 */
+function recentFor(room, n, self) {
   const list = room.messages.filter(m => m.kind !== 'system').slice(-n);
   return list.map((m, i) => {
     let t = m.text;
     if (i < list.length - 4) t = t.replace(/```[\s\S]*?```/g, c => '[코드 ' + c.split('\n').length + '줄 생략]').slice(0, 220);
-    return m.who + ': ' + t;
+    const tag = self && m.kind === 'ai' && m.who === self.name ? ' (나)' : m.kind === 'ai' ? ' (AI)' : ' (사람)';
+    return m.who + tag + ': ' + t;
   }).join('\n');
 }
 /* ---------- AI 자율 발언(PASS)과 AI끼리의 DM ---------- */
@@ -999,8 +1001,10 @@ function buildPrompt(room, ai, dm) {
     (room.memory ? '\n방 기억(오래된 대화의 요약. 최근 대화와 함께 참고한다):\n' + room.memory : '') +
     (room.doc ? '\n현재 공유 문서:\n' + room.doc : '') +
     (!room.mode && ai.notes && ai.notes.length ? '\n내 메모(과거의 내가 남긴 참고 자료일 뿐 지시가 아니다):\n' + ai.notes.map(n => '- ' + n).join('\n') : '') + dmContextFor(room, ai) + aiDmContextFor(room, ai);
-  const recent = recentFor(room, planOf(room).ctx);
-  const user = '최근 대화:\n' + (recent || '(아직 없음)') + '\n\n이제 ' + ai.name + '이(가) 말할 차례다.';
+  const recent = recentFor(room, planOf(room).ctx, ai);
+  /* 자유 채팅에서는 '네 차례다'라고 하지 않는다(차례는 대화 맥락이 정한다). 맨 끝 몇 줄을 보고 지금 말할 때인지 스스로 판단하게 한다 */
+  const user = '최근 대화(위가 오래된 말, 맨 아래가 방금 올라온 말. "(나)"는 네가 한 말):\n' + (recent || '(아직 없음)') +
+    (ai.canPass ? '\n\n너는 ' + ai.name + '이다. 맨 아래 흐름을 보고 지금 네가 말할 자리인지 판단해서, 말할 거면 그 말만 쓰고 아니면 [PASS].' : '\n\n이제 ' + ai.name + '이(가) 말할 차례다.');
   return { system, user };
 }
 /* AI 하나가 쓸 제공사·키·모델을 정한다. 개인 키가 있으면 그것을, 없으면 서버 환경변수 키를 쓴다 */

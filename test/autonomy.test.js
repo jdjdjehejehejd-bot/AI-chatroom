@@ -6,10 +6,10 @@ const ROOT = path.resolve(__dirname, '..'); const WS = require('ws');
 const sleep = ms => new Promise(r => setTimeout(r, ms)); const res = [];
 const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + d)); };
 (async () => {
-  let mode = 'allpass'; const log = [];
-  const nameOf = j => (/이제 (\S+?)이\(가\) 말할 차례다/.exec(((j.messages[1] || {}).content) || '') || [])[1] || '';
+  let mode = 'allpass'; const log = []; let lastUser = '';
+  const nameOf = j => (/(?:이제 (\S+?)이\(가\) 말할 차례다|너는 (\S+?)이다\.)/.exec(((j.messages[1] || {}).content) || '') || []).slice(1).find(Boolean) || '';
   const mock = http.createServer((req, rq) => { let b = ''; req.on('data', c => b += c); req.on('end', () => {
-    const j = JSON.parse(b || '{}'); const sys = (j.messages[0] || {}).content || ''; const name = nameOf(j);
+    const j = JSON.parse(b || '{}'); const sys = (j.messages[0] || {}).content || ''; const name = nameOf(j); lastUser = ((j.messages[1] || {}).content) || lastUser;
     log.push({ name, called: sys.includes('너를 @로 불렀다'), optional: /\[PASS\]/.test(sys), wind: /AI들끼리 \d+번 말했다/.test(sys) });
     let text = '[PASS]', delay = 30;
     if (mode === 'chatty') text = name + ' 의견';
@@ -54,6 +54,8 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     check('after one posts, the others re-read before posting (no pile-up of stale replies)', ms.length >= 2 && ms.every((x, i) => i === 0 || x !== ms[i - 1]), JSON.stringify(seq));
     await sleep(6000);
     check('typing indicators cleared when the room goes quiet', ev.slice(n0).some(e => e.t === 'typing' && e.who === null), '');
+    // 맥락 표시: 대화 기록에 사람/AI/내 말이 구분되어 들어가고, 자유 채팅에서는 '네 차례다'라고 하지 않는다
+    check('chat log marks (사람)/(AI)/(나) so each AI can read whose line is whose', lastUser.includes('(사람)') && lastUser.includes('(나)') && !lastUser.includes('말할 차례다'), lastUser.slice(-300));
     // 같은 대화를 보고 동시에 생각해도, 먼저 올라온 말이 있으면 낡은 생각을 버리고 다시 읽는다(중복 답 방지)
     mode = 'allpass'; await sleep(4000);   // 앞 대화가 완전히 잦아든 뒤
     const d0 = ev.length; mode = 'dup';
