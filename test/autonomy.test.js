@@ -19,7 +19,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     if (mode === 'greetjoin') { const u = ((j.messages[1] || {}).content) || ''; if (/\(알림\) Bob 님이 입장했습니다/.test(u) && name === '가') text = 'Bob 어서와!'; }
     if (mode === 'dmonly') { if (sys.includes('1:1 비공개 DM')) text = '[DM @나] Ann이 서운했대'; else if (sys.includes('너에게만 몰래 DM을 보냈다') && sys.includes('반드시')) text = 'Ann 미안해, 일부러 그런 거 아니야'; }
     if (mode === 'nopass') { text = /말할 차례다/.test((j.messages[1] || {}).content || '') ? name + ' 결국 대답' : '[PASS]'; }
-        if (mode === 'relay') { if (sys.includes('1:1 비공개 DM')) text = '알겠어 물어볼게\n[DM @나] 너 아까 왜 조용했어?'; else if (sys.includes('물어본 것의 답이 왔다')) text = '나는 그냥 피곤했대'; else if (sys.includes('너에게만 몰래 DM을 보냈다')) text = '그냥 피곤했어'; }
+        if (mode === 'relay') { if (((j.messages[1] || {}).content || '').includes('몰래 물어본 것의 답이 왔다')) text = '나는 그냥 피곤했대'; else if (sys.includes('1:1 비공개 DM')) text = '알겠어 물어볼게\n[DM @나] 너 아까 왜 조용했어?'; else if (sys.includes('물어본 것의 답이 왔다')) text = '나는 그냥 피곤했대'; else if (sys.includes('너에게만 몰래 DM을 보냈다')) text = '그냥 피곤했어'; }
     if (mode === 'greetdm') { const u = (j.messages[1] || {}).content || ''; if (sys.includes('1:1 비공개 DM')) text = '알겠어\n[DM @나] 너 왜 조용해?'; else if (name === '나' && sys.includes('너에게만 몰래 DM을 보냈다') && /ㅎㅇ/.test(u) && !/\(나\): 안녕/.test(u)) text = '안녕!'; else if (name === '나' && sys.includes('너에게만 몰래 DM을 보냈다')) text = '그냥 피곤해서'; else if (must) text = name + ' 응답'; }
         if (mode === 'whisper') { if (name === '다' && !sys.includes('1:1 비공개 DM')) text = '[DM @Ann] 너한테만 말하는 건데, 아까 그거 비밀이야'; }
     if (mode === 'dmgroup') { if (sys.includes('1:1 비공개 DM')) text = '알겠어 지금 물어볼게\n[단체방] @나 아까 뭐라고 했어?'; else if (must) text = name + ' 대답: 별말 안 했어'; }

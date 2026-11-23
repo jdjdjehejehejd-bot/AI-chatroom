@@ -1062,7 +1062,7 @@ function buildDMPrompt(room, ai, dm) {
     (room.doc ? '\n방의 공유 문서:\n' + room.doc : '');
   const recent = dm.thread.msgs.filter(m => m.kind !== 'system').slice(-30).map(m => (m.kind === 'ai' ? ai.name : dm.who) + ': ' + m.text).join('\n');
   const pub = recentFor(room, planOf(room).ctx);
-  return { system: system + (room.memory ? '\n방 기억:\n' + room.memory : '') + aiDmContextFor(room, ai), user: '단체방 최근 대화(당신도 이 방의 참가자이므로 기억해야 한다):\n' + (pub || '(없음)') + '\n\nDM 대화:\n' + recent + '\n\n이제 ' + ai.name + '이(가) 답할 차례다.' };
+  return { system: system + (room.memory ? '\n방 기억:\n' + room.memory : '') + aiDmContextFor(room, ai), user: '단체방 최근 대화(당신도 이 방의 참가자이므로 기억해야 한다):\n' + (pub || '(없음)') + '\n\nDM 대화:\n' + recent + (dm.relay ? '\n\n방금 ' + dm.relay.from + '에게 몰래 물어본 것의 답이 왔다: "' + dm.relay.text + '". 약속대로 ' + dm.who + ' 님에게 그 답을 자연스럽게 전한다(답장 본문만 쓴다).' : '\n\n이제 ' + ai.name + '이(가) 답할 차례다.') };
 }
 function demoDM(room, ai, dm) {
   const last = [...dm.thread.msgs].reverse().find(m => m.kind === 'human');
@@ -1543,6 +1543,20 @@ async function chatThink(room, ai) {
   const must = calledSince(room, ai) || !!ai.forceReply || !!(dmAsk && dmAsk.must);
   ai.canPass = true; ai.calledNow = calledSince(room, ai); ai.mustAnswer = must; ai.rescue = !!ai.forceReply && !ai.calledNow && !dmAsk; ai.dmAsk = dmAsk;
   ai.forceReply = false;
+  /* 전달 임무(부탁받아 다른 AI에게 물어본 답이 옴): 단체방 흐름이 아니라, 부탁한 사람과의 귓속말 맥락에서 그 사람에게 쓴다
+     (실모델 QA: 단체방 인사에 답한 말이 '전달'로 잘못 귓속말됨) */
+  const relayTh = dmAsk && dmAsk.relay && [...room.dms.values()].find(t => t.aiId === ai.id && t.who === dmAsk.relay);
+  if (relayTh) {
+    ai.canPass = false; ai.calledNow = false; ai.mustAnswer = false; ai.rescue = false; ai.dmAsk = null; ai.dmPending = null;
+    try {
+      const r = await generate(room, ai, { who: dmAsk.relay, thread: relayTh, relay: { from: dmAsk.from, text: dmAsk.text } });
+      const body = cleanText(r, 800).split('\n').filter(l => !/^\s*\[(메모|DM|단체방)/.test(l)).join('\n').trim();
+      if (body && !isPass(body)) whisperHuman(room, ai, dmAsk.relay, body.slice(0, 500));
+    } catch (e) { room.budget.used = Math.max(0, room.budget.used - 1); if (sub) refund(sub); broadcast(room, { t: 'budget', budget: room.budget }); }
+    st.busy.delete(ai.id);
+    if (st.again.delete(ai.id)) chatSchedule(room, ai);
+    return chatIdle(room);
+  }
   let text;
   try {
     text = await generate(room, ai);
