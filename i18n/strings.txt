@@ -793,3 +793,7 @@ Notion에 내보냈습니다. || Exported to Notion || Notionに書き出しま�
 갈리는 문제를 더 따져서 결론 내줘 || Dig into the disputed problems and decide. || 分かれる問題をもっと検討して結論を出して。 || 深入分析分歧问题并给出结论。 || Profundiza en los problemas en disputa y decide.
 고친 버전 전체를 다시 써줘 || Rewrite the whole fixed version. || 修正版を全文書き直して。 || 重写完整的修改版。 || Reescribe completa la versión corregida.
 다른 창이나 기기에서 이 방에 다시 들어와 여기 연결은 닫았어요. 새로고침하면 이 창으로 이어집니다. || You rejoined this room from another window or device, so this connection was closed. Refresh to continue here. || 別のウィンドウや端末からこのルームに入り直したため、ここの接続は閉じました。再読み込みするとこのウィンドウで続けられます。 || 你已在其他窗口或设备重新进入此房间，此处连接已关闭。刷新即可在此窗口继续。 || Volviste a entrar en esta sala desde otra ventana o dispositivo, así que se cerró esta conexión. Recarga para continuar aquí.
+AI 셋과 단톡방 시작 || Start a group chat with 3 AIs || AI3人とグループチャットを始める || 和 3 个 AI 开始群聊 || Empezar un chat grupal con 3 IA
+지우 || Jiwoo || ジウ || 智宇 || Jiwoo
+도윤 || Doyun || ドユン || 道允 || Doyun
+하린 || Harin || ハリン || 夏琳 || Harin

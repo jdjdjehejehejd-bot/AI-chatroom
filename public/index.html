@@ -1636,7 +1636,13 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       });
       e.appendChild(ex2);
     } else if (!has) {
-      var b0 = mk("button", "btn primary", _t("무료 AI 한 명으로 바로 시작")); b0.type = "button"; b0.id = "quickai"; b0.style.display = "block"; b0.style.margin = "0 auto 10px";
+      /* 단체방 느낌으로 바로: 서버 무료 풀이 있으면 서로 다른 모델에 고정되는 자유 AI 셋을 한 번에 초대한다 */
+      if (meta && meta.free && meta.free.available) {
+        var bg = mk("button", "btn primary", _t("AI 셋과 단톡방 시작")); bg.type = "button"; bg.id = "quickgroup"; bg.style.display = "block"; bg.style.margin = "0 auto 10px";
+        bg.addEventListener("click", function () { bg.disabled = true; [_t("지우"), _t("도윤"), _t("하린")].forEach(function (n, i) { setTimeout(function () { send({ t: "addAI", name: n, persona: "", provider: "free" }); }, i * 350); }); });
+        e.appendChild(bg);
+      }
+      var b0 = mk("button", meta && meta.free && meta.free.available ? "btn" : "btn primary", _t("무료 AI 한 명으로 바로 시작")); b0.type = "button"; b0.id = "quickai"; b0.style.display = "block"; b0.style.margin = "0 auto 10px";
       b0.addEventListener("click", function () {
         if (meta && meta.free && meta.free.available) return send({ t: "addAI", name: "AI", persona: "", provider: "free" });
         /* 서버 무료 풀이 없으면, 이 기기에 기억한 내 무료 키가 있을 때 그 키로 시작한다 */
