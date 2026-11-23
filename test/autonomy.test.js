@@ -10,8 +10,12 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
   const nameOf = j => (/(?:이제 (\S+?)이\(가\) 말할 차례다|너는 (\S+?)이다\.)/.exec(((j.messages[1] || {}).content) || '') || []).slice(1).find(Boolean) || '';
   const mock = http.createServer((req, rq) => { let b = ''; req.on('data', c => b += c); req.on('end', () => {
     const j = JSON.parse(b || '{}'); const sys = (j.messages[0] || {}).content || ''; const name = nameOf(j); lastUser = ((j.messages[1] || {}).content) || lastUser;
-    log.push({ name, called: sys.includes('너를 @로 불렀다'), optional: /\[PASS\]/.test(sys), wind: /AI들끼리 \d+번 말했다/.test(sys) });
+    const must = /\[PASS\] 금지|\[PASS\]는 허용되지 않는다/.test(sys);
+    log.push({ name, called: sys.includes('너를 @로 불렀다'), optional: /\[PASS\]/.test(sys) && !must, must, rescue: sys.includes('아직 아무도 반응하지 않았다'), again: sys.includes('[PASS]는 허용되지 않는다'), wind: /AI들끼리 \d+번 말했다/.test(sys) });
+    /* 'allpass': 할 말이 없으면 넘기지만 지시(반드시 답하라)는 따르는 모델. 'stubborn': 첫 지시를 무시하고 한 번 더 요구받아야 답하는 모델 */
     let text = '[PASS]', delay = 30;
+    if (mode === 'allpass' && must) text = name + ' 응답';
+    if (mode === 'stubborn' && /\[PASS\]는 허용되지 않는다/.test(sys)) text = name + ' 마지못해 응답';
     if (mode === 'chatty') text = name + ' 의견';
     if (mode === 'one' && name === '나' && log.filter(l => l.name === '나').length === 1) text = '나는 이렇게 생각해';
     if (mode === 'dup') { const ctx = ((j.messages[1] || {}).content) || ''; text = /랑데부/.test(ctx) ? '[PASS]' : '랑데부'; delay = name === '가' ? 80 : 350; }
@@ -32,15 +36,19 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     const ais = () => ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').length;
     let a0 = ais(); log.length = 0; mode = 'allpass';
     ws.send(JSON.stringify({ t: 'msg', text: '다들 뭐해?' })); await sleep(1500);
-    check('AIs that pass never show a typing bubble', !ev.some(e => e.t === 'typing' && e.on), '');
-    check('nobody has to answer: everyone looked once and all passed -> silence, no error', ais() - a0 === 0 && log.length === 3 && log.every(l => l.optional) && !ev.some(e => e.t === 'msg' && e.msg.code === 'AI_ERROR'), JSON.stringify({ n: ais() - a0, log }));
-    check('passing does not use up the room budget (only real lines count)', budgetUsed() === 0, budgetUsed());
+    { const sp = new Set(ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').map(e => e.msg.who)); check('AIs that pass never show a typing bubble (only the one that speaks types)', ev.filter(e => e.t === 'typing' && e.on).every(e => sp.has(e.who)) && sp.size === 1, JSON.stringify([...sp])); }
+    check('nobody is forced at first: everyone looked once and could pass', log.slice(0, 3).every(l => l.optional) && new Set(log.slice(0, 3).map(l => l.name)).size === 3, JSON.stringify(log));
+    check('a human line is never just ignored: when all passed, exactly one AI is asked to react and does', ais() - a0 === 1 && log.filter(l => l.rescue).length === 1 && log[3].rescue && log.slice(4).every(l => l.optional) && !ev.some(e => e.t === 'msg' && e.msg.code === 'AI_ERROR'), JSON.stringify({ n: ais() - a0, log }));
+    check('passing does not use up the room budget (only the one real line counts)', budgetUsed() === 1, budgetUsed());
     a0 = ais(); log.length = 0; mode = 'one';
     ws.send(JSON.stringify({ t: 'msg', text: '오늘 날씨 어때?' })); await sleep(1500);
     check('one AI speaks; the others get another look at the new message (no turns)', ais() - a0 === 1 && log.length >= 4, JSON.stringify(log));
     a0 = ais(); log.length = 0; mode = 'allpass';
     ws.send(JSON.stringify({ t: 'msg', text: '@나 너한테 묻는 거야' })); await sleep(1500);
-    check('@mention is a hint, not an order: mentioned AI is told, and may still pass', ais() - a0 === 0 && log.find(l => l.name === '나').called && !log.find(l => l.name === '가').called, JSON.stringify(log));
+    check('@mention must be answered: mentioned AI is told to answer and does; others stay optional', ais() - a0 === 1 && ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').pop().msg.who === '나' && log.find(l => l.name === '나').called && log.find(l => l.name === '나').must && !log.find(l => l.name === '가').called, JSON.stringify(log));
+    a0 = ais(); log.length = 0; mode = 'stubborn';
+    ws.send(JSON.stringify({ t: 'msg', text: '@다 대답해 줘' })); await sleep(1500);
+    check('@mention: a model that still passes is asked once more and then answers', ais() - a0 === 1 && ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').pop().msg.who === '다' && log.filter(l => l.name === '다' && l.again).length === 1, JSON.stringify(log));
     a0 = ais(); log.length = 0; mode = 'chatty';
     ws.send(JSON.stringify({ t: 'msg', text: '자유롭게 떠들어 봐' })); await sleep(9000);
     check('no fixed 4-line cap: AIs keep going while they have something to say, never beyond the safety line (7 here)', ais() - a0 > 4 && ais() - a0 <= 7, ais() - a0);

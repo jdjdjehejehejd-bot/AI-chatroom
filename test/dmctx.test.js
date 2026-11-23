@@ -30,6 +30,13 @@ const res=[];const check=(n,c,d)=>{res.push(c);console.log((c?'PASS ':'FAIL ')+n
  // join state returns only own threads
  const B2=await cl('Mia2','keybbbbbbbb2');const st=B2.ev.find(e=>e.t==='state');
  check('rejoin with key returns own DMs only',Object.keys(st.dms).length===1&&JSON.stringify(st.dms).includes('뭐해')&&!JSON.stringify(st.dms).includes('사과'));
+ // 긴 귓속말: 앞쪽에 알려 준 사실을 12마디 넘게 지나도 기억한다(DM 프롬프트·단체방 프롬프트 모두)
+ for(let i=0;i<10;i++){s({t:'dm',aiId:spy.id,text:'잡담 '+i});await sleep(250);}
+ const longDm=JSON.stringify(log[log.length-1]);
+ check('DM prompt still has the early whisper after 20+ lines',longDm.includes('사과')&&longDm.includes('잡담 9'),longDm.slice(-300));
+ A.ws.send(JSON.stringify({t:'msg',text:'@첩자 아까 내가 뭐라고 했지?'}));await sleep(600);
+ const g2=JSON.stringify(log[log.length-1]);
+ check('group prompt keeps a long DM window (early whisper + recent lines)',g2.includes('잡담 9')&&g2.includes('잡담 0'),g2.slice(0,300));
  const C=await cl('Eve','keyccccccccc3');check('different key sees none',Object.keys(C.ev.find(e=>e.t==='state').dms).length===0);
  console.log(res.every(Boolean)?'ALL OK':'SOME FAILED');sv.kill();mock.close();process.exit(0);
 })();
