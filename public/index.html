@@ -1124,6 +1124,10 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   }
   if (inRoomUrl) setView("main");
   setEntry();
+  /* 새로고침하거나 내가 들어갔던 방 링크를 다시 열면 이름·동의 화면 없이 바로 이어서 들어간다(처음 받은 초대 링크는 그대로 이름을 묻는다) */
+  if (inRoomUrl && loadRooms().some(function (r) { return r.id === roomId; }) && $("jname").value.trim() && store("consent") === "1") {
+    setTimeout(function () { if (!joined && !ws) enterRoom(roomId); }, 0);
+  }
   $("newroom").addEventListener("click", function () { if (joined || ws || inRoomUrl) goHome(); setView("main"); });
   $("entryback").addEventListener("click", function () { setView("list"); });
   $("back").addEventListener("click", goHome);
