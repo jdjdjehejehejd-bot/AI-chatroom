@@ -20,7 +20,8 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     if (mode === 'dmonly') { if (sys.includes('1:1 비공개 DM')) text = '[DM @나] Ann이 서운했대'; else if (sys.includes('너에게만 몰래 DM을 보냈다') && sys.includes('반드시')) text = 'Ann 미안해, 일부러 그런 거 아니야'; }
     if (mode === 'nopass') { text = /말할 차례다/.test((j.messages[1] || {}).content || '') ? name + ' 결국 대답' : '[PASS]'; }
         if (mode === 'relay') { if (sys.includes('1:1 비공개 DM')) text = '알겠어 물어볼게\n[DM @나] 너 아까 왜 조용했어?'; else if (sys.includes('물어본 것의 답이 왔다')) text = '나는 그냥 피곤했대'; else if (sys.includes('너에게만 몰래 DM을 보냈다')) text = '그냥 피곤했어'; }
-    if (mode === 'whisper') { if (name === '다' && !sys.includes('1:1 비공개 DM')) text = '[DM @Ann] 너한테만 말하는 건데, 아까 그거 비밀이야'; }
+    if (mode === 'greetdm') { const u = (j.messages[1] || {}).content || ''; if (sys.includes('1:1 비공개 DM')) text = '알겠어\n[DM @나] 너 왜 조용해?'; else if (name === '나' && sys.includes('너에게만 몰래 DM을 보냈다') && /ㅎㅇ/.test(u) && !/\(나\): 안녕/.test(u)) text = '안녕!'; else if (name === '나' && sys.includes('너에게만 몰래 DM을 보냈다')) text = '그냥 피곤해서'; else if (must) text = name + ' 응답'; }
+        if (mode === 'whisper') { if (name === '다' && !sys.includes('1:1 비공개 DM')) text = '[DM @Ann] 너한테만 말하는 건데, 아까 그거 비밀이야'; }
     if (mode === 'dmgroup') { if (sys.includes('1:1 비공개 DM')) text = '알겠어 지금 물어볼게\n[단체방] @나 아까 뭐라고 했어?'; else if (must) text = name + ' 대답: 별말 안 했어'; }
     if (mode === 'stubborn' && /\[PASS\]는 허용되지 않는다/.test(sys)) text = name + ' 마지못해 응답';
     if (mode === 'chatty') text = name + ' 의견';
@@ -139,6 +140,14 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     const rd = ev.slice(r0).filter(e => e.t === 'dm' && e.msg.kind === 'ai' && e.aiId === ga4.id).map(e => e.msg.text);
     check('relay: the asking AI reports the answer back to the person by whisper', rd.length >= 2 && rd[rd.length - 1] === '나는 그냥 피곤했대', JSON.stringify(rd));
     check('relay: nothing about it is posted in the group', !ev.slice(r0).some(e => e.t === 'msg' && e.msg.kind === 'ai'), JSON.stringify(ev.slice(r0).filter(e => e.t === 'msg').map(e => e.msg.who + ':' + e.msg.text)));
+    // 인사와 쪽지가 겹쳐도 쪽지를 잊지 않는다(실모델 QA: 단체방 인사만 하고 쪽지 답은 빠뜨림)
+    mode = 'allpass'; await sleep(2500);
+    const g5 = ev.length; mode = 'greetdm';
+    const ga5 = (ev.filter(e => e.t === 'meta').pop()).ais.find(a => a.name === '가');
+    ws.send(JSON.stringify({ t: 'dm', aiId: ga5.id, text: '나한테 몰래 물어봐 줘' })); await sleep(200);
+    ws.send(JSON.stringify({ t: 'msg', text: 'ㅎㅇ' })); await sleep(5000);
+    const ad5 = (ev.slice(g5).filter(e => e.t === 'aidms').pop() || { list: [] }).list.flatMap(t => t.msgs).filter(m => m.from === '나' && m.to === '가');
+    check('an AI that greets in the group still answers the private note it got', ad5.some(m => m.text === '그냥 피곤해서'), JSON.stringify({ ad5: ad5.map(m => m.text), msgs: ev.slice(g5).filter(e => e.t === 'msg').map(e => e.msg.who + ':' + e.msg.text), log: log.slice(-8).map(l => l.name + (l.must ? '!' : '')) }));
     ws.close();
     // 방 무료 한도에 닿으면 AI마다 오류를 띄우지 않고 한 번만 알린다
     const sv2 = spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: '3322', DEFAULT_POLICY: 'free', CHAT_JITTER_MIN_MS: '0', CHAT_JITTER_MAX_MS: '40', CHAT_TYPE_MIN_MS: '0', CHAT_TYPE_PER_CHAR_MS: '0', FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'mk', base: 'http://127.0.0.1:4121', models: ['m'], cap: 900 }]), FREE_ROOM_CAP: '2', REQUIRE_LOGIN: '0', SESSION_SECRET: 's' }), stdio: 'ignore' });

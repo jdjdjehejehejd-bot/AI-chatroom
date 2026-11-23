@@ -1611,10 +1611,15 @@ async function chatThink(room, ai) {
     const plain = ex.text.replace(/^\s*\[?PASS\]?\s*$/gim, '').trim();
     if (dmAsk && dmAsk.relay && dmAsk.seen === seen && plain && !ex.whispers && whisperHuman(room, ai, dmAsk.relay, cleanText(plain, 300))) { ex.whispers++; ex.text = ''; }
     const toHuman = [...room.clients].some(c => c.meta && c.meta.name && ex.text.includes(c.meta.name));   // 사람에게 직접 하는 말(사과 등)은 단체방에 둔다
-    const dmOnly = dmAsk && dmAsk.seen != null && dmAsk.seen === seen && !toHuman;
+    const dmOnly = dmAsk && (dmAsk.retry || (dmAsk.seen != null && dmAsk.seen === seen)) && !toHuman;   // DM에 답하러 다시 온 거면 그 말은 쪽지 답장
     const asker = dmOnly && room.ais.find(a => a.name === dmAsk.from);
     if (asker && !ex.dms.some(d => d.to === asker) && ex.text.replace(/^\s*\[?PASS\]?\s*$/gim, '').trim()) { ex.dms.push({ to: asker, text: cleanText(ex.text, 300) }); ex.text = ''; }
-    if (dmAsk && ai.dmPending === dmAsk) ai.dmPending = null;
+    if (dmAsk && ai.dmPending === dmAsk) {
+      /* 받은 DM에 답했거나(쪽지·전달 귓속말) 꼭 답할 필요가 없으면 끝. 단체방에만 말하고 DM은 빠뜨렸으면 한 번 더 보러 온다(실모델 QA: 인사만 하고 쪽지를 잊음) */
+      const replied = ex.dms.some(d => d.to.name === dmAsk.from) || (dmAsk.relay && ex.whispers > 0);
+      if (replied || !dmAsk.must || (dmAsk.tries = (dmAsk.tries || 0) + 1) >= 2) ai.dmPending = null;
+      else { dmAsk.seen = seen; dmAsk.retry = true; chatSchedule(room, ai); }   // 다음엔 DM만 보고 깨어난 것으로 보고 답을 쪽지로 보낸다
+    }
     let changed = false;
     for (const d of ex.dms) if (pushAIDM(room, ai, d.to, d.text)) { changed = true; sendAIDM(room, ai, d.to, d.text, !!(dmAsk && dmAsk.from === d.to.name)); }
     if (ex.dms.length && !ex.text.replace(/^\s*\[?PASS\]?\s*$/gim, '').trim()) st.sinceHuman++;   // 몰래 쪽지만 오가도 안전선에 센다
