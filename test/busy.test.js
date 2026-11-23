@@ -5,17 +5,17 @@ const ROOT = path.resolve(__dirname, '..'); const WS = require('ws');
 const sleep = ms => new Promise(r => setTimeout(r, ms)); const res = [];
 const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + d)); };
 (async () => {
-  let fail503 = 0; const log = [];
+  let fail503 = 0, docMode = false; const log = [];
   const mock = http.createServer((req, rq) => { let b = ''; req.on('data', c => b += c); req.on('end', () => {
     const j = JSON.parse(b || '{}'); log.push(j.model);
     if (j.model === 'busy-model') { rq.writeHead(429, { 'content-type': 'application/json' }); return rq.end('{"error":{"message":"rate limited"}}'); }
     if (fail503 > 0) { fail503--; rq.writeHead(503, { 'content-type': 'application/json' }); return rq.end('{"error":{"message":"overloaded"}}'); }
     const sys = (j.messages[0] || {}).content || '', name = (/AI 참가자 "([^"]+)"/.exec(sys) || [])[1];
-    rq.writeHead(200, { 'content-type': 'application/json' }); rq.end(JSON.stringify({ choices: [{ message: { content: name + ' 안녕(' + j.model + ')' } }] }));
+    rq.writeHead(200, { 'content-type': 'application/json' }); rq.end(JSON.stringify({ choices: [{ message: { content: docMode ? '알겠어, 금요일로 하자 [문서] 회의는 금요일 3시' : name + ' 안녕(' + j.model + ')' } }] }));
   }); });
   await new Promise(r => mock.listen(4141, '127.0.0.1', r));
   const port = 3354;
-  const sv = spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: String(port), REQUIRE_LOGIN: '0', SESSION_SECRET: 's', DEFAULT_POLICY: 'free', CHAT_EVENT_GAP_MS: '600000',
+  const sv = spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: String(port), REQUIRE_LOGIN: '0', SESSION_SECRET: 's', DEFAULT_POLICY: 'free', CHAT_EVENT_GAP_MS: '600000', ROOM_CALL_BUDGET: '500', ROOM_CALL_BUDGET_MAX: '500', CHAT_SAFETY_MAX: '4',
     FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'mk', base: 'http://127.0.0.1:4141', models: ['busy-model', 'ok-model', 'ok-2'], cap: 900 }]), FREE_ROOM_CAP: '300' }), stdio: 'ignore' });
   try {
     await sleep(900);
@@ -36,6 +36,12 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     s({ t: 'msg', text: '@가 지금 뭐해?' }); await sleep(30000);
     const said2 = ev.slice(n1).filter(e => e.t === 'msg' && e.msg.kind === 'ai' && e.msg.who === '가');
     check('a transient provider error is retried quietly and the AI still answers', said2.length >= 1 && !ev.slice(n1).some(e => e.t === 'msg' && e.msg.code === 'AI_ERROR'), JSON.stringify(ev.slice(n1).filter(e => e.t === 'msg').map(e => e.msg.who + ':' + e.msg.text)));
+    // "[문서]"는 줄 가운데에 붙어 있어도 공유 문서로 옮기고 대화에서는 지운다(실측: 문장 끝에 붙은 [문서]가 대화에 그대로 보임)
+    docMode = true; const n2 = ev.length;
+    s({ t: 'msg', text: '@가 회의 금요일 3시로 기록해 줘' }); await sleep(25000);
+    const m3 = ev.slice(n2).filter(e => e.t === 'msg' && e.msg.kind === 'ai' && e.msg.who === '가').map(e => e.msg.text);
+    const dd = ev.slice(n2).filter(e => e.t === 'doc').pop();
+    check('inline [문서] goes to the shared doc and is removed from the chat line', m3.length >= 1 && m3.every(t => !t.includes('[문서]')) && m3[0] === '알겠어, 금요일로 하자' && dd && dd.text.includes('- 회의는 금요일 3시'), JSON.stringify({ m3, doc: dd && dd.text, all: ev.slice(n2).filter(e => e.t === 'msg').map(e => e.msg.who + ':' + e.msg.text) }));
     ws.close();
   } finally { sv.kill(); mock.close(); }
   console.log(res.every(Boolean) ? 'ALL OK' : 'SOME FAILED'); process.exit(res.every(Boolean) ? 0 : 1);
