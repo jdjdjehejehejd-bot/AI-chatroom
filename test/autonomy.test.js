@@ -15,6 +15,8 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     /* 'allpass': 할 말이 없으면 넘기지만 지시(반드시 답하라)는 따르는 모델. 'stubborn': 첫 지시를 무시하고 한 번 더 요구받아야 답하는 모델 */
     let text = '[PASS]', delay = 30;
     if (mode === 'allpass' && must) text = name + ' 응답';
+    if (mode === 'whisper') { if (name === '다' && !sys.includes('1:1 비공개 DM')) text = '[DM @Ann] 너한테만 말하는 건데, 아까 그거 비밀이야'; }
+    if (mode === 'dmgroup') { if (sys.includes('1:1 비공개 DM')) text = '알겠어 지금 물어볼게\n[단체방] @나 아까 뭐라고 했어?'; else if (must) text = name + ' 대답: 별말 안 했어'; }
     if (mode === 'stubborn' && /\[PASS\]는 허용되지 않는다/.test(sys)) text = name + ' 마지못해 응답';
     if (mode === 'chatty') text = name + ' 의견';
     if (mode === 'one' && name === '나' && log.filter(l => l.name === '나').length === 1) text = '나는 이렇게 생각해';
@@ -70,6 +72,23 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     ws.send(JSON.stringify({ t: 'msg', text: '끝말잇기 다음 단어?' })); await sleep(3000);
     const dups = ev.slice(d0).filter(e => e.t === 'msg' && e.msg.kind === 'ai' && e.msg.text === '랑데부').length;
     check('no duplicate answers: a stale draft is re-thought after someone else posts', dups === 1, dups + ' ' + JSON.stringify(ev.slice(d0).filter(e => e.t === 'err' || e.t === 'msg').map(e => e.t === 'err' ? 'ERR:' + e.text : e.msg.who + ':' + e.msg.text)) + JSON.stringify(log.slice(-6)));
+    // 귓속말에서 "단체방에 물어볼게" → 말만 하지 않고 [단체방] 줄로 실제로 올리고, 불린 AI가 답한다
+    mode = 'allpass'; await sleep(2500);
+    const g0 = ev.length; mode = 'dmgroup';
+    const ga = (ev.filter(e => e.t === 'meta').pop()).ais.find(a => a.name === '가');
+    ws.send(JSON.stringify({ t: 'dm', aiId: ga.id, text: '나한테 욕한 거 직접 물어봐' })); await sleep(2500);
+    const gm = ev.slice(g0).filter(e => e.t === 'msg' && e.msg.kind === 'ai').map(e => e.msg.who + ':' + e.msg.text);
+    const dmr = ev.slice(g0).filter(e => e.t === 'dm' && e.msg.kind === 'ai').map(e => e.msg.text);
+    check('whisper can act in the group: [단체방] line is posted by that AI, the DM keeps only the private part', gm[0] === '가:@나 아까 뭐라고 했어?' && dmr.length === 1 && dmr[0] === '알겠어 지금 물어볼게', JSON.stringify({ gm, dmr }));
+    check('the AI mentioned from a whisper-triggered line answers in the group', gm.some(x => x.startsWith('나:나 대답')), JSON.stringify(gm));
+    // 단체방 대화 중에도 AI가 스스로 판단해 사람에게 귓속말을 보낸다(단체방에는 안 보이고, 씹은 것으로 치지 않는다)
+    mode = 'allpass'; await sleep(2500);
+    const w0 = ev.length; log.length = 0; mode = 'whisper';
+    ws.send(JSON.stringify({ t: 'msg', text: '다들 비밀 하나씩 있어?' })); await sleep(2500);
+    const wdm = ev.slice(w0).filter(e => e.t === 'dm' && e.msg.kind === 'ai');
+    const da = (ev.filter(e => e.t === 'meta').pop()).ais.find(a => a.name === '다');
+    check('AI can whisper to a human on its own from the group chat', wdm.length === 1 && wdm[0].aiId === da.id && wdm[0].msg.text.includes('비밀이야'), JSON.stringify(wdm));
+    check('the whisper is not posted in the group and counts as a reaction (no rescue)', !ev.slice(w0).some(e => e.t === 'msg' && e.msg.kind === 'ai') && !log.some(l => l.rescue), JSON.stringify(log));
     ws.close();
     // 방 무료 한도에 닿으면 AI마다 오류를 띄우지 않고 한 번만 알린다
     const sv2 = spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: '3322', DEFAULT_POLICY: 'free', CHAT_JITTER_MIN_MS: '0', CHAT_JITTER_MAX_MS: '40', CHAT_TYPE_MIN_MS: '0', CHAT_TYPE_PER_CHAR_MS: '0', FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'mk', base: 'http://127.0.0.1:4121', models: ['m'], cap: 900 }]), FREE_ROOM_CAP: '2', REQUIRE_LOGIN: '0', SESSION_SECRET: 's' }), stdio: 'ignore' });
