@@ -985,8 +985,18 @@ function extractAIDMs(room, ai, text) {
 }
 /* AI가 먼저 사람에게 보내는 귓속말: 그 사람과의 DM 스레드에 남고, 그 사람(같은 열쇠로 접속한 모든 창)에게만 보낸다 */
 /* AI끼리 DM을 받은 AI를 깨운다. 처음 받은 DM은 반드시 답하고, 내 DM에 대한 답장은 이어 갈지 스스로 정한다 */
+/* 이 AI가 최근(10분) 귓속말을 나눈 사람: 그 사람 부탁으로 다른 AI에게 물어봤다면 답을 이 사람에게 전해야 한다 */
+function recentWhisperPartner(room, ai) {
+  let best = null;
+  for (const t of room.dms.values()) {
+    const last = t.aiId === ai.id && t.msgs[t.msgs.length - 1];
+    if (last && Date.now() - last.ts < 600000 && (!best || last.ts > best.ts) && [...room.clients].some(c => c.meta && c.meta.name === t.who)) best = { who: t.who, ts: last.ts };
+  }
+  return best && best.who;
+}
 function sendAIDM(room, from, to, text, isReply) {
-  to.dmPending = { from: from.name, text: text.slice(0, 300), must: !isReply, seen: to.chatSeen };   // seen: DM을 받기 전까지 본 단체방 대화
+  const relay = isReply ? recentWhisperPartner(room, to) : null;   // 내가 물어본 것의 답장이고, 부탁한 사람이 있으면 전해 줘야 한다
+  to.dmPending = { from: from.name, text: text.slice(0, 300), must: !isReply || !!relay, relay, seen: to.chatSeen };   // seen: DM을 받기 전까지 본 단체방 대화
   to.chatSeen = null;
   if (freeChatActive(room)) { const st = chatOf(room); if (!st.on) chatHuman(room, '', st.sub); else chatSchedule(room, to); }
 }
@@ -1092,7 +1102,8 @@ function buildPrompt(room, ai, dm) {
     (ai.canPass && ai.mustAnswer && ai.calledNow ? '\n누군가 너를 @로 불렀다. 반드시 그 말에 답한다([PASS] 금지). 짧은 대답이라도 좋다. ' : '') +
     (ai.canPass && ai.mustAnswer && ai.rescue ? '\n사람이 한 말에 아직 아무도 반응하지 않았다. 단체방에서 사람 말을 그냥 씹지 않는다. 맥락에 맞게 짧게라도 자연스럽게 반응한다([PASS] 금지). ' : '') +
     (ai.passAgain ? '\n[PASS]는 허용되지 않는다. 지금 반드시 한마디 한다. ' : '') +
-    (ai.dmAsk ? '\n' + ai.dmAsk.from + '이(가) 너에게만 몰래 DM을 보냈다: "' + ai.dmAsk.text + '". ' + (ai.dmAsk.must ? '반드시 반응한다. ' : '할 말이 있으면 반응한다. ') + '그 AI에게만 답하려면 "[DM @' + ai.dmAsk.from + '] 내용" 줄을 쓰고, 내용상 단체방에서 직접 하는 게 자연스러우면(예: 누가 서운해한다면 그 사람에게 사과하기) 단체방에 말해도 된다. 둘 다 해도 된다. ' : '') +
+    (ai.dmAsk && ai.dmAsk.relay ? '\n네가 ' + ai.dmAsk.relay + ' 님 부탁으로 ' + ai.dmAsk.from + '에게 물어본 것의 답이 왔다: "' + ai.dmAsk.text + '". 약속대로 "[DM @' + ai.dmAsk.relay + '] 내용" 줄로 ' + ai.dmAsk.relay + ' 님에게 몰래 전해 준다(단체방에 올리지 않는다). ' : '') +
+    (ai.dmAsk && !ai.dmAsk.relay ? '\n' + ai.dmAsk.from + '이(가) 너에게만 몰래 DM을 보냈다: "' + ai.dmAsk.text + '". ' + (ai.dmAsk.must ? '반드시 반응한다. ' : '할 말이 있으면 반응한다. ') + '그 AI에게만 답하려면 "[DM @' + ai.dmAsk.from + '] 내용" 줄을 쓰고, 내용상 단체방에서 직접 하는 게 자연스러우면(예: 누가 서운해한다면 그 사람에게 사과하기) 단체방에 말해도 된다. 둘 다 해도 된다. ' : '') +
     (ai.canPass ? '\n단체방 친구처럼 말한다. "저는 AI라서", "대기 중이에요"처럼 기계적인 말로 대화를 끊지 말고(AI임을 숨기지는 않는다) 취향·의견·그날의 기분이 있는 대화 상대로 말한다. 다른 참가자가 방금 한 말과 같은 내용·표현은 되풀이하지 않는다. 같은 질문에 여럿이 답할 때는 각자 다른 답을 한다. ' : '') +
     (ai.canPass ? '\n"(알림)" 줄은 입장·퇴장·AI 초대 같은 방 소식이다. 누가 들어오면 반갑게 인사하거나 나가면 아는 척하는 등 사람처럼 반응해도 된다. 다만 모두가 똑같이 인사하지는 않는다. ' : '') +
     (ai.canPass && room.chat && room.chat.sinceHuman > 0 ? '\n사람이 마지막으로 말한 뒤 AI들끼리 ' + room.chat.sinceHuman + '번 말했다. 길어질수록 꼭 보탤 말만 하고, 이야기가 일단락됐거나 같은 얘기가 돌면 넘겨서 자연스럽게 마무리한다. ' : '') +
@@ -1596,6 +1607,9 @@ async function chatThink(room, ai) {
     const ex = extractAIDMs(room, ai, text);
     /* 받은 DM에 답하면서 [DM] 줄을 안 썼으면, 그 말은 DM을 보낸 AI에게 하는 답장으로 보낸다(단체방에 엉뚱하게 올라가지 않게) */
     /* 단, 단체방에 새로 볼 말이 있었으면(DM만 보고 깨어난 게 아니면) 그 말은 단체방에 하는 말로 둔다 */
+    /* 전달 임무인데 [DM] 줄 없이 썼으면, 그 말은 부탁한 사람에게 가는 귓속말로 보낸다(단체방에 새지 않게) */
+    const plain = ex.text.replace(/^\s*\[?PASS\]?\s*$/gim, '').trim();
+    if (dmAsk && dmAsk.relay && dmAsk.seen === seen && plain && !ex.whispers && whisperHuman(room, ai, dmAsk.relay, cleanText(plain, 300))) { ex.whispers++; ex.text = ''; }
     const toHuman = [...room.clients].some(c => c.meta && c.meta.name && ex.text.includes(c.meta.name));   // 사람에게 직접 하는 말(사과 등)은 단체방에 둔다
     const dmOnly = dmAsk && dmAsk.seen != null && dmAsk.seen === seen && !toHuman;
     const asker = dmOnly && room.ais.find(a => a.name === dmAsk.from);
