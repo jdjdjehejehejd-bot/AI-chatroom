@@ -546,6 +546,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
           <div class="eyebrow" style="margin-top:20px">모드</div>
           <div class="modes" role="radiogroup" aria-label="방 모드">
             <label class="mode"><input type="radio" name="jmode" value="" checked><b>빈 방</b><span>AI를 직접 초대 (역할을 비우면 자유 AI)</span></label>
+            <label class="mode"><input type="radio" name="jmode" value="review"><b>Review</b><span>여러 AI가 문서를 따로 검토하고 고친 버전까지</span></label>
             <label class="mode"><input type="radio" name="jmode" value="code"><b>Code</b><span>설계·구현·리뷰로 코드 완성</span></label>
             <label class="mode"><input type="radio" name="jmode" value="brainstorm"><b>Brainstorm</b><span>발산·비판·정리로 아이디어</span></label>
             <label class="mode"><input type="radio" name="jmode" value="make"><b>Make</b><span>웹사이트·보고서·PPT 제작</span></label>
@@ -675,7 +676,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
                 <label class="lb" for="aikey" id="keylabel">개인 API 키 (선택)</label>
                 <input class="field" id="aikey" type="password" maxlength="300" placeholder="비우면 서버 설정 키 사용" autocomplete="off">
                 <div class="keyguide" id="keyguide" hidden></div>
-                <label class="keymem"><input type="checkbox" id="aikeymem"><span>이 기기(브라우저)에 키 기억하기</span></label>
+                <label class="keymem"><input type="checkbox" id="aikeymem"><span>이 탭을 닫을 때까지 키 기억하기</span></label>
                 <div class="row2"><button type="button" class="btn sm" id="aikeytest">키 확인</button><span class="hint" id="aikeyres" role="status"></span></div>
                 <p class="hint">키는 서버 메모리에만 보관되고 다른 참가자에게 보이지 않으며 방이 정리되면 사라집니다. 서버를 거치므로 HTTPS로 운영되는 신뢰할 수 있는 서버에서만 입력하세요.</p>
               </div>
@@ -879,10 +880,11 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     code: { label: "Code", desc: "설계 → 구현 → 리뷰 → 수정", flow: ["설계자", "구현자", "리뷰어", "테스터", "구현자"] },
     brainstorm: { label: "Brainstorm", desc: "발산 → 비판 → 정리", flow: ["발산자", "비평가", "조합가", "정리자"] },
     make: { label: "Make", desc: "기획 → 작성 → 편집", flow: ["기획자", "작성자", "디자이너", "편집자"] },
-    debate: { label: "Debate", desc: "옹호 → 반박 → 검증 → 판정", flow: ["옹호자", "반박자", "검증자", "심판"] }
+    debate: { label: "Debate", desc: "옹호 → 반박 → 검증 → 판정", flow: ["옹호자", "반박자", "검증자", "심판"] },
+    review: { label: "Review", desc: "각자 검토 → 교차 반박 → 편집", flow: ["논리검토자", "근거검토자", "독자검토자", "편집장"] }
   };
   /* 모드 역할 이름(설계자 등)은 서버가 정식 이름(한국어)으로 다루고, 화면에 보일 때만 현재 언어로 바꾼다. */
-  var ROLE_KO = ["설계자", "구현자", "리뷰어", "테스터", "발산자", "비평가", "조합가", "정리자", "기획자", "작성자", "디자이너", "편집자", "옹호자", "반박자", "검증자", "심판"];
+  var ROLE_KO = ["설계자", "구현자", "리뷰어", "테스터", "발산자", "비평가", "조합가", "정리자", "기획자", "작성자", "디자이너", "편집자", "옹호자", "반박자", "검증자", "심판", "논리검토자", "근거검토자", "독자검토자", "편집장"];
   function dn(n) { if (typeof n !== "string") return n; var p = /^\((.+)\)$/.exec(n); if (p) return "(" + dn(p[1]) + ")"; return ROLE_KO.indexOf(n) >= 0 ? _t(n) : n; }
   function escRe(x) { return x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
   function swapMentions(text, toLocal) {
@@ -1679,6 +1681,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   }
   function renderMeta(s) {
     meta = s; updateCost(s.budget);
+    $("text").maxLength = s.mode && s.mode.id === "review" ? 8000 : 1000;   // 검토실은 문서를 통째로 붙여 넣는다
     var title = s.asset ? s.asset.name : _t("방 {id}", { id: s.id });
     $("rtitle").textContent = title; document.title = title + " · " + _t("AI 채팅방");
     $("rsub").textContent = _t("사람 {h} · AI {a} · {pol}", { h: s.humans.length, a: s.ais.length, pol: POLNAME[s.policy] });
@@ -1855,7 +1858,8 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       brainstorm: ["고른 아이디어를 실행 계획으로 정리해줘", "각 아이디어의 위험과 반대 의견을 더 따져줘"],
       make: ["출처·수치·사실 확인이 필요한 부분을 표시해줘", "발표용 한 장 요약으로 줄여줘"],
       code: ["이 코드의 테스트 케이스를 추가해줘", "엣지 케이스와 오류 처리를 점검해줘"],
-      debate: ["갈리는 쟁점 하나를 더 깊이 따져줘", "내 상황 기준으로 다시 판정해줘"]
+      debate: ["갈리는 쟁점 하나를 더 깊이 따져줘", "내 상황 기준으로 다시 판정해줘"],
+      review: ["갈리는 문제를 더 따져서 결론 내줘", "고친 버전 전체를 다시 써줘"]
     };
     var nx = meta && meta.mode && NEXT[meta.mode.id];
     if (nx && !old) {
@@ -2278,8 +2282,11 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     nvidia: { url: "https://build.nvidia.com", models: ["deepseek-ai/deepseek-v4.1-flash", "openai/gpt-oss-20b", "google/gemma-4-31b-it"], note: "개인 체험·시제품용입니다. 휴대폰 인증이 필요하고 입력·출력이 기록되어 제품 개선에 쓰일 수 있습니다." },
     openrouter: { url: "https://openrouter.ai/keys", models: ["openrouter/free"], note: "openrouter/free는 무료 모델 중 하나를 자동으로 고릅니다. 하루 약 50회(크레딧 구매 이력이 있으면 더 많음)." }
   };
-  function keyStore() { try { return JSON.parse(store("mm_keys") || "{}") || {}; } catch (e) { return {}; } }
-  function keySave(p, k) { var o = keyStore(); if (k) o[p] = k; else delete o[p]; try { localStorage.setItem("mm_keys", JSON.stringify(o)); } catch (e) {} }
+  /* 개인 API 키는 브라우저에 영구 저장하지 않는다: 원하면 이 탭을 닫을 때까지만(sessionStorage) 기억한다.
+     예전 버전이 localStorage에 남긴 키는 지운다 */
+  try { localStorage.removeItem("mm_keys"); } catch (e) {}
+  function keyStore() { try { return JSON.parse(sessionStorage.getItem("mm_keys") || "{}") || {}; } catch (e) { return {}; } }
+  function keySave(p, k) { var o = keyStore(); if (k) o[p] = k; else delete o[p]; try { sessionStorage.setItem("mm_keys", JSON.stringify(o)); } catch (e) {} }
   function provChange() {
     var v = $("aiprov").value, fk = FREEKEY[v], dl = $("aimodels"), g = $("keyguide");
     dl.textContent = ""; g.textContent = ""; g.hidden = !fk; $("aikeyres").textContent = "";
