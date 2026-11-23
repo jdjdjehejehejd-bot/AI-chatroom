@@ -317,11 +317,17 @@ function pinFor(room, ai) {
   const pairs = [];
   for (const b of FREE_BACKENDS) if (!b.keyless && freeConfigured(b)) for (const m of b.models) pairs.push({ b: b.id, m });
   if (!pairs.length) return null;
-  if (ai.freePin && pairs.some(p => p.b === ai.freePin.b && p.m === ai.freePin.m)) return ai.freePin;
-  const used = {}; for (const o of room.ais) if (o !== ai && o.freePin) { const k = o.freePin.b + '|' + o.freePin.m; used[k] = (used[k] || 0) + 1; }
-  /* 같은 방에서 덜 쓰는 모델을 먼저, 같으면 실제로 잰 응답 시간이 빠른 모델을 먼저(안 재 본 모델은 5초로 본다) */
   const lat = p => (freeState.lat && freeState.lat[p.b + '|' + p.m]) || 5000;
-  pairs.sort((p, q) => ((used[p.b + '|' + p.m] || 0) - (used[q.b + '|' + q.m] || 0)) || (lat(p) - lat(q)));
+  if (ai.freePin && pairs.some(p => p.b === ai.freePin.b && p.m === ai.freePin.m)) {
+    /* 고정된 모델이 실측으로 많이 느리면(8초 넘고 가장 빠른 모델의 2배 이상) 더 빠른 모델로 옮긴다 */
+    const mine = lat(ai.freePin), best = Math.min(...pairs.map(lat));
+    if (!(mine > 8000 && mine > best * 2)) return ai.freePin;
+  }
+  const used = {}; for (const o of room.ais) if (o !== ai && o.freePin) { const k = o.freePin.b + '|' + o.freePin.m; used[k] = (used[k] || 0) + 1; }
+  /* 같은 방에서 덜 쓰는 모델을 먼저, 같으면 실제로 잰 응답 시간이 빠른 모델을 먼저(안 재 본 모델은 5초로 본다).
+     단 실측 8초가 넘는 느린 모델은 다른 모델을 겹쳐 쓰는 것보다 뒤로 미룬다 */
+  const slow = p => (lat(p) > 8000 ? 1 : 0);
+  pairs.sort((p, q) => slow(p) - slow(q) || ((used[p.b + '|' + p.m] || 0) - (used[q.b + '|' + q.m] || 0)) || (lat(p) - lat(q)));
   return (ai.freePin = { b: pairs[0].b, m: pairs[0].m });
 }
 const freeKey = b => b.key || (b.keyEnv && process.env[b.keyEnv]) || '';
@@ -1281,8 +1287,17 @@ async function callFree(room, ai, dm, opts = {}) {
       /* 계정 단위 문제(결제 402·인증 401/403·속도 제한 429)는 백엔드 전체를 쉬게 하고,
          모델 단위 문제(시간 초과·서버 오류·모델 없음·빈 응답)는 그 모델만 쉬게 한다(같은 키의 다른 모델은 계속 쓴다) */
       if (code === 402 || code === 401 || code === 403) freeState.cool[b.id] = Date.now() + 6 * 3600000;
-      else if (code === 429) freeState.cool[b.id] = Date.now() + (b.keyless ? 15000 : 20000);
-      else if (b.models.length > 1) freeState.mcool[b.id + '|' + model] = Date.now() + (code === 404 ? 3600000 : e.empty ? 600000 : 60000);
+      else if (code === 429) {
+        /* 429는 모델 하나만 붐비는 경우가 많다(실측: NVIDIA의 특정 모델만 계속 429). 모델이 여럿이면 그 모델만 쉬게 하고,
+           10초 안에 서로 다른 모델 둘 이상이 429면 계정 전체가 막힌 것으로 보고 백엔드를 쉬게 한다 */
+        const now = Date.now(), mk = b.id + '|' + model;
+        if (b.models.length > 1) {
+          freeState.mcool[mk] = now + 30000;
+          freeState.r429 = (freeState.r429 || []).filter(h => now - h.t < 10000 && h.m !== mk).concat([{ t: now, m: mk }]);
+          if (freeState.r429.filter(h => h.m.startsWith(b.id + '|')).length >= 2) freeState.cool[b.id] = now + 15000;
+        } else freeState.cool[b.id] = now + (b.keyless ? 15000 : 20000);
+      }
+      else if (b.models.length > 1) freeState.mcool[b.id + '|' + model] = Date.now() + (code === 404 ? 3600000 : e.empty ? 600000 : 20000);
       else freeState.cool[b.id] = Date.now() + (code === 404 ? 3600000 : b.keyless ? 15000 : 20000);
     }
   }
@@ -1299,13 +1314,16 @@ async function callFree(room, ai, dm, opts = {}) {
     throw new Error('무료 모델 호출 실패' + (code ? ' (HTTP ' + code + ')' : '') + ': ' + reason);
   }
   /* 쓸 수 있는 곳이 하나도 없을 때: 한도가 남았는데 잠깐 쉬는 중이면 가장 먼저 풀리는 곳을 조금 기다렸다 한 번 쓴다 */
+  /* 쓸 수 있는 곳이 없을 때: 계정 단위 휴식뿐 아니라 모델 단위 휴식도 보고, 가장 먼저 풀리는 곳이 12초 안이면 기다렸다 한 번 쓴다.
+     한도가 남아 있으면 "소진"이 아니라 "잠시 쉬는 중"으로 알린다 */
+  const hasCap = x => freeConfigured(x) && (DEV_UNLIMITED || (freeState.used[x.id] || 0) < x.cap);
   if (!tried && !opts.waited) {
-    const soon = FREE_BACKENDS.filter(x => freeConfigured(x) && (freeState.used[x.id] || 0) < x.cap)
-      .map(x => ({ x, at: freeState.cool[x.id] || 0 })).filter(o => o.at - Date.now() <= 12000).sort((p, q) => p.at - q.at)[0];
+    const readyAt = x => Math.max(freeState.cool[x.id] || 0, Math.min(...x.models.map(m => freeState.mcool[x.id + '|' + m] || 0)));
+    const soon = FREE_BACKENDS.filter(hasCap)
+      .map(x => ({ x, at: readyAt(x) })).filter(o => o.at - Date.now() <= 12000).sort((p, q) => p.at - q.at)[0];
     if (soon) { await new Promise(r => setTimeout(r, Math.max(0, soon.at - Date.now()) + 200)); return callFree(room, ai, dm, { waited: true }); }
-    if (FREE_BACKENDS.some(x => freeConfigured(x) && (freeState.used[x.id] || 0) < x.cap))
-      throw new Error('무료 AI가 잠시 쉬는 중입니다. 잠시 뒤 "다시 시도"를 누르세요.');
   }
+  if (FREE_BACKENDS.some(hasCap)) throw new Error('무료 AI가 잠시 쉬는 중입니다. 잠시 뒤 "다시 시도"를 누르세요.');
   throw new Error('오늘의 무료 모델 사용량이 모두 소진되었거나 아직 설정되지 않았습니다.');
 }
 function demoSummary(room) {
@@ -1514,9 +1532,20 @@ async function chatThink(room, ai) {
     room.budget.used = Math.max(0, room.budget.used - 1); if (sub) refund(sub); broadcast(room, { t: 'budget', budget: room.budget });
     /* 방 무료 한도는 방 전체 일이라 AI마다 오류를 띄우지 않고 한 번만 알린다 */
     if (/무료 모델 사용 한도/.test(em)) { if (!st.capNoted) { st.capNoted = true; system(room, '이 방의 무료 AI 대화량을 다 썼습니다. 내 무료 키로 연결한 AI를 초대하면 계속 이야기할 수 있어요.', 'FREE_ROOM_CAP'); } return chatIdle(room); }
-    system(room, ai.name + ' 응답 오류: ' + em, 'AI_ERROR', { aiId: ai.id, aiName: ai.name, text: em });
+    /* 잠깐 붐비거나(429)·시간 초과·제공사 일시 오류는 대화방에 오류를 띄우지 않고 몇 초 뒤 조용히 다시 본다(두 번까지).
+       그래도 안 되면, 꼭 답해야 했던 경우에만 오류를 알린다(그냥 넘겨도 되는 판단이었으면 조용히 넘어간다) */
+    const transient = /HTTP (429|5\d\d)|붐빕니다|잠시 쉬는 중|timeout|aborted|빈 응답/i.test(em);
+    if (transient && (ai.busyTries = (ai.busyTries || 0) + 1) <= 2) {
+      if (must) ai.forceReply = true;
+      ai.chatSeen = null; room.runErr = false;
+      st.timers.set(ai.id, setTimeout(() => { st.timers.delete(ai.id); chatThink(room, ai); }, 5000 + Math.random() * 4000));
+      return chatIdle(room);
+    }
+    ai.busyTries = 0;
+    if (must || !transient) system(room, ai.name + ' 응답 오류: ' + em, 'AI_ERROR', { aiId: ai.id, aiName: ai.name, text: em });
     return chatIdle(room);
   }
+  ai.busyTries = 0;
   ai.canPass = false; ai.calledNow = false; ai.mustAnswer = false; ai.passAgain = false; ai.rescue = false; ai.dmAsk = null;
   if (gen !== room.gen || !freeChatActive(room)) { st.busy.delete(ai.id); return chatIdle(room); }
   text = cleanText(text, 1500);
