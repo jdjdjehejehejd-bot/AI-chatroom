@@ -36,6 +36,12 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     s({ t: 'msg', text: '@가 지금 뭐해?' }); await sleep(30000);
     const said2 = ev.slice(n1).filter(e => e.t === 'msg' && e.msg.kind === 'ai' && e.msg.who === '가');
     check('a transient provider error is retried quietly and the AI still answers', said2.length >= 1 && !ev.slice(n1).some(e => e.t === 'msg' && e.msg.code === 'AI_ERROR'), JSON.stringify(ev.slice(n1).filter(e => e.t === 'msg').map(e => e.msg.who + ':' + e.msg.text)));
+    // 실패한 모델은 응답 시간 벌점: 쉬는 시간(30초)이 끝나도 새 AI를 그 모델에 고정하지 않는다(실측: 계속 실패하는 모델이 '빠른 모델'로 먼저 뽑힘)
+    docMode = false; await sleep(12000); log.length = 0; const n3 = ev.length;
+    s({ t: 'addAI', name: '다', persona: '', provider: 'free' }); await sleep(500);
+    s({ t: 'msg', text: '@다 안녕' }); await sleep(6000);
+    const d3 = ev.slice(n3).filter(e => e.t === 'msg' && e.msg.who === '다').map(e => e.msg.text);
+    check('a model that failed is not pinned to a new AI after its pause ends (it answers via a healthy model)', d3.length >= 1 && /ok-/.test(d3[0]), JSON.stringify({ d3, log }));
     // "[문서]"는 줄 가운데에 붙어 있어도 공유 문서로 옮기고 대화에서는 지운다(실측: 문장 끝에 붙은 [문서]가 대화에 그대로 보임)
     docMode = true; const n2 = ev.length;
     s({ t: 'msg', text: '@가 회의 금요일 3시로 기록해 줘' }); await sleep(25000);

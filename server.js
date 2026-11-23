@@ -1256,12 +1256,10 @@ async function callFree(room, ai, dm, opts = {}) {
   for (const k of order) {
     const b = FREE_BACKENDS[k];
     if (!freeUsable(b)) continue;
-    const start = freeState.used[b.id] || 0;
-    for (let j = 0; j < b.models.length; j++) {
-      const mdl = b.models[(start + j) % b.models.length];
-      if (modelCooling(b, mdl) || tries.some(t => t[0] === b && t[1] === mdl)) continue;
-      tries.push([b, mdl]); break;
-    }
+    /* 대신 쓸 모델은 실측으로 빠른 것부터(실패한 모델은 벌점으로 뒤로), 백엔드마다 둘까지 */
+    const lat = m => (freeState.lat && freeState.lat[b.id + '|' + m]) || 5000;
+    const alt = b.models.filter(m => !modelCooling(b, m) && !tries.some(t => t[0] === b && t[1] === m)).sort((p, q) => lat(p) - lat(q));
+    for (const m of alt.slice(0, 2)) tries.push([b, m]);
   }
   for (const [b, model] of tries) {
     if (!freeUsable(b)) continue;
@@ -1287,6 +1285,8 @@ async function callFree(room, ai, dm, opts = {}) {
     } catch (e) {
       lastErr = e;
       const m = /API (\d+)/.exec(e.message), code = m ? Number(m[1]) : 0;
+      /* 실패한 모델은 응답 시간에 벌점을 준다(성공만 재면 계속 실패하는 모델이 '안 재 본 빠른 모델'로 보여 먼저 뽑혔다). 성공하면 평균으로 회복 */
+      { const lk = b.id + '|' + model; freeState.lat = freeState.lat || {}; freeState.lat[lk] = Math.max(freeState.lat[lk] || 0, code === 429 ? 15000 : 25000); }
       /* 계정 단위 문제(결제 402·인증 401/403·속도 제한 429)는 백엔드 전체를 쉬게 하고,
          모델 단위 문제(시간 초과·서버 오류·모델 없음·빈 응답)는 그 모델만 쉬게 한다(같은 키의 다른 모델은 계속 쓴다) */
       if (code === 402 || code === 401 || code === 403) freeState.cool[b.id] = Date.now() + 6 * 3600000;
