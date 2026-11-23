@@ -1405,10 +1405,12 @@ function chatOf(room) { return room.chat || (room.chat = { busy: new Set(), agai
 function lastOtherSeq(room, ai) { for (let i = room.messages.length - 1; i >= 0; i--) { const m = room.messages[i]; if (m.kind !== 'system' && m.who !== ai.name) return m.id; } return 0; }
 function freeChatActive(room) { return !room.mode && room.policy === 'free' && !PARALLEL_OFF; }
 /* 이 AI가 마지막으로 말한 뒤에 다른 참가자가 이 AI를 @로 불렀는지(@all·@모두 포함). 불렸으면 반드시 답한다 */
+const GROUP_CALL = /(얘들아|애들아|다들|여러분|모두들|모두\s*안녕|하이\s*하이|\b(everyone|everybody|guys|y'all|hi all|hello all)\b)/i;
 function calledSince(room, ai) {
   const mine = [...room.messages].reverse().findIndex(m => m.kind === 'ai' && m.who === ai.name);
-  const since = mine < 0 ? room.messages.slice(-12) : room.messages.slice(room.messages.length - mine);
-  return since.some(m => m.kind !== 'system' && m.who !== ai.name && ((m.text || '').includes('@' + ai.name) || /@(all|모두|전체)(?![\w가-힣])/i.test(m.text || '')));
+  const since = (mine < 0 ? room.messages.slice(-12) : room.messages.slice(room.messages.length - mine)).filter(m => !(ai.calledDone >= m.id));   // 이미 한 번 답을 요구받은 부름은 다시 세지 않는다
+  return since.some(m => m.kind !== 'system' && m.who !== ai.name && ((m.text || '').includes('@' + ai.name) || /@(all|모두|전체)(?![\w가-힣])/i.test(m.text || '') ||
+    (m.kind === 'human' && GROUP_CALL.test(m.text || ''))));   // 사람이 방 전체에 건 말(얘들아, 다들, 여러분…)도 모두를 부른 것으로 본다
 }
 function chatSchedule(room, ai, extra) {
   const st = chatOf(room);
@@ -1509,6 +1511,7 @@ async function chatThink(room, ai) {
      새 대화를 다시 읽고 판단한다. 둘이 같은 말을 하거나 차례를 가로채던 문제를 막는다(한 사람 말마다 AI당 3번까지) */
   const stale = () => lastOtherSeq(room, ai) !== seen && !(must && (st.rethinks[ai.id] || 0) >= 3);
   const rethink = () => { giveBack(); st.busy.delete(ai.id); st.rethinks[ai.id] = (st.rethinks[ai.id] || 0) + 1; if (must) ai.forceReply = true; if (st.rethinks[ai.id] <= 3 || must) { ai.chatSeen = null; chatSchedule(room, ai); } else st.again.delete(ai.id); chatIdle(room); };
+  if (must) ai.calledDone = seen;   // 이 부름에는 답을 요구했다(넘겼어도 다음에 또 강요하지 않는다)
   if (isPass(text)) { giveBack(); ai.chatSeen = seen; if (dmAsk && ai.dmPending === dmAsk) ai.dmPending = null; }
   else {
     if (stale()) return rethink();
@@ -1751,13 +1754,20 @@ function join(ws, m) {
   if (!/^[a-z0-9]{3,12}$/.test(id)) return send(ws, { t: 'err', text: '방 코드는 영문 소문자/숫자 3~12자여야 합니다.' });
   let name = cleanText(m.name, 16).replace(/\s+/g, ' ');
   if (!name) return send(ws, { t: 'err', text: '이름을 입력하세요.' });
-  let room = getRoom(id), assetErr = '', justCreated = false;
+  let room = getRoom(id), assetErr = '', justCreated = false, restored = false;
   if (!room) {
     justCreated = true; track('room_created');
-    if (rooms.size >= LIMITS.rooms) return send(ws, { t: 'err', text: '서버가 가득 찼습니다.' });
+    if (rooms.size >= LIMITS.rooms) {   // 가득 찼으면 가장 오래 비어 있던 방부터 내보낸다
+      const idle = [...rooms.values()].filter(r => r.clients.size === 0).sort((a, b) => (a.lastActive || 0) - (b.lastActive || 0))[0];
+      if (!idle) return send(ws, { t: 'err', text: '서버가 가득 찼습니다.' });
+      if (store.enabled) saveRoom(idle);
+      if (idle.cleanup) clearTimeout(idle.cleanup);
+      rooms.delete(idle.id);
+    }
     room = newRoom(id);
     rooms.set(id, room);
-    if (m.mode != null && m.asset == null) {
+    if (m.restore && typeof m.restore === 'object' && m.mode == null && m.asset == null) { if (restoreRoom(room, m.restore)) { restored = true; track('room_restored'); } }
+    else if (m.mode != null && m.asset == null) {
       if (!applyMode(room, String(m.mode))) assetErr = '알 수 없는 모드입니다.';
     } else if (m.asset != null) {
       const r = validateAsset(m.asset);
@@ -1768,10 +1778,18 @@ function join(ws, m) {
   }
   if (room.clients.size >= LIMITS.humans) return send(ws, { t: 'err', text: '방이 가득 찼습니다.' });
   if ((room.banned || []).includes(ws.user ? ws.user.sub : 'name:' + name)) return send(ws, { t: 'err', code: 'KICKED', text: '이 방에서 내보내져 입장할 수 없습니다.' });
+  const key = ws.user ? dmKeyFor(ws.user.sub) : /^[A-Za-z0-9]{8,40}$/.test(String(m.key || '')) ? String(m.key) : crypto.randomBytes(8).toString('hex');
+  /* 같은 사람(같은 열쇠)이 다시 접속하면(끊겼다 재접속, 새로고침, 다른 창) 예전 연결을 정리하고 그 자리를 이어받는다.
+     사람이 두 번 세어지거나 이름 뒤에 숫자가 붙지 않고, 입장 알림도 다시 띄우지 않는다 */
+  let rejoined = false;
+  for (const c of [...room.clients]) if (c !== ws && c.meta && c.meta.key === key) {
+    room.clients.delete(c); c.meta = null; rejoined = true;
+    try { c.close(4000, 'replaced'); } catch (e) {}
+  }
   const taken = new Set([...room.clients].map(c => c.meta.name).concat(room.ais.map(a => a.name)));
   const base = name; let k = 2;
   while (taken.has(name)) name = base + k++;
-  ws.meta = { room, name, user: ws.user, key: ws.user ? dmKeyFor(ws.user.sub) : /^[A-Za-z0-9]{8,40}$/.test(String(m.key || '')) ? String(m.key) : crypto.randomBytes(8).toString('hex') };
+  ws.meta = { room, name, user: ws.user, key };
   if (justCreated && ws.user) { room.ownerSub = ws.user.sub; room.ownerName = name; }
   if (!justCreated && room.stats) {   // 방 재방문: 방 나이 구간별로 하루 한 번만 센다
     const age = Math.floor((Date.now() - (room.created || Date.now())) / 86400000), today = kstDay();
@@ -1783,9 +1801,40 @@ function join(ws, m) {
   if (room.cleanup) { clearTimeout(room.cleanup); room.cleanup = null; }
   send(ws, Object.assign(meta(room), { t: 'state', compare: room.compare || null, you: name, messages: room.messages.slice(-100).filter(x => !blockedBy(ws, x)).map(pub), doc: room.doc, deliv: room.deliv, dhist: histMeta(room), dms: dmsFor(room, ws.meta.key), aidms: aidmsView(room), blocked: blockedList(ws), memory: room.memory || '', credits: ws.user ? creditInfo(ws.user.sub) : null, user: ws.user ? { name: ws.user.name, picture: ws.user.pic } : null, youOwner: !room.ownerSub || !!(ws.user && ws.user.sub === room.ownerSub) }));
   if (assetErr) send(ws, { t: 'err', text: '에셋을 적용하지 못했습니다: ' + assetErr });
-  system(room, name + ' 님이 입장했습니다.', 'MEMBER_JOIN');
+  if (restored) system(room, '서버가 다시 시작되어 이 기기에 남아 있던 기록으로 방을 되살렸습니다. 되살린 대화는 기기에 저장돼 있던 내용이라 다른 사람의 기록과 다를 수 있습니다.', 'ROOM_RESTORED');
+  if (!rejoined) system(room, name + ' 님이 입장했습니다.', 'MEMBER_JOIN');
   if (room.keyLost && room.keyLost.length) { system(room, '개인 API 키는 서버에 저장하지 않아서 ' + room.keyLost.join(', ') + '의 키를 다시 입력해야 합니다. 그때까지 서버 기본 모델로 말합니다.', 'KEY_LOST'); room.keyLost = []; }
   broadcast(room, meta(room));
+}
+/* 빈 방을 메모리에 남겨 두는 시간(기본 24시간). 방이 가득 차면 가장 오래 비어 있던 방부터 내보낸다.
+   영구 저장소가 없으면 서버 재시작·재배포 때는 사라지므로, 클라이언트가 보낸 기록(restore)으로 되살린다 */
+const EMPTY_ROOM_KEEP_MS = Number(process.env.EMPTY_ROOM_KEEP_MS || 24 * 3600 * 1000);
+/* 서버에 없는 방을 클라이언트가 기기에 남겨 둔 기록으로 되살린다. 받는 값은 모두 검증하고, 키·계정 정보는 받지 않는다 */
+function restoreRoom(room, r) {
+  try {
+    const ais = Array.isArray(r.ais) ? r.ais.slice(0, planOf(room).ais === UNLIMITED ? LIMITS.ais : Math.min(LIMITS.ais, planOf(room).ais)) : [];
+    if (r.mode && MODES[r.mode]) applyMode(room, String(r.mode));
+    else {
+      if (['mention', 'round', 'free'].includes(r.policy)) room.policy = r.policy;
+      if (Number.isInteger(r.maxStreak) && r.maxStreak >= 1 && r.maxStreak <= 10) room.maxStreak = r.maxStreak;
+      room.rules = cleanText(r.rules || '', ASSET_RULES_MAX);
+      const seen = new Set();
+      room.ais = ais.filter(a => a && typeof a.name === 'string' && /^[^\s@]{1,12}$/.test(a.name) && !seen.has(a.name) && seen.add(a.name))
+        .map(a => newAI({ name: a.name, persona: cleanText(typeof a.persona === 'string' ? a.persona : '', LIMITS.persona), provider: ['free', 'demo', 'default'].includes(a.provider) ? a.provider : 'default' }));
+    }
+    room.doc = cleanText(typeof r.doc === 'string' ? r.doc : '', LIMITS.doc);
+    const msgs = Array.isArray(r.messages) ? r.messages.slice(-40) : [];
+    for (const x of msgs) {
+      if (!x || !['human', 'ai'].includes(x.kind) || typeof x.who !== 'string' || typeof x.text !== 'string') continue;
+      const text = cleanText(x.text, 1500); if (!text) continue;
+      room.messages.push({ id: ++room.seq, kind: x.kind, who: cleanText(x.who, 16), text, ts: Number.isFinite(x.ts) ? Math.min(x.ts, Date.now()) : Date.now(), restored: true });
+    }
+    if (r.deliv && typeof r.deliv.text === 'string' && r.deliv.text.trim()) {
+      room.deliv = { lang: String(r.deliv.lang || 'text').toLowerCase().replace(/[^a-z0-9+-]/g, '').slice(0, 12) || 'text', text: r.deliv.text.slice(0, DELIV_MAX), by: cleanText(String(r.deliv.by || ''), 16), v: 1, ts: Date.now() };
+      room.delivHist = [Object.assign({}, room.deliv)];
+    }
+    return room.ais.length > 0 || room.messages.length > 0;
+  } catch (e) { return false; }
 }
 function leave(ws) {
   if (!ws.meta) return;
@@ -1793,7 +1842,7 @@ function leave(ws) {
   room.clients.delete(ws);
   if (room.clients.size === 0) {
     room.gen++;
-    room.cleanup = setTimeout(() => { if (room.clients.size === 0) { if (store.enabled) saveRoom(room); rooms.delete(room.id); } }, 10 * 60 * 1000);
+    room.cleanup = setTimeout(() => { if (room.clients.size === 0) { if (store.enabled) saveRoom(room); rooms.delete(room.id); } }, EMPTY_ROOM_KEEP_MS);
     room.cleanup.unref();
     return;
   }
@@ -2543,7 +2592,7 @@ const server = http.createServer(async (req, res) => {
   }
   res.writeHead(404); res.end('not found');
 });
-const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024, verifyClient: info => sameOrigin(info.req) });
+const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 128 * 1024, verifyClient: info => sameOrigin(info.req) });
 const wsPerIp = new Map(), WS_PER_IP = Number(process.env.MAX_WS_PER_IP) || 20;
 wss.on('connection', (ws, req) => {
   const ip = clientIp(req), cnt = (wsPerIp.get(ip) || 0) + 1; wsPerIp.set(ip, cnt);

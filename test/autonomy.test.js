@@ -38,7 +38,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     for (const n of ['가', '나', '다']) { ws.send(JSON.stringify({ t: 'addAI', name: n, persona: '', provider: 'free' })); await sleep(250); }
     const ais = () => ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').length;
     let a0 = ais(); log.length = 0; mode = 'allpass';
-    ws.send(JSON.stringify({ t: 'msg', text: '다들 뭐해?' })); await sleep(1500);
+    ws.send(JSON.stringify({ t: 'msg', text: '오늘 좀 심심하네' })); await sleep(1500);
     { const sp = new Set(ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').map(e => e.msg.who)); check('AIs that pass never show a typing bubble (only the one that speaks types)', ev.filter(e => e.t === 'typing' && e.on).every(e => sp.has(e.who)) && sp.size === 1, JSON.stringify([...sp])); }
     check('nobody is forced at first: everyone looked once and could pass', log.slice(0, 3).every(l => l.optional) && new Set(log.slice(0, 3).map(l => l.name)).size === 3, JSON.stringify(log));
     check('a human line is never just ignored: when all passed, exactly one AI is asked to react and does', ais() - a0 === 1 && log.filter(l => l.rescue).length === 1 && log[3].rescue && log.slice(4).every(l => l.optional) && !ev.some(e => e.t === 'msg' && e.msg.code === 'AI_ERROR'), JSON.stringify({ n: ais() - a0, log }));
@@ -52,6 +52,11 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     a0 = ais(); log.length = 0; mode = 'stubborn';
     ws.send(JSON.stringify({ t: 'msg', text: '@다 대답해 줘' })); await sleep(1500);
     check('@mention: a model that still passes is asked once more and then answers', ais() - a0 === 1 && ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').pop().msg.who === '다' && log.filter(l => l.name === '다' && l.again).length === 1, JSON.stringify(log));
+    // 방 전체에 건 인사·질문(얘들아, 다들…)은 모두를 부른 것: AI마다 각자 답한다
+    await sleep(1500); a0 = ais(); log.length = 0; mode = 'allpass';
+    ws.send(JSON.stringify({ t: 'msg', text: '안녕 얘들아' })); await sleep(2000);
+    { const who = ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').slice(-3).map(e => e.msg.who).sort().join(',');
+      check('a greeting to everyone gets an answer from every AI', ais() - a0 === 3 && who === '가,나,다', JSON.stringify({ n: ais() - a0, who, log: log.map(l => l.name + (l.must ? '!' : '')) })); }
     a0 = ais(); log.length = 0; mode = 'chatty';
     ws.send(JSON.stringify({ t: 'msg', text: '자유롭게 떠들어 봐' })); await sleep(9000);
     check('no fixed 4-line cap: AIs keep going while they have something to say, never beyond the safety line (7 here)', ais() - a0 > 4 && ais() - a0 <= 7, ais() - a0);

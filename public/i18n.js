@@ -771,7 +771,8 @@
 ["팀장에게 올릴 신제품 출시 일정 보고서", "Launch schedule report for my team lead", "チームリーダーに出す新製品発売スケジュール報告書", "提交给组长的新品上市日程报告", "Informe del calendario de lanzamiento para mi jefe de equipo"],
 ["고객 공지문: 서비스 점검 안내", "Customer notice: scheduled maintenance", "顧客向けお知らせ：サービス点検のご案内", "客户公告：服务维护通知", "Aviso a clientes: mantenimiento programado"],
 ["갈리는 문제를 더 따져서 결론 내줘", "Dig into the disputed problems and decide.", "分かれる問題をもっと検討して結論を出して。", "深入分析分歧问题并给出结论。", "Profundiza en los problemas en disputa y decide."],
-["고친 버전 전체를 다시 써줘", "Rewrite the whole fixed version.", "修正版を全文書き直して。", "重写完整的修改版。", "Reescribe completa la versión corregida."]
+["고친 버전 전체를 다시 써줘", "Rewrite the whole fixed version.", "修正版を全文書き直して。", "重写完整的修改版。", "Reescribe completa la versión corregida."],
+["다른 창이나 기기에서 이 방에 다시 들어와 여기 연결은 닫았어요. 새로고침하면 이 창으로 이어집니다.", "You rejoined this room from another window or device, so this connection was closed. Refresh to continue here.", "別のウィンドウや端末からこのルームに入り直したため、ここの接続は閉じました。再読み込みするとこのウィンドウで続けられます。", "你已在其他窗口或设备重新进入此房间，此处连接已关闭。刷新即可在此窗口继续。", "Volviste a entrar en esta sala desde otra ventana o dispositivo, así que se cerró esta conexión. Recarga para continuar aquí."]
 ];
   function pick() {
     var c = null, q = /[?&]lang=([a-z]{2})/.exec(location.search);

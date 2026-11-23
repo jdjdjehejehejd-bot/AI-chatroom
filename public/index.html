@@ -1293,17 +1293,41 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     var sock = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws"); ws = sock;
     sock.onopen = function () {
       var j = { t: "join", room: roomId, name: name, key: dmKey(), consent: true };
+      var snap = loadSnap(roomId); if (snap) j.restore = snap;   // 서버가 재시작돼 방을 잃었으면 이 기록으로 되살린다(방이 있으면 무시됨)
       if (fresh && !inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; }
       send(j);
     };
     sock.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (x) { return; } if (m.t === "state") { retry = 0; netbar(""); } onMsg(m); };
-    sock.onclose = function () {
+    sock.onclose = function (ev) {
       if (ws !== sock) return;
+      if (ev && ev.code === 4000) { joined = false; netbar(_t("다른 창이나 기기에서 이 방에 다시 들어와 여기 연결은 닫았어요. 새로고침하면 이 창으로 이어집니다.")); return; }
       if (joined) { netbar(_t("연결이 끊어졌어요. 다시 연결하는 중…")); retry++; retryTimer = setTimeout(function () { if (joined) connect(lastName, false); }, Math.min(15000, 800 * Math.pow(1.7, retry))); }
       else { $("jgo").disabled = false; setJoining(false); }
     };
     sock.onerror = function () { if (!joined) { joinErr(_t("서버에 연결하지 못했습니다.")); $("jgo").disabled = false; setJoining(false); } };
   }
+  /* 휴대폰에서 앱을 잠깐 내렸다 오면 연결이 끊겨 있는 경우가 많다: 화면으로 돌아오면 바로 다시 붙는다 */
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && joined && ws && ws.readyState !== 1 && ws.readyState !== 0) { clearTimeout(retryTimer); connect(lastName, false); } });
+  /* 방 기록 백업: 서버에 영구 저장소가 없으면 재시작 때 방이 사라지므로, 방 구성과 최근 대화를 이 기기에 남겨 두었다가 되살린다(API 키는 넣지 않음) */
+  var snapMsgs = [], snapTimer = null;
+  function loadSnap(id) { try { var s = JSON.parse(localStorage.getItem("mm_snap_" + id) || "null"); return s && s.v === 1 ? s : null; } catch (e) { return null; } }
+  function saveSnap() {
+    clearTimeout(snapTimer);
+    snapTimer = setTimeout(function () {
+      if (!meta || !roomId || !joined) return;
+      var s = { v: 1, ts: Date.now(), mode: meta.mode ? meta.mode.id : "", policy: meta.policy, maxStreak: meta.maxStreak,
+        ais: (meta.ais || []).map(function (a) { return { name: a.name, persona: a.persona || "", provider: a.ownKey ? "default" : a.provider }; }),
+        doc: ($("doc").value || "").slice(0, 3000), deliv: deliv ? { lang: deliv.lang, text: String(deliv.text || "").slice(0, 6000), by: deliv.by } : null,
+        messages: snapMsgs.slice(-30).map(function (x) { return { kind: x.kind, who: x.who, text: String(x.text || "").slice(0, 500), ts: x.ts }; }) };
+      try {
+        localStorage.setItem("mm_snap_" + roomId, JSON.stringify(s));
+        var ids = JSON.parse(localStorage.getItem("mm_snaps") || "[]").filter(function (x) { return x !== roomId; }); ids.push(roomId);
+        while (ids.length > 20) localStorage.removeItem("mm_snap_" + ids.shift());
+        localStorage.setItem("mm_snaps", JSON.stringify(ids));
+      } catch (e) {}
+    }, 800);
+  }
+  function snapAdd(x) { if (x && (x.kind === "human" || x.kind === "ai")) { snapMsgs.push(x); if (snapMsgs.length > 60) snapMsgs.splice(0, snapMsgs.length - 60); saveSnap(); } }
   window.addEventListener("online", function () { if (joined && ws && ws.readyState !== 1 && ws.readyState !== 0) { clearTimeout(retryTimer); connect(lastName, false); } });
   $("joinform").addEventListener("submit", function (e) { e.preventDefault(); if (authCfg.required && !authUser) { joinErr(_t("로그인한 뒤에 시작할 수 있어요.")); return; } go(); });
 
@@ -2201,12 +2225,13 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     if (m.t === "state") {
       me = m.you; joined = true; setJoining(false);
       $("entrypane").hidden = true; $("room").hidden = false; setView("main");
-      $("log").textContent = ""; last = null; lastDay = ""; m.messages.forEach(addMessage);
+      $("log").textContent = ""; last = null; lastDay = ""; m.messages.forEach(addMessage); snapMsgs = []; m.messages.forEach(snapAdd);
       $("doc").value = m.doc || ""; deliv = m.deliv || null; dhist = m.dhist || []; viewVer = null; dmThreads = m.dms || {}; aidms = m.aidms || []; cmp = m.compare || null; credits = m.credits || credits; youOwner = m.youOwner !== false; renderCredits(); renderPub(); loadMyRooms();
       if (wide()) $("shell").dataset.info = "1";
       renderBlocked(m.blocked); renderMeta(m); renderMemory(m.memory); renderRooms(); if (!matchMedia("(pointer:coarse)").matches) $("text").focus();
-    } else if (m.t === "meta") { renderMeta(m); }
+    } else if (m.t === "meta") { renderMeta(m); saveSnap(); }
     else if (m.t === "msg") {
+      snapAdd(m.msg);
       if (m.msg.kind === "ai") dropTyping(m.msg.who); addMessage(m.msg); keepTypingLast(); setLive();
       if (document.hidden && m.msg.kind !== "system" && m.msg.who !== me) { unread++; document.title = "(" + unread + ") " + _t("AI 채팅방"); }
       if (m.msg.kind === "ai" && meta && meta.plan.ads && meta.adList.length && ++aiShown % 4 === 0) insertAd(meta.adList[(aiShown / 4 - 1) % meta.adList.length]);
@@ -2247,7 +2272,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     else if (m.t === "keytest") { $("aikeyres").textContent = (m.ok ? "✓ " : "✕ ") + _tx(m.text); $("aikeyres").style.color = m.ok ? "var(--ok, #1a7f37)" : "var(--danger, #c0392b)"; }
     else if (m.t === "compare") { cmp = m.compare || null; cmpBusy = false; renderDeliv(); }
     else if (m.t === "deliv") {
-      deliv = m.deliv; dhist = m.hist || []; viewVer = null; renderDeliv();
+      deliv = m.deliv; dhist = m.hist || []; viewVer = null; renderDeliv(); saveSnap();
       if (deliv) {
         var visible = $("shell").dataset.info === "1" && $("info").dataset.tab === "deliv";
         if (!visible) { document.querySelector('#seg [data-go="deliv"]').classList.add("new"); toast(_t("산출물이 갱신됐습니다 (v{v})", { v: deliv.v })); }
