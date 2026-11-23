@@ -29,7 +29,7 @@ with sync_playwright() as p:
     check("publish success message","게시했어요" in pg.inner_text("#pubmsg"),pg.inner_text("#pubmsg"))
     check("premium option hidden for free",pg.locator("#pubprem").is_hidden())
     # market from home
-    pg.reload();pg.wait_for_selector("#gwho:not([hidden])")
+    pg.goto(B+"/");pg.wait_for_selector("#gwho:not([hidden])")   # 새로고침은 방으로 바로 돌아가므로 홈으로 이동
     pg.click("#marketbtn");pg.wait_for_selector("#mklist .mk")
     check("market shows published asset + featured banner","브레인스토밍 3인 팀" in pg.inner_text("#mklist") and pg.locator("#mkfeat .mk.feat").count()==1)
     pg.click("#mklist .mk >> text=♡ 좋아요");pg.wait_for_function("document.querySelector('#mklist .likes').innerText.indexOf('1')>=0")

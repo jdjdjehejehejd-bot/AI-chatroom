@@ -28,7 +28,7 @@ with sync_playwright() as p:
     check("other user has empty DM history", "비밀" not in B.inner_text("#inboxlist") and "데모 귓속말" not in B.inner_text("#inboxlist"))
     B.click("#inboxlist .inrow >> nth=0"); B.wait_for_selector("#dm:not([hidden])"); check("B thread empty", "데모 귓속말" not in B.inner_text("#dmlog"))
     # reload A (same context => same key) keeps thread
-    A.reload(); A.fill("#jname","Ben"); A.check("#jconsent",force=True); A.click("#jgo"); A.wait_for_selector("#room:not([hidden])")
+    A.reload(); A.wait_for_selector("#room:not([hidden])")   # 새로고침하면 이름 화면 없이 바로 이어서 입장
     A.click("#dmbtn"); A.wait_for_selector("#inboxlist .inrow"); check("DM history survives reload (key)", "데모 귓속말" in A.inner_text("#inboxlist") or "비밀" in A.inner_text("#inboxlist"))
     A.click("#inboxback")
     # hearts
