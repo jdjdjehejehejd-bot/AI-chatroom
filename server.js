@@ -1505,6 +1505,8 @@ async function chatThink(room, ai) {
     text = await generate(room, ai);
     /* 그래도 넘기면 한 번 더 분명히 요구한다 */
     if (must && isPass(text)) { ai.passAgain = true; text = await generate(room, ai); }
+    /* 그래도 넘기면 넘김 선택지를 아예 빼고 "네가 말할 차례"로 한 번 더 부른다(불렸는데 끝내 말이 없던 문제) */
+    if (must && isPass(text)) { ai.canPass = false; text = await generate(room, ai); ai.canPass = true; }
   }
   catch (e) {
     const em = redact(e.message, ai); room.runErr = true;
@@ -1526,7 +1528,10 @@ async function chatThink(room, ai) {
   };
   /* 사람처럼: 생각하는 사이(또는 치는 사이) 다른 사람이 말을 올렸으면, 낡은 생각을 그대로 올리지 않고
      새 대화를 다시 읽고 판단한다. 둘이 같은 말을 하거나 차례를 가로채던 문제를 막는다(한 사람 말마다 AI당 3번까지) */
-  const stale = () => lastOtherSeq(room, ai) !== seen && !(must && (st.rethinks[ai.id] || 0) >= 3);
+  /* 반드시 답해야 하는 AI는 다른 AI의 말이 새로 올라온 것만으로는 다시 생각하지 않는다(같이 인사하는데 서로 밀려 늦던 문제).
+     사람이 새로 말했을 때만 다시 읽는다 */
+  const humanSince = () => room.messages.some(m => m.id > seen && m.kind === 'human');
+  const stale = () => lastOtherSeq(room, ai) !== seen && (!must || humanSince()) && !(must && (st.rethinks[ai.id] || 0) >= 3);
   const rethink = () => { giveBack(); st.busy.delete(ai.id); st.rethinks[ai.id] = (st.rethinks[ai.id] || 0) + 1; if (must) ai.forceReply = true; if (st.rethinks[ai.id] <= 3 || must) { ai.chatSeen = null; chatSchedule(room, ai); } else st.again.delete(ai.id); chatIdle(room); };
   if (must) ai.calledDone = seen;   // 이 부름에는 답을 요구했다(넘겼어도 다음에 또 강요하지 않는다)
   if (isPass(text)) { giveBack(); ai.chatSeen = seen; if (dmAsk && ai.dmPending === dmAsk) ai.dmPending = null; }

@@ -18,7 +18,8 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     if (mode === 'aidm') { if (sys.includes('1:1 비공개 DM')) text = '알겠어\n[DM @나] 아까 나한테 뭐라 했어?'; else if (sys.includes('너에게만 몰래 DM을 보냈다') && sys.includes('반드시')) text = '별말 안 했어 ㅋㅋ'; }
     if (mode === 'greetjoin') { const u = ((j.messages[1] || {}).content) || ''; if (/\(알림\) Bob 님이 입장했습니다/.test(u) && name === '가') text = 'Bob 어서와!'; }
     if (mode === 'dmonly') { if (sys.includes('1:1 비공개 DM')) text = '[DM @나] Ann이 서운했대'; else if (sys.includes('너에게만 몰래 DM을 보냈다') && sys.includes('반드시')) text = 'Ann 미안해, 일부러 그런 거 아니야'; }
-    if (mode === 'whisper') { if (name === '다' && !sys.includes('1:1 비공개 DM')) text = '[DM @Ann] 너한테만 말하는 건데, 아까 그거 비밀이야'; }
+    if (mode === 'nopass') { text = /말할 차례다/.test((j.messages[1] || {}).content || '') ? name + ' 결국 대답' : '[PASS]'; }
+        if (mode === 'whisper') { if (name === '다' && !sys.includes('1:1 비공개 DM')) text = '[DM @Ann] 너한테만 말하는 건데, 아까 그거 비밀이야'; }
     if (mode === 'dmgroup') { if (sys.includes('1:1 비공개 DM')) text = '알겠어 지금 물어볼게\n[단체방] @나 아까 뭐라고 했어?'; else if (must) text = name + ' 대답: 별말 안 했어'; }
     if (mode === 'stubborn' && /\[PASS\]는 허용되지 않는다/.test(sys)) text = name + ' 마지못해 응답';
     if (mode === 'chatty') text = name + ' 의견';
@@ -63,6 +64,11 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     await sleep(1500); a0 = ais(); log.length = 0; mode = 'allpass';
     ws.send(JSON.stringify({ t: 'msg', text: 'ㅎㅇㅎㅇ' })); await sleep(2000);
     check('a bare greeting (ㅎㅇㅎㅇ) gets an answer from every AI', ais() - a0 === 3, JSON.stringify(log.map(l => l.name + (l.must ? '!' : ''))));
+    check('greeting together: each AI is asked to answer once, no re-think just because another AI greeted first', log.filter(l => l.must).length === 3, JSON.stringify(log.map(l => l.name)));
+    // 끝까지 넘기려는 모델: 불렸으면 넘김 선택지를 빼고 한 번 더 불러 결국 답한다
+    a0 = ais(); log.length = 0; mode = 'nopass';
+    ws.send(JSON.stringify({ t: 'msg', text: '@가 대답해' })); await sleep(2000);
+    check('a mentioned AI that keeps passing is finally asked without a pass option and answers', ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').pop().msg.who === '가' && ais() - a0 === 1, JSON.stringify(log.map(l => l.name + (l.optional ? '?' : '') + (l.must ? '!' : ''))));
     // 방 소식(입장)도 AI가 대화로 보고 반응한다
     mode = 'allpass'; await sleep(1500); log.length = 0; mode = 'greetjoin';
     const j0 = ev.length; const wb = new WS('ws://127.0.0.1:3321/ws'); await new Promise(r => wb.on('open', r));
