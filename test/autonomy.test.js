@@ -17,6 +17,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     if (mode === 'allpass' && must) text = name + ' 응답';
     if (mode === 'aidm') { if (sys.includes('1:1 비공개 DM')) text = '알겠어\n[DM @나] 아까 나한테 뭐라 했어?'; else if (sys.includes('너에게만 몰래 DM을 보냈다') && sys.includes('반드시')) text = '별말 안 했어 ㅋㅋ'; }
     if (mode === 'greetjoin') { const u = ((j.messages[1] || {}).content) || ''; if (/\(알림\) Bob 님이 입장했습니다/.test(u) && name === '가') text = 'Bob 어서와!'; }
+    if (mode === 'dmonly') { if (sys.includes('1:1 비공개 DM')) text = '[DM @나] Ann이 서운했대'; else if (sys.includes('너에게만 몰래 DM을 보냈다') && sys.includes('반드시')) text = 'Ann 미안해, 일부러 그런 거 아니야'; }
     if (mode === 'whisper') { if (name === '다' && !sys.includes('1:1 비공개 DM')) text = '[DM @Ann] 너한테만 말하는 건데, 아까 그거 비밀이야'; }
     if (mode === 'dmgroup') { if (sys.includes('1:1 비공개 DM')) text = '알겠어 지금 물어볼게\n[단체방] @나 아까 뭐라고 했어?'; else if (must) text = name + ' 대답: 별말 안 했어'; }
     if (mode === 'stubborn' && /\[PASS\]는 허용되지 않는다/.test(sys)) text = name + ' 마지못해 응답';
@@ -27,7 +28,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     setTimeout(() => { rq.writeHead(200, { 'content-type': 'application/json' }); rq.end(JSON.stringify({ choices: [{ message: { content: text } }] })); }, delay);
   }); });
   await new Promise(r => mock.listen(4121, '127.0.0.1', r));
-  const sv = spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: '3321', DEFAULT_POLICY: 'free', CHAT_EVENT_GAP_MS: '0', CHAT_JITTER_MIN_MS: '0', CHAT_JITTER_MAX_MS: '60', CHAT_SAFETY_MAX: '7', CHAT_SLOWDOWN_MS: '20', CHAT_TYPE_MIN_MS: '500', CHAT_TYPE_PER_CHAR_MS: '0', FREE_ROOM_CAP: '300', FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'mk', base: 'http://127.0.0.1:4121', models: ['m'], cap: 900 }]), FREE_ROOM_CAP: '300', REQUIRE_LOGIN: '0', SESSION_SECRET: 's' }), stdio: 'ignore' });
+  const sv = spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: '3321', DEFAULT_POLICY: 'free', CHAT_EVENT_GAP_MS: '0', ROOM_CALL_BUDGET: '200', ROOM_CALL_BUDGET_MAX: '200', CHAT_JITTER_MIN_MS: '0', CHAT_JITTER_MAX_MS: '60', CHAT_SAFETY_MAX: '7', CHAT_SLOWDOWN_MS: '20', CHAT_TYPE_MIN_MS: '500', CHAT_TYPE_PER_CHAR_MS: '0', FREE_ROOM_CAP: '300', FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'mk', base: 'http://127.0.0.1:4121', models: ['m'], cap: 900 }]), FREE_ROOM_CAP: '300', REQUIRE_LOGIN: '0', SESSION_SECRET: 's' }), stdio: 'ignore' });
   try {
     await sleep(900);
     const ws = new WS('ws://127.0.0.1:3321/ws'); const ev = []; ws.on('message', d => ev.push(JSON.parse(d)));
@@ -58,6 +59,10 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     ws.send(JSON.stringify({ t: 'msg', text: '안녕 얘들아' })); await sleep(2000);
     { const who = ev.filter(e => e.t === 'msg' && e.msg.kind === 'ai').slice(-3).map(e => e.msg.who).sort().join(',');
       check('a greeting to everyone gets an answer from every AI', ais() - a0 === 3 && who === '가,나,다', JSON.stringify({ n: ais() - a0, who, log: log.map(l => l.name + (l.must ? '!' : '')) })); }
+    // 이름 없이 건 짧은 인사(ㅎㅇㅎㅇ)도 모두에게 한 인사: AI마다 답한다
+    await sleep(1500); a0 = ais(); log.length = 0; mode = 'allpass';
+    ws.send(JSON.stringify({ t: 'msg', text: 'ㅎㅇㅎㅇ' })); await sleep(2000);
+    check('a bare greeting (ㅎㅇㅎㅇ) gets an answer from every AI', ais() - a0 === 3, JSON.stringify(log.map(l => l.name + (l.must ? '!' : ''))));
     // 방 소식(입장)도 AI가 대화로 보고 반응한다
     mode = 'allpass'; await sleep(1500); log.length = 0; mode = 'greetjoin';
     const j0 = ev.length; const wb = new WS('ws://127.0.0.1:3321/ws'); await new Promise(r => wb.on('open', r));
@@ -111,6 +116,14 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     const th = ad.find(t => [t.a, t.b].sort().join() === '가,나') || { msgs: [] };
     check('AI-to-AI DM gets answered privately by the receiving AI', th.msgs.some(m => m.from === '가' && m.to === '나') && th.msgs.some(m => m.from === '나' && m.to === '가' && m.text.includes('별말 안 했어')), JSON.stringify(th.msgs));
     check('the private exchange does not spill into the group, and it stops', !ev.slice(k0).some(e => e.t === 'msg' && e.msg.kind === 'ai') && log.filter(l => l.name === '가').length <= 3, JSON.stringify(log.map(l => l.name)));
+    // 귓속말로 "대신 전해줘": 답장 본문이 비어도 무엇을 했는지 보이고, 받은 AI는 사람에게 직접 하는 말(사과)을 단체방에 할 수 있다
+    mode = 'allpass'; await sleep(2500);
+    const q0 = ev.length; mode = 'dmonly';
+    const ga3 = (ev.filter(e => e.t === 'meta').pop()).ais.find(a => a.name === '가');
+    ws.send(JSON.stringify({ t: 'dm', aiId: ga3.id, text: '네가 대신 전해줘' })); await sleep(3000);
+    const dr = ev.slice(q0).filter(e => e.t === 'dm' && e.msg.kind === 'ai').map(e => e.msg.text);
+    check('DM reply is never "(응답 없음)" when the AI acted: it says what it passed on', dr.length === 1 && dr[0].startsWith('(나에게 몰래 전했어요)'), JSON.stringify(dr));
+    check('the receiving AI can apologise to the person in the group', ev.slice(q0).some(e => e.t === 'msg' && e.msg.kind === 'ai' && e.msg.who === '나' && e.msg.text.includes('Ann 미안해')), JSON.stringify(ev.slice(q0).filter(e => e.t === 'msg').map(e => e.msg.who + ':' + e.msg.text)));
     ws.close();
     // 방 무료 한도에 닿으면 AI마다 오류를 띄우지 않고 한 번만 알린다
     const sv2 = spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: '3322', DEFAULT_POLICY: 'free', CHAT_JITTER_MIN_MS: '0', CHAT_JITTER_MAX_MS: '40', CHAT_TYPE_MIN_MS: '0', CHAT_TYPE_PER_CHAR_MS: '0', FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'mk', base: 'http://127.0.0.1:4121', models: ['m'], cap: 900 }]), FREE_ROOM_CAP: '2', REQUIRE_LOGIN: '0', SESSION_SECRET: 's' }), stdio: 'ignore' });
