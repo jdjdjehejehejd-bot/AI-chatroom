@@ -29,7 +29,8 @@ const msgs=c=>c.ev.filter(e=>e.t==='msg').map(e=>e.msg);
  const G=await cl('safe1','Guest',null,true);
  check('guest join ok (anon)',G.ev.some(e=>e.t==='state'));
  // second join w/o consent flag works (already consented)
- const M2=await cl('safe1','Mia',ck2,undefined);check('consent remembered',M2.ev.some(e=>e.t==='state'));M2.ws.close();
+ const M2=await cl('safe1b','Mia',ck2,undefined);   // 같은 방에 같은 계정으로 또 들어오면 예전 연결을 대체하므로 다른 방에서 확인
+ check('consent remembered',M2.ev.some(e=>e.t==='state'));M2.ws.close();
  A.s({t:'addAI',name:'봇',persona:'p'});await sleep(250); A.s({t:'addAI',name:'봇2',persona:'p'});await sleep(250);
  M.s({t:'msg',text:'미아의 스팸 메시지'});await sleep(300);
  Z.s({t:'msg',text:'제드의 정상 메시지'});await sleep(300);
@@ -60,8 +61,8 @@ const msgs=c=>c.ev.filter(e=>e.t==='msg').map(e=>e.msg);
  const st=A2.ev.find(e=>e.t==='state');
  check('state history hides blocked sender for blocker',!st.messages.some(m=>m.text.includes('미아')||m.text==='차단 후 메시지')&&st.messages.some(m=>m.text==='제드의 정상 메시지'),JSON.stringify(st.messages.map(m=>m.text)));
  check('state carries blocked list',Array.isArray(st.blocked)&&st.blocked.length===1,JSON.stringify(st.blocked));
- A.s({t:'unblock',name:'Mia'});await sleep(300);
- const A3=await cl('safe1','Ben',ck1,true);check('unblock restores history',A3.ev.find(e=>e.t==='state').messages.some(m=>m.text==='차단 후 메시지'));A3.ws.close();A2.ws.close();
+ A2.s({t:'unblock',name:'Mia'});   // A2가 같은 계정의 예전 연결(A)을 이어받았다await sleep(300);
+ const A3=await cl('safe1','Ben',ck1,true);check('unblock restores history',A3.ev.find(e=>e.t==='state').messages.some(m=>m.text==='차단 후 메시지'));Object.assign(A,A3);   // 이후는 최신 연결로 계속
  // anonymous session block
  G.s({t:'block',name:'Zed'});await sleep(250);Z.s({t:'msg',text:'제드 둘째'});await sleep(300);
  check('anon session block hides',!msgs(G).some(m=>m.text==='제드 둘째')&&msgs(A).some(m=>m.text==='제드 둘째'));

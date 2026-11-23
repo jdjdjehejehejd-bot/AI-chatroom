@@ -38,9 +38,10 @@ const msgs=c=>[].concat(...c.ev.filter(e=>e.t==='state').map(e=>e.messages),c.ev
  M.s({t:'msg',text:'방장이 지울 글'});await sleep(300);
  const A3=await cl('pol1','Ben',ck1);A3.s({t:'delmsg',id:id(A3,'방장이 지울 글')});await sleep(300);
  check('owner can delete others',M.ev.filter(e=>e.t==='msgdel').length>=2&&M.ev.some(e=>e.t==='msgdel'&&e.id===id(M,'방장이 지울 글')));
- // ip cap: 6 allowed (already: A,M,G1,G2,A2,A3 = 6) -> 7th rejected
+ // ip cap: 6 allowed. 같은 계정의 재접속(A2, A3)은 예전 연결을 대체하므로 지금 열린 연결은 M,G1,G2,A3 = 4개 → 둘 더 열어 6개, 7번째는 거절
+ const P1=await cl('pol2','P1',null),P2=await cl('pol2','P2',null);
  const X=await cl('pol1','Over',null);
  check('per-IP ws cap',X.ev.some(e=>e.code==='TOO_MANY')&&X.ev.some(e=>e._closed||e.t==='_closed'),JSON.stringify(X.ev.map(e=>e.t)));
- A2.ws.close();await sleep(200);const Y=await cl('pol1','Again',null);check('cap frees after close',Y.ev.some(e=>e.t==='state'));
+ P1.ws.close();await sleep(200);const Y=await cl('pol1','Again',null);check('cap frees after close',Y.ev.some(e=>e.t==='state'));
  console.log(res.every(Boolean)?'ALL OK':'SOME FAILED');sv.kill();setTimeout(()=>{try{fs.rmSync(dir,{recursive:true,force:true})}catch(e){}process.exit(0)},300);
 })();

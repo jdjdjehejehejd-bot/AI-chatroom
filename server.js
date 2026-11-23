@@ -906,7 +906,16 @@ function addMsg(room, kind, who, text, code, extra, sub) {
   for (const c of room.clients) if (c.readyState === 1 && !blockedBy(c, msg)) c.send(str);
   return msg;
 }
-function system(room, text, code, extra) { return addMsg(room, 'system', '시스템', text, code, extra); }
+function system(room, text, code, extra) { const m = addMsg(room, 'system', '시스템', text, code, extra); if (EVENT_CODES.has(code) && code !== 'AI_REMOVED') setImmediate(() => chatEvent(room)); return m; }
+/* 방 소식이 생기면 AI들이 그걸 보고 반응할지(인사·아는 척) 스스로 정한다. 들락날락이 잦아도 CHAT_EVENT_GAP_MS(기본 8초)에 한 번만 깨운다 */
+const CHAT_EVENT_GAP_MS = Number(process.env.CHAT_EVENT_GAP_MS || 8000);
+function chatEvent(room) {
+  if (!rooms.has(room.id) || !freeChatActive(room) || !room.ais.some(a => !a.muted) || ![...room.clients].some(c => c.readyState === 1)) return;
+  const now = Date.now(); if (now - (room.lastEventKick || 0) < CHAT_EVENT_GAP_MS) return; room.lastEventKick = now;
+  const st = chatOf(room);
+  if (!st.on) chatHuman(room, '', st.sub); else chatWake(room, null);
+  st.rescued = true;   // 방 소식은 '씹으면 안 되는 사람 말'이 아니다
+}
 
 /* ---------- 발언 대상 선택 ---------- */
 function mentioned(room, text, exclude) {
@@ -922,9 +931,13 @@ function nextAI(room) {
 }
 /* ---------- 토큰 절감: 오래된 발언은 코드블록을 접고 줄여서 프롬프트에 넣는다 ---------- */
 /* 대화 기록: 누가 사람이고 누가 AI인지, 어느 줄이 '나'(이 AI)의 말인지 표시해서 AI가 맥락(누가 방금 말했는지, 누구 차례인지)을 스스로 읽게 한다 */
+/* 방 소식(입장·퇴장·AI 초대 등)은 AI도 대화의 일부로 본다. 그 밖의 시스템 알림(오류·예산 등)은 넣지 않는다 */
+const EVENT_CODES = new Set(['MEMBER_JOIN', 'MEMBER_LEAVE', 'MEMBER_KICKED', 'AI_ADDED', 'AI_REMOVED']);
+const isEvent = m => m.kind === 'system' && EVENT_CODES.has(m.code);
 function recentFor(room, n, self) {
-  const list = room.messages.filter(m => m.kind !== 'system').slice(-n);
+  const list = room.messages.filter(m => m.kind !== 'system' || isEvent(m)).slice(-n);
   return list.map((m, i) => {
+    if (m.kind === 'system') return '(알림) ' + m.text;
     let t = m.text;
     if (room.mode === 'review' && m.kind === 'human' && room.reviewDoc && t === room.reviewDoc) t = '[검토 대상 문서 ' + t.length + '자: 위에 원문 전체가 있다]';   // 원문은 시스템 지시에 한 번만 싣는다
     else if (i < list.length - 4) t = t.replace(/```[\s\S]*?```/g, c => '[코드 ' + c.split('\n').length + '줄 생략]').slice(0, 220);
@@ -1073,6 +1086,7 @@ function buildPrompt(room, ai, dm) {
     (ai.canPass && ai.mustAnswer && ai.rescue ? '\n사람이 한 말에 아직 아무도 반응하지 않았다. 단체방에서 사람 말을 그냥 씹지 않는다. 맥락에 맞게 짧게라도 자연스럽게 반응한다([PASS] 금지). ' : '') +
     (ai.passAgain ? '\n[PASS]는 허용되지 않는다. 지금 반드시 한마디 한다. ' : '') +
     (ai.dmAsk ? '\n' + ai.dmAsk.from + '이(가) 너에게만 몰래 DM을 보냈다: "' + ai.dmAsk.text + '". ' + (ai.dmAsk.must ? '반드시 ' : '할 말이 있으면 ') + '"[DM @' + ai.dmAsk.from + '] 내용" 줄로 그 AI에게 답한다. 단체방에 따로 말할 필요는 없다. ' : '') +
+    (ai.canPass ? '\n"(알림)" 줄은 입장·퇴장·AI 초대 같은 방 소식이다. 누가 들어오면 반갑게 인사하거나 나가면 아는 척하는 등 사람처럼 반응해도 된다. 다만 모두가 똑같이 인사하지는 않는다. ' : '') +
     (ai.canPass && room.chat && room.chat.sinceHuman > 0 ? '\n사람이 마지막으로 말한 뒤 AI들끼리 ' + room.chat.sinceHuman + '번 말했다. 길어질수록 꼭 보탤 말만 하고, 이야기가 일단락됐거나 같은 얘기가 돌면 넘겨서 자연스럽게 마무리한다. ' : '') +
     (ai.canPass ? '\n사람이 정한 진행 방식(차례, 순서, 게임 규칙)이 있으면 반드시 따른다. 네 차례가 아니면 [PASS](단 너를 불렀으면 답한다). 다른 참가자의 차례나 말을 대신하지 않고, 이미 나온 답과 같은 말을 하지 않는다. 채팅이므로 **굵게** 같은 마크다운 꾸밈은 쓰지 않는다. ' : '') +
     (ai.canPass && !ai.mustAnswer ? '\n여기는 친구들 단체 채팅방 같은 곳이고 지금 너를 직접 부르지는 않았다. 사람이 말하면 보통 누군가는 반응한다. 맥락을 보고 정한다: ' +
@@ -1402,7 +1416,7 @@ const TYPE_MIN_MS = Number(process.env.CHAT_TYPE_MIN_MS || 250), TYPE_PER_CHAR_M
 const JIT_MIN = Number(process.env.CHAT_JITTER_MIN_MS || 100), JIT_MAX = Math.max(JIT_MIN, Number(process.env.CHAT_JITTER_MAX_MS || 900));
 function chatOf(room) { return room.chat || (room.chat = { busy: new Set(), again: new Set(), timers: new Map(), sinceHuman: 0, noted: false, limitNoted: false, sub: '', on: false, rethinks: {} }); }
 /* 이 AI가 아닌 참가자(사람·다른 AI)가 마지막으로 올린 말의 번호. 시스템 알림은 대화가 아니므로 뺀다 */
-function lastOtherSeq(room, ai) { for (let i = room.messages.length - 1; i >= 0; i--) { const m = room.messages[i]; if (m.kind !== 'system' && m.who !== ai.name) return m.id; } return 0; }
+function lastOtherSeq(room, ai) { for (let i = room.messages.length - 1; i >= 0; i--) { const m = room.messages[i]; if ((m.kind !== 'system' || isEvent(m)) && m.who !== ai.name) return m.id; } return 0; }
 function freeChatActive(room) { return !room.mode && room.policy === 'free' && !PARALLEL_OFF; }
 /* 이 AI가 마지막으로 말한 뒤에 다른 참가자가 이 AI를 @로 불렀는지(@all·@모두 포함). 불렸으면 반드시 답한다 */
 const GROUP_CALL = /(얘들아|애들아|다들|여러분|모두들|모두\s*안녕|하이\s*하이|\b(everyone|everybody|guys|y'all|hi all|hello all)\b)/i;

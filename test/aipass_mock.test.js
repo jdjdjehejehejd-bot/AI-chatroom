@@ -11,6 +11,7 @@ const mock=http.createServer((q,r)=>{let b='';q.on('data',c=>b+=c);q.on('end',()
  const s=o=>ws.send(JSON.stringify(o));s({t:'join',consent:true,room:'passmock',name:'Ben'});await sleep(300);
  s({t:'plan',id:'plus'});s({t:'config',policy:'free'});
  s({t:'addAI',name:'첫째',persona:'a',provider:'openai',model:'m'});s({t:'addAI',name:'둘째',persona:'b',provider:'openai',model:'m'});await sleep(300);
+ await sleep(1200);log.length=0;   // AI 초대 알림에 대한 반응 판단은 이 검사와 별개
  s({t:'msg',text:'아무나'});await sleep(1500);
  check('all-PASS run: no AI message, no error, stops',!ev.some(e=>e.t==='msg'&&(e.msg.kind==='ai'||e.msg.code==='AI_ERROR')),JSON.stringify(ev.filter(e=>e.t==='msg').slice(-2)));
  check('prompt offers [PASS] + DM syntax',log[0].includes('[PASS]')&&log[0].includes('[DM @'));
