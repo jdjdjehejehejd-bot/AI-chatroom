@@ -15,6 +15,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     /* 'allpass': 할 말이 없으면 넘기지만 지시(반드시 답하라)는 따르는 모델. 'stubborn': 첫 지시를 무시하고 한 번 더 요구받아야 답하는 모델 */
     let text = '[PASS]', delay = 30;
     if (mode === 'allpass' && must) text = name + ' 응답';
+    if (mode === 'aidm') { if (sys.includes('1:1 비공개 DM')) text = '알겠어\n[DM @나] 아까 나한테 뭐라 했어?'; else if (sys.includes('너에게만 몰래 DM을 보냈다') && sys.includes('반드시')) text = '별말 안 했어 ㅋㅋ'; }
     if (mode === 'whisper') { if (name === '다' && !sys.includes('1:1 비공개 DM')) text = '[DM @Ann] 너한테만 말하는 건데, 아까 그거 비밀이야'; }
     if (mode === 'dmgroup') { if (sys.includes('1:1 비공개 DM')) text = '알겠어 지금 물어볼게\n[단체방] @나 아까 뭐라고 했어?'; else if (must) text = name + ' 대답: 별말 안 했어'; }
     if (mode === 'stubborn' && /\[PASS\]는 허용되지 않는다/.test(sys)) text = name + ' 마지못해 응답';
@@ -89,6 +90,15 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     const da = (ev.filter(e => e.t === 'meta').pop()).ais.find(a => a.name === '다');
     check('AI can whisper to a human on its own from the group chat', wdm.length === 1 && wdm[0].aiId === da.id && wdm[0].msg.text.includes('비밀이야'), JSON.stringify(wdm));
     check('the whisper is not posted in the group and counts as a reaction (no rescue)', !ev.slice(w0).some(e => e.t === 'msg' && e.msg.kind === 'ai') && !log.some(l => l.rescue), JSON.stringify(log));
+    // AI끼리 몰래 쪽지: 받은 AI는 반드시 답하고([DM] 줄 없이 답해도 보낸 AI에게 가는 답장이 됨), 단체방에는 아무것도 안 올라가며, 답장에 대한 답장은 선택이라 끝난다
+    mode = 'allpass'; await sleep(2500);
+    const k0 = ev.length; log.length = 0; mode = 'aidm';
+    const ga2 = (ev.filter(e => e.t === 'meta').pop()).ais.find(a => a.name === '가');
+    ws.send(JSON.stringify({ t: 'dm', aiId: ga2.id, text: '나한테 뭐라 했는지 걔한테 물어봐' })); await sleep(3000);
+    const ad = (ev.slice(k0).filter(e => e.t === 'aidms').pop() || { list: [] }).list;
+    const th = ad.find(t => [t.a, t.b].sort().join() === '가,나') || { msgs: [] };
+    check('AI-to-AI DM gets answered privately by the receiving AI', th.msgs.some(m => m.from === '가' && m.to === '나') && th.msgs.some(m => m.from === '나' && m.to === '가' && m.text.includes('별말 안 했어')), JSON.stringify(th.msgs));
+    check('the private exchange does not spill into the group, and it stops', !ev.slice(k0).some(e => e.t === 'msg' && e.msg.kind === 'ai') && log.filter(l => l.name === '가').length <= 3, JSON.stringify(log.map(l => l.name)));
     ws.close();
     // 방 무료 한도에 닿으면 AI마다 오류를 띄우지 않고 한 번만 알린다
     const sv2 = spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: '3322', DEFAULT_POLICY: 'free', CHAT_JITTER_MIN_MS: '0', CHAT_JITTER_MAX_MS: '40', CHAT_TYPE_MIN_MS: '0', CHAT_TYPE_PER_CHAR_MS: '0', FREE_EXTRA_BACKENDS: JSON.stringify([{ id: 'mk', base: 'http://127.0.0.1:4121', models: ['m'], cap: 900 }]), FREE_ROOM_CAP: '2', REQUIRE_LOGIN: '0', SESSION_SECRET: 's' }), stdio: 'ignore' });
