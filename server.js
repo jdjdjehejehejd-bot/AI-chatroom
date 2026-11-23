@@ -967,7 +967,7 @@ function extractAIDMs(room, ai, text) {
 /* AI가 먼저 사람에게 보내는 귓속말: 그 사람과의 DM 스레드에 남고, 그 사람(같은 열쇠로 접속한 모든 창)에게만 보낸다 */
 /* AI끼리 DM을 받은 AI를 깨운다. 처음 받은 DM은 반드시 답하고, 내 DM에 대한 답장은 이어 갈지 스스로 정한다 */
 function sendAIDM(room, from, to, text, isReply) {
-  to.dmPending = { from: from.name, text: text.slice(0, 300), must: !isReply };
+  to.dmPending = { from: from.name, text: text.slice(0, 300), must: !isReply, seen: to.chatSeen };   // seen: DM을 받기 전까지 본 단체방 대화
   to.chatSeen = null;
   if (freeChatActive(room)) { const st = chatOf(room); if (!st.on) chatHuman(room, '', st.sub); else chatSchedule(room, to); }
 }
@@ -1527,7 +1527,9 @@ async function chatThink(room, ai) {
     room.lastAI = ai;
     const ex = extractAIDMs(room, ai, text);
     /* 받은 DM에 답하면서 [DM] 줄을 안 썼으면, 그 말은 DM을 보낸 AI에게 하는 답장으로 보낸다(단체방에 엉뚱하게 올라가지 않게) */
-    const asker = dmAsk && room.ais.find(a => a.name === dmAsk.from);
+    /* 단, 단체방에 새로 볼 말이 있었으면(DM만 보고 깨어난 게 아니면) 그 말은 단체방에 하는 말로 둔다 */
+    const dmOnly = dmAsk && dmAsk.seen != null && dmAsk.seen === seen;
+    const asker = dmOnly && room.ais.find(a => a.name === dmAsk.from);
     if (asker && !ex.dms.some(d => d.to === asker) && ex.text.replace(/^\s*\[?PASS\]?\s*$/gim, '').trim()) { ex.dms.push({ to: asker, text: cleanText(ex.text, 300) }); ex.text = ''; }
     if (dmAsk && ai.dmPending === dmAsk) ai.dmPending = null;
     let changed = false;
@@ -1923,7 +1925,7 @@ function handle(ws, m) {
         txt = txt.split('\n').filter(l => { const g = /^\s*\[단체방\]\s*(.*)$/.exec(l); if (!g) return true; if (g[1].trim() && grp.length < 2) grp.push(g[1].trim()); return false; }).join('\n').trim();
         const ex = extractAIDMs(room, ai, txt); txt = ex.text;
         let changed = false;
-        for (const d of ex.dms) if (pushAIDM(room, ai, d.to, d.text)) { changed = true; d.to.dmPending = { from: ai.name, text: d.text.slice(0, 300), must: true }; d.to.chatSeen = null; }   // 받은 AI는 그 DM에 답한다
+        for (const d of ex.dms) if (pushAIDM(room, ai, d.to, d.text)) { changed = true; d.to.dmPending = { from: ai.name, text: d.text.slice(0, 300), must: true, seen: d.to.chatSeen }; d.to.chatSeen = null; }   // 받은 AI는 그 DM에 답한다
         if (changed) broadcast(room, { t: 'aidms', list: aidmsView(room) });
         const gtext = cleanText(grp.join('\n'), 600);
         if (gtext && room.ais.includes(ai)) {
