@@ -171,6 +171,8 @@ npm start          # http://localhost:3000
 ## 저장 · 계정 플랜 · 일일 크레딧 · 방 기억 · 에셋 마켓
 
 - **저장**: `DATA_DIR`를 지정하면 방(대화, 문서, 산출물, 설정, 귓속말, AI끼리 DM)과 계정, 마켓이 파일로 저장되고 재시작 뒤 복원된다. 개인 API 키는 저장하지 않으며, 복원된 방에서는 키를 다시 입력하라는 안내가 나온다. 보관 기간은 무료 7일/플러스 365일(`ROOM_KEEP_DAYS_FREE`, `ROOM_KEEP_DAYS_PLUS`), 마지막 활동 기준이다. 저장소는 `store.js`의 `read/write/remove/list` 네 함수뿐이라 Redis나 DB로 바꾸기 쉽다. **Render 무료 플랜 등 디스크가 없는 환경에서는 재시작 때 사라진다**(영구 디스크가 필요하다).
+- **코드 구성**: `server.js`(접속·대화 흐름·HTTP), `lib/modes.js`(모드 정의), `lib/free-backends.js`(무료 모델 풀 백엔드 목록), `store.js`(파일 저장), `pgstore.js`(Postgres 저장), `secrets.js`(암호화 설정). 분리는 동작을 바꾸지 않는 단계로 나눠 진행한다.
+- **Postgres 저장(`DATABASE_URL`)**: `DATABASE_URL`이 있으면 같은 데이터를 Postgres 표 `mm_kv`(키, JSON 문자열)에 보관한다(`pgstore.js`). 디스크 없는 Render Free에서도 재시작·재배포 뒤 방이 남는다. 연결 문자열은 비밀이므로 `secrets.enc`에 넣는다(Render 환경변수에는 `CONFIG_KEY`만). 시작할 때 표 전체를 읽어 메모리에 올리고, 쓰기는 뒤에서 같은 키의 마지막 값만 보낸다(실패하면 재시도). 종료 신호를 받으면 남은 쓰기를 보낸 뒤(최대 8초) 끝난다. DB에 닿지 못하면 메모리만으로 시작하고 DB의 기존 데이터는 건드리지 않는다(`/healthz`의 `store`가 `memory`로 보인다). TLS는 기본으로 인증서를 검증하며, 필요하면 `DATABASE_SSL=no-verify|off`.
 - **내 계정의 방**: 로그인하면 다른 기기에서도 내가 들어갔던 방이 사이드바에 나타난다(`/api/myrooms`).
 - **계정 플랜**: 방 플랜은 방장 계정의 플랜을 따른다. 결제 연동 전이므로 운영자가 `POST /admin/plan`(헤더 `Authorization: Bearer $ADMIN_TOKEN`, 본문 `{"email":"…" 또는 "sub":"…","plan":"plus","days":30}`)으로 부여한다. 결제(Play Billing 등)는 영수증을 검증한 뒤 이 로직을 호출하도록 붙이면 된다. `ADMIN_TOKEN`이 없으면 비활성.
 - **일일 크레딧**: 로그인 계정마다 하루 AI 호출 한도(무료 `DAILY_FREE_CALLS`=60, 플러스 `DAILY_PLUS_CALLS`=400)를 방 예산과 별개로 건다. 요청한 사람의 크레딧이 깎이고, 한국 시간 자정에 초기화된다. DM도 포함.

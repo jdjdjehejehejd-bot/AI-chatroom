@@ -51,5 +51,5 @@
 1. 실제 AI가 필요할 때만 제공사 키·모델을 추가하고 `node scripts/smoke-providers.js`로 확인한다. Mistral Free mode 서버 키를 쓸 경우 제공사 계정에서 학습 옵트아웃을 먼저 확인하고, 해당 계정에 포함된 모델 ID만 명시한다. 제공사 사용료는 호스팅 무료 여부와 별개다.
 2. 공개 전에 `OPERATOR_NAME`, `CONTACT_EMAIL`을 설정하고 개인정보처리방침·약관 템플릿을 실제 운영 방식에 맞게 검토한다.
 3. Google/GitHub 로그인 또는 이메일 인증이 필요하면 자격증명을 설정하고 실기기에서 확인한다.
-4. Render Free에서는 재시작 후 데이터가 남지 않는 것이 정상이다. 유료 전환 뒤 보존하려면 영구 디스크를 `/data`에 연결하고 `DATA_DIR=/data`로 설정한 뒤 복구를 확인한다.
+4. `DATABASE_URL`(secrets.enc)이 있으면 Postgres에 저장되어 Render Free에서도 재시작 뒤 방이 남는다(실제 Postgres 16에서 재시작 복원 확인, CI는 pg-mem). 없으면 Render Free에서는 재시작 후 데이터가 남지 않는 것이 정상이다. 유료 전환 뒤 보존하려면 영구 디스크를 `/data`에 연결하고 `DATA_DIR=/data`로 설정한 뒤 복구를 확인한다.
 5. Render Free는 유휴 15분 뒤 잠들고 다시 깨어나는 데 시간이 걸릴 수 있다. Free 사용량 한도와 초과 사용 시 계정 결제수단에 따라 서비스 정지 또는 추가 요금 가능성을 확인한다.
