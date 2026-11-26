@@ -830,6 +830,7 @@ function harvestDeliverable(room, ai, text) {
   if (!last || !last[2].trim()) return;
   if (!room.mode && last[2].trim().length < FREE_DELIV_MIN) return;   // 모드 없는 방은 짧은 예시 코드는 산출물로 치지 않는다
   room.deliv = { lang: (last[1] || 'text').toLowerCase().slice(0, 12), text: last[2].trim().slice(0, DELIV_MAX), by: ai.name, v: ((room.deliv && room.deliv.v) || 0) + 1, ts: Date.now() };
+  if (room.mode === 'review' && room.reviewDoc) room.deliv.src = room.reviewDoc;   // 검토실: 원문을 함께 보관해 '원문과 비교' 화면을 만든다
   room.delivReq = room.lastReq || ''; room.compare = null;
   pushHist(room); trackF('deliverable_saved', room); room.runDeliv = true; funnel(room, 'deliverable');
   broadcast(room, { t: 'deliv', deliv: room.deliv, hist: histMeta(room) });
@@ -2242,6 +2243,7 @@ function handle(ws, m) {
       const h = (room.delivHist || []).find(x => x.v === Number(m.v));
       if (!h || !room.deliv) return;
       room.deliv = { lang: h.lang, text: h.text, by: h.by, v: room.deliv.v + 1, ts: Date.now(), from: h.v };
+      if (h.src) room.deliv.src = h.src;
       pushHist(room); track('deliverable_restored');
       system(room, name + ' 님이 산출물 v' + h.v + '을(를) 되돌려 v' + room.deliv.v + '으로 저장했습니다.', 'DELIV_RESTORED');
       return broadcast(room, { t: 'deliv', deliv: room.deliv, hist: histMeta(room) });

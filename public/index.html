@@ -498,6 +498,65 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
 .mk .meta{font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
 .mk .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
 .badge-prem{font-size:11px;font-weight:700;color:var(--accent-text);background:var(--accent-soft);border-radius:999px;padding:2px 8px;align-self:flex-start}
+
+/* ===== 디자인 정리(2026-11): 크롬은 무채색, 색은 AI 참가자가 가진다 =====
+   - 내 말풍선·주요 버튼은 먹색(다크 모드에서는 반전), 보조 요소는 회색 단계로만 구분
+   - AI는 각자 고유 색의 말풍선과 둥근 사각 아바타, 사람은 원형 아바타(모양만 봐도 AI/사람 구분)
+   - 시스템 알림은 상자 없이 작은 회색 글씨, 같은 사람의 연속 메시지는 메신저처럼 묶음 */
+:root {
+  --bg:#EDEFF2; --surface:#FFFFFF; --surface2:#F7F8FA; --ink:#17191E; --muted:#667080; --line:#E3E6EB; --line2:#D3D8DF; --edge:#E3E6EB;
+  --accent:#17191E; --accent2:#30343C; --accent-ink:#FFFFFF; --accent-soft:#E8EAEE; --accent-text:#17191E;
+  --me-bubble:#17191E; --me-ink:#FFFFFF; --h-sf:#EEF0F3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#0F1114; --surface:#16191E; --surface2:#1B1F25; --ink:#E9ECF1; --muted:#8D95A4; --line:#232831; --line2:#2F3541; --edge:#262B34;
+    --accent:#E9ECF1; --accent2:#FFFFFF; --accent-ink:#0F1114; --accent-soft:#242932; --accent-text:#E9ECF1;
+    --me-bubble:#E9ECF1; --me-ink:#0F1114; --h-sf:#1D2128;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0F1114; --surface:#16191E; --surface2:#1B1F25; --ink:#E9ECF1; --muted:#8D95A4; --line:#232831; --line2:#2F3541; --edge:#262B34;
+  --accent:#E9ECF1; --accent2:#FFFFFF; --accent-ink:#0F1114; --accent-soft:#242932; --accent-text:#E9ECF1;
+  --me-bubble:#E9ECF1; --me-ink:#0F1114; --h-sf:#1D2128;
+}
+body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:-0.005em; }
+:focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+.btn.primary:hover:not(:disabled) { background:var(--accent2); }
+.mark { background:var(--ink); color:var(--surface); border:0; box-shadow:none; }
+/* 대화 */
+#log { padding-left:max(14px, env(safe-area-inset-left, 0px)); padding-right:max(14px, env(safe-area-inset-right, 0px)); }
+.sys { border:0; background:none; font-size:12px; color:var(--muted); padding:2px 8px; margin:10px 0; line-height:1.5; }
+.date { background:var(--line); color:var(--muted); font-size:11.5px; padding:3px 12px; border-radius:999px; margin:14px 0 8px; }
+.row { max-width:78%; margin-top:14px; gap:8px; }
+.row.cont { margin-top:3px; }
+.av { border-radius:30%; border:0; }
+.av.human, .cc.human .av, #people .av { border-radius:50%; }
+.row .av { width:34px; height:34px; font-size:14px; }
+.name { font-size:12.5px; margin:0 4px 4px; gap:5px; }
+.tag { font:500 10px/1.4 inherit; letter-spacing:0; border:0; padding:0; color:var(--muted); opacity:.85; }
+.bubble { border:0 !important; border-radius:18px !important; padding:9px 14px; font-size:15px; line-height:1.55; color:var(--ink); box-shadow:none; }
+.row:not(.mine).first .bubble { border-top-left-radius:6px !important; }
+.row.mine .bubble { background:var(--me-bubble); color:var(--me-ink); border-top-right-radius:6px !important; }
+.row.mine.cont .bubble { border-top-right-radius:18px !important; }
+.row.mine .bubble a, .row.mine .mention { color:var(--me-ink); }
+.time { font-size:10.5px; margin:4px 6px 0; opacity:.85; }
+.typing .bubble i { border-radius:50%; }
+/* 참가자 줄: 말하는 중일 때만 상태를 보인다 */
+.cc small:empty { display:none; }
+#stories { background:var(--surface); }
+/* 입력창 */
+#text { font-size:15px; }
+@media (prefers-reduced-motion: reduce) { .row, .typing .bubble i, .cc.live .av { animation:none !important; } }
+/* 검토실 원문 비교 */
+.dcmp { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:8px 0; }
+.dcol { min-width:0; border:1px solid var(--line); border-radius:12px; background:var(--surface2); padding:10px 12px; }
+.dcol > b { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+.dtext { white-space:pre-wrap; word-break:break-word; font-size:13.5px; line-height:1.65; max-height:52vh; overflow:auto; }
+.dtext mark { border-radius:4px; padding:0 1px; color:inherit; }
+.dtext mark.del { background:rgba(220,38,38,.14); text-decoration:line-through; text-decoration-color:rgba(220,38,38,.55); }
+.dtext mark.ins { background:rgba(22,163,74,.16); }
+@media (max-width:560px) { .dcmp { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -1383,7 +1442,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
   function ccStatus(small, live) {
     small.textContent = "";
     if (live) { var eq = mk("span", "eq"); eq.appendChild(mk("i")); eq.appendChild(mk("i")); eq.appendChild(mk("i")); small.appendChild(eq); small.appendChild(document.createTextNode(_t("말하는 중"))); }
-    else small.textContent = _t("대기");
+    /* 쉬는 중에는 상태를 적지 않는다(모든 AI 밑에 "대기"가 붙으면 잡음) */
   }
   function renderStories(s) {
     var box = $("stories"); box.textContent = "";
@@ -1559,7 +1618,7 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       var ai = m.kind === "ai", mine = m.kind === "human" && m.who === me;
       var cont = last && last.who === m.who && last.kind === m.kind && ts - last.ts < 120000;
       var row = mk("div", "row" + (mine ? " mine" : "") + (ai ? " c" + colorOf(m.who) : "") + (cont ? " cont" : " first") + " last");
-      var av = mk("div", "av", (ai ? dn(m.who) : m.who).charAt(0)); av.setAttribute("aria-hidden", "true"); if (!ai) humanStyle(av, m.who);
+      var av = mk("div", "av" + (ai ? "" : " human"), (ai ? dn(m.who) : m.who).charAt(0)); av.setAttribute("aria-hidden", "true"); if (!ai) humanStyle(av, m.who);
       var col = mk("div", "col");
       if (!cont && !mine) { var nm = mk("div", "name"); nm.appendChild(mk("span", "", ai ? dn(m.who) : m.who)); if (ai) nm.appendChild(mk("span", "tag", "AI")); col.appendChild(nm); }
       var b = mk("div", "bubble"); renderBody(b, m.text); col.appendChild(b);
@@ -1801,6 +1860,27 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
     host.insertBefore(box, first);
   }
   var EXT = { html: "html", python: "py", py: "py", javascript: "js", js: "js", markdown: "md", md: "md", json: "json", css: "css", text: "txt", typescript: "ts", ts: "ts", bash: "sh", sh: "sh" };
+  /* 검토실 '원문과 비교': 검토 카드의 '## 고친 버전' 절을 원문 옆에 놓고 문장 단위로 바뀐 곳을 표시한다 */
+  function fixedPart(t) { var m = /(^|\n)##\s*고친 버전[^\n]*\n([\s\S]*?)(?=\n##\s|$)/.exec(String(t || "")); return m ? m[2].trim() : ""; }
+  function sents(t) { return String(t).replace(/\r/g, "").split(/(?<=[.!?。！？]\s+|\n+)/).filter(function (x) { return x.length; }); }
+  function sentDiff(a, b) {   // LCS(문장 단위). 앞뒤 공백은 비교에서 뺀다
+    var A = sents(a), B = sents(b), n = A.length, m = B.length, k = function (x) { return x.trim(); };
+    if (n * m > 250000) return { a: [[A.join(""), 0]], b: [[B.join(""), 0]] };
+    var L = []; for (var i = 0; i <= n; i++) { L.push(new Array(m + 1).fill(0)); }
+    for (i = n - 1; i >= 0; i--) for (var j = m - 1; j >= 0; j--) L[i][j] = k(A[i]) === k(B[j]) ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    var oa = [], ob = []; i = 0; j = 0;
+    while (i < n || j < m) {
+      if (i < n && j < m && k(A[i]) === k(B[j])) { oa.push([A[i++], 0]); ob.push([B[j++], 0]); }
+      else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) ob.push([B[j++], 1]);
+      else oa.push([A[i++], 1]);
+    }
+    return { a: oa, b: ob };
+  }
+  function diffPane(title, parts, cls) {
+    var col = mk("div", "dcol"); col.appendChild(mk("b", "", title));
+    var body = mk("div", "dtext"); parts.forEach(function (p) { body.appendChild(p[1] ? mk("mark", cls, p[0]) : document.createTextNode(p[0])); });
+    col.appendChild(body); return col;
+  }
   function renderDeliv() {
     var box = $("delivbox"); box.textContent = "";
     if (!deliv) {
@@ -1816,24 +1896,37 @@ a.btn{display:inline-flex;align-items:center;text-decoration:none}
       m.appendChild(sel);
     } else m.appendChild(mk("span", "pill", "v" + cur.v));
     m.appendChild(mk("span", "", dn(cur.by) + " · " + cur.lang + " · " + _t("{n}자", { n: cur.text.length })));
+    var fixed = cur.src ? fixedPart(cur.text) : "";
+    if (fixed) {
+      var cv = mk("button", "btn sm", dview === "compare" ? _t("검토 카드 보기") : _t("원문과 비교")); cv.type = "button"; cv.id = "dcompare";
+      cv.addEventListener("click", function () { dview = dview === "compare" ? "preview" : "compare"; renderDeliv(); });
+      m.appendChild(cv);
+    } else if (dview === "compare") dview = "preview";
     if (isHtml) {
       var tg = mk("button", "btn sm", dview === "preview" ? _t("코드 보기") : _t("미리보기")); tg.type = "button"; tg.id = "dtoggle";
       tg.addEventListener("click", function () { dview = dview === "preview" ? "code" : "preview"; renderDeliv(); });
       m.appendChild(tg);
     }
     box.appendChild(m);
-    if (isHtml && dview === "preview") {
+    if (fixed && dview === "compare") {
+      var d = sentDiff(cur.src, fixed), grid = mk("div", "dcmp"); grid.id = "dcmpbox";
+      grid.appendChild(diffPane(_t("원문"), d.a, "del")); grid.appendChild(diffPane(_t("고친 버전"), d.b, "ins"));
+      box.appendChild(grid);
+      var nch = d.b.filter(function (p) { return p[1]; }).length;
+      box.appendChild(mk("p", "hint", nch ? _t("바뀐 문장 {n}개를 표시했습니다.", { n: nch }) : _t("바뀐 문장이 없습니다.")));
+    } else     if (isHtml && dview === "preview") {
       var fr = document.createElement("iframe"); fr.id = "dframe"; fr.setAttribute("sandbox", ""); fr.setAttribute("title", _t("산출물 미리보기")); fr.srcdoc = cur.text; box.appendChild(fr);
     } else { var pre = mk("pre", "code mono dpre", cur.text); pre.id = "dcode"; box.appendChild(pre); }
     var act = mk("div", "dact");
-    var cp = mk("button", "btn sm", _t("복사")); cp.type = "button"; cp.id = "dcopy";
-    cp.addEventListener("click", function () { var kv = cur.v, fail = function () { send({ t: "kpi", n: "copy_failed", v: kv }); toast(_t("복사하지 못했습니다.")); }; try { navigator.clipboard.writeText(cur.text).then(function () { send({ t: "kpi", n: "copy_success", v: kv }); toast(_t("복사했습니다.")); }, fail); } catch (e) { fail(); } });
-    var dl = mk("button", "btn sm primary", _t("파일로 저장")); dl.type = "button"; dl.id = "ddown";
+    var cmpOn = !!(fixed && dview === "compare"), outText = cmpOn ? fixed : cur.text;
+    var cp = mk("button", "btn sm", cmpOn ? _t("고친 버전 복사") : _t("복사")); cp.type = "button"; cp.id = "dcopy";
+    cp.addEventListener("click", function () { var kv = cur.v, fail = function () { send({ t: "kpi", n: "copy_failed", v: kv }); toast(_t("복사하지 못했습니다.")); }; try { navigator.clipboard.writeText(outText).then(function () { send({ t: "kpi", n: "copy_success", v: kv }); toast(_t("복사했습니다.")); }, fail); } catch (e) { fail(); } });
+    var dl = mk("button", "btn sm primary", cmpOn ? _t("고친 버전 저장") : _t("파일로 저장")); dl.type = "button"; dl.id = "ddown";
     dl.addEventListener("click", function () {
       send({ t: "kpi", n: "download_clicked", v: cur.v });
       try {
-        var a = document.createElement("a"), u = URL.createObjectURL(new Blob([cur.text], { type: "text/plain;charset=utf-8" }));
-        a.href = u; a.download = "result-v" + cur.v + "." + (EXT[deliv.lang] || "txt"); document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
+        var a = document.createElement("a"), u = URL.createObjectURL(new Blob([outText], { type: "text/plain;charset=utf-8" }));
+        a.href = u; a.download = (cmpOn ? "fixed-v" + cur.v + ".txt" : "result-v" + cur.v + "." + (EXT[deliv.lang] || "txt")); document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
       } catch (e) { toast(_t("저장하지 못했습니다. 복사해서 쓰세요.")); }
     });
     act.appendChild(cp); act.appendChild(dl);

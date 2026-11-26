@@ -797,3 +797,13 @@ AI 셋과 단톡방 시작 || Start a group chat with 3 AIs || AI3人とグル�
 지우 || Jiwoo || ジウ || 智宇 || Jiwoo
 도윤 || Doyun || ドユン || 道允 || Doyun
 하린 || Harin || ハリン || 夏琳 || Harin
+
+# ── 검토실 비교 ──
+원문과 비교 || Compare with original || 原文と比較 || 与原文对比 || Comparar con el original
+검토 카드 보기 || View review card || レビューカードを見る || 查看审阅卡片 || Ver la tarjeta de revisión
+원문 || Original || 原文 || 原文 || Original
+고친 버전 || Revised version || 修正版 || 修改版 || Versión corregida
+바뀐 문장 {n}개를 표시했습니다. || Highlighted {n} changed sentences. || 変更された文を{n}件表示しました。 || 已标出 {n} 处修改的句子。 || Se marcaron {n} frases cambiadas.
+바뀐 문장이 없습니다. || No sentences changed. || 変更された文はありません。 || 没有修改的句子。 || No cambió ninguna frase.
+고친 버전 복사 || Copy revised version || 修正版をコピー || 复制修改版 || Copiar versión corregida
+고친 버전 저장 || Save revised version || 修正版を保存 || 保存修改版 || Guardar versión corregida
