@@ -557,6 +557,24 @@ body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-
 .dtext mark.del { background:rgba(220,38,38,.14); text-decoration:line-through; text-decoration-color:rgba(220,38,38,.55); }
 .dtext mark.ins { background:rgba(22,163,74,.16); }
 @media (max-width:560px) { .dcmp { grid-template-columns:1fr; } }
+/* AI 활동량 3단 선택 */
+.seg3 { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; background:var(--surface2); border:1px solid var(--line); border-radius:12px; padding:4px; }
+.seg3 label { position:relative; }
+.seg3 input { position:absolute; opacity:0; inset:0; margin:0; cursor:pointer; }
+.seg3 span { display:block; text-align:center; padding:8px 0; border-radius:9px; font-size:13.5px; font-weight:600; color:var(--muted); }
+.seg3 input:checked + span { background:var(--ink); color:var(--surface); }
+.seg3 input:focus-visible + span { outline:2px solid var(--ink); outline-offset:2px; }
+/* 진행 중인 AI 작업 + 멈추기 */
+#runbar { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 8px; padding:6px 6px 6px 12px; border:1px solid var(--line); border-radius:12px; background:var(--surface2); font-size:13px; color:var(--muted); }
+#runbar[hidden] { display:none; }
+#runstop { border:1px solid var(--line2); background:var(--surface); color:var(--ink); border-radius:9px; padding:5px 12px; font:600 12.5px/1.2 inherit; cursor:pointer; }
+#runstop:hover { background:var(--accent-soft); }
+.runlist { display:grid; gap:2px; }
+.runrow { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid var(--line); }
+.runrow .nm { min-width:0; display:flex; flex-direction:column; }
+.runrow small { color:var(--muted); font-size:11.5px; }
+.runrow.failed small { color:#C2410C; }
+.runrow .mono { font-size:12px; color:var(--muted); white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -648,6 +666,7 @@ body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-
       <div id="status"></div>
       <div id="composer">
         <div id="costhint" hidden></div>
+        <div id="runbar" hidden><span id="runtxt">AI가 작업 중</span><button type="button" id="runstop">멈추기</button></div>
         <div id="chips"></div>
         <div id="send-row">
           <label for="text" class="sr">메시지 입력</label>
@@ -749,6 +768,22 @@ body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-
         <section><h3>계정</h3><div id="acct"></div></section>
         <section><h3>차단한 사용자</h3><div id="blklist"></div><p class="hint" style="margin-top:8px">메시지의 ⋯ 버튼으로 신고·차단할 수 있어요. 차단하면 그 사람의 메시지가 나에게만 숨겨집니다.</p></section>
         <section id="intsec"><h3>외부 서비스 연동</h3><p class="hint" style="margin:0 0 10px">GitHub 저장소와 Notion 페이지를 채팅방의 대화·산출물과 연결합니다. 토큰은 서버의 암호화 쿠키에 보관됩니다.</p><div id="intstate"></div><div class="row2" style="margin-top:10px"><button type="button" class="btn sm" id="ghconnect">GitHub 연결</button><button type="button" class="btn sm" id="notionconnect">Notion 연결</button></div><label class="lb" for="intrepo">GitHub 저장소 (owner/repo)</label><input class="field" id="intrepo" placeholder="owner/repo"><label class="lb" for="intpath">저장 파일 경로</label><input class="field" id="intpath" placeholder="ai-chatroom/chat.md"><label class="lb" for="intbranch">브랜치</label><input class="field" id="intbranch" value="main"><label class="lb" for="intpage">Notion 페이지 ID</label><input class="field" id="intpage" placeholder="페이지 검색 결과의 ID"><label class="keymem"><input type="checkbox" id="intauto"><span>새 메시지마다 자동 동기화</span></label><div class="row2" style="margin-top:10px"><button type="button" class="btn primary sm" id="intsave">연동 저장</button><button type="button" class="btn sm" id="intsync">지금 동기화</button></div><div class="row2" style="margin-top:10px"><input class="field" id="notionq" placeholder="Notion 검색어"><button type="button" class="btn sm" id="notionsearch">Notion 검색</button></div><div id="intmsg" class="hint" role="status" style="margin-top:8px"></div></section>
+        <section id="actsec">
+          <fieldset>
+            <legend>AI 활동량</legend>
+            <div class="seg3" role="radiogroup" aria-label="AI 활동량">
+              <label><input type="radio" name="activity" value="quiet"><span>조용</span></label>
+              <label><input type="radio" name="activity" value="normal"><span>보통</span></label>
+              <label><input type="radio" name="activity" value="chatty"><span>수다</span></label>
+            </div>
+            <p class="hint" id="acthint" style="margin:8px 0 0"></p>
+          </fieldset>
+          <fieldset style="margin-top:14px">
+            <legend>누가 말할지 정하는 방식 (실험)</legend>
+            <label class="pol"><input type="radio" name="judge" value="each"><span><b>AI마다 따로 판단</b><span>AI가 각자 대화를 보고 말할지 정합니다. 자연스럽지만 AI 수만큼 호출합니다.</span></span></label>
+            <label class="pol"><input type="radio" name="judge" value="one"><span><b>한 번에 판단</b><span>진행자 호출 한 번으로 누가 말할지 정하고, 고른 AI만 부릅니다. 호출이 줄어듭니다. @로 부른 AI는 항상 답합니다.</span></span></label>
+          </fieldset>
+        </section>
         <section>
           <fieldset>
             <legend>AI 발언 방식</legend>
@@ -1840,6 +1875,10 @@ body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-
     else { cur.appendChild(mk("b", "", _t("적용된 에셋 없음"))); cur.appendChild(mk("small", "", _t("빈 방이거나 AI를 직접 초대한 상태입니다."))); }
     var active = document.activeElement;
     document.querySelectorAll('input[name="policy"]').forEach(function (r) { r.checked = r.value === s.policy; });
+    document.querySelectorAll('input[name="activity"]').forEach(function (r) { r.checked = r.value === s.activity; });
+    document.querySelectorAll('input[name="judge"]').forEach(function (r) { r.checked = r.value === s.judge; });
+    $("acthint").textContent = ACTHINT[s.activity] ? _t(ACTHINT[s.activity]) : "";
+    $("actsec").hidden = !!s.mode || s.policy !== "free";
     if (active !== $("stplus") && active !== $("stminus")) $("stval").textContent = s.maxStreak;
     if (errAI && !s.ais.some(function (a) { return a.id === errAI.id; })) errAI = null;
     $("text").placeholder = s.mode ? _t("요청을 입력하세요") : _t("메시지 입력 (@이름 으로 AI 호출)");
@@ -2094,6 +2133,16 @@ body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-
     toast(_t("브랜드 키트를 저장했습니다."));
   });
   $("bclear").addEventListener("click", function () { send({ t: "brand", clear: true }); });
+  /* Run(요청 하나가 일으킨 AI 작업): 1.2초 넘게 돌면 '멈추기'를 보여 주고, 끝나면 최근 실행 기록에 넣는다 */
+  var runs = [], curRun = null, runTimer = null;
+  var RUNKIND = { chat: "자유 대화", review: "검토" }, RUNSTAT = { running: "진행 중", done: "완료", failed: "실패", cancelled: "멈춤", replaced: "새 요청으로 바뀜" };
+  function runKindLabel(k) { var id = String(k || "").replace(/^mode:/, ""); return RUNKIND[k] ? _t(RUNKIND[k]) : MODEINFO[id] ? MODEINFO[id].label : id; }
+  function onRun(r) {
+    clearTimeout(runTimer);
+    if (r && r.status === "running") { curRun = r; runTimer = setTimeout(function () { if (curRun && curRun.id === r.id) $("runbar").hidden = false; }, 1200); }
+    else { $("runbar").hidden = true; if (r) { if (curRun && curRun.id === r.id) curRun = null; runs = runs.filter(function (x) { return x.id !== r.id; }).concat([r]).slice(-10); renderStats(); } }
+  }
+  $("runstop").addEventListener("click", function () { send({ t: "cancelRun" }); $("runbar").hidden = true; });
   function renderStats() {
     var box = $("stats"), st = meta && meta.stats; box.textContent = "";
     if (!st) return;
@@ -2104,6 +2153,19 @@ body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-
     rows.forEach(function (r) { var d = mk("div", "ai-item"); var n = mk("div", "nm"); n.appendChild(mk("b", "", r[0])); d.appendChild(n); d.appendChild(mk("span", "mono", r[1])); box.appendChild(d); });
     var names = Object.keys(st.byAI), max = 1; names.forEach(function (n) { max = Math.max(max, st.byAI[n]); });
     if (names.length) { var h = mk("div", "hint", _t("AI별 발언 수")); h.style.marginTop = "12px"; box.appendChild(h); }
+    if (runs.length) {
+      var rh = mk("div", "hint", _t("최근 실행")); rh.style.marginTop = "12px"; box.appendChild(rh);
+      var rl = mk("div", "runlist"); rl.id = "runlist";
+      runs.slice().reverse().slice(0, 6).forEach(function (r) {
+        var d = mk("div", "runrow " + r.status), l = mk("div", "nm");
+        l.appendChild(mk("b", "", runKindLabel(r.kind))); l.appendChild(mk("small", "", _t(RUNSTAT[r.status] || r.status) + " · " + new Date(r.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })));
+        d.appendChild(l);
+        var cost = r.costMicro ? " · $" + (r.costMicro / 1e6).toFixed(4) : "";
+        d.appendChild(mk("span", "mono", _t("호출 {n}회", { n: r.calls || 0 }) + (r.ms != null ? " · " + Math.max(1, Math.round(r.ms / 1000)) + _t("초") : "") + cost));
+        rl.appendChild(d);
+      });
+      box.appendChild(rl);
+    }
     names.forEach(function (n) {
       var row = mk("div", "ai-item c" + colorOf(n)), l = mk("div", "nm"); l.appendChild(mk("b", "", n));
       var bar = mk("div"); bar.style.cssText = "height:6px;border-radius:3px;background:var(--h-sf);margin-top:4px;overflow:hidden";
@@ -2329,7 +2391,7 @@ body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-
       me = m.you; joined = true; setJoining(false);
       $("entrypane").hidden = true; $("room").hidden = false; setView("main");
       $("log").textContent = ""; last = null; lastDay = ""; m.messages.forEach(addMessage); snapMsgs = []; m.messages.forEach(snapAdd);
-      $("doc").value = m.doc || ""; deliv = m.deliv || null; dhist = m.dhist || []; viewVer = null; dmThreads = m.dms || {}; aidms = m.aidms || []; cmp = m.compare || null; credits = m.credits || credits; youOwner = m.youOwner !== false; renderCredits(); renderPub(); loadMyRooms();
+      runs = m.runs || []; curRun = null; onRun(m.run); $("doc").value = m.doc || ""; deliv = m.deliv || null; dhist = m.dhist || []; viewVer = null; dmThreads = m.dms || {}; aidms = m.aidms || []; cmp = m.compare || null; credits = m.credits || credits; youOwner = m.youOwner !== false; renderCredits(); renderPub(); loadMyRooms();
       if (wide()) $("shell").dataset.info = "1";
       renderBlocked(m.blocked); renderMeta(m); renderMemory(m.memory); renderRooms(); if (!matchMedia("(pointer:coarse)").matches) $("text").focus();
     } else if (m.t === "meta") { renderMeta(m); saveSnap(); }
@@ -2342,6 +2404,7 @@ body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-
       if (m.msg.code === "BUDGET_EXHAUSTED") { budgetAlert = true; renderStatus(); }
       if (m.msg.code === "AI_ERROR" && m.msg.extra) { errAI = { id: m.msg.extra.aiId, name: m.msg.extra.aiName, text: m.msg.extra.text }; renderStatus(); }
     }
+    else if (m.t === "run") { onRun(m.run); }
     else if (m.t === "budget") { if (meta) meta.budget = m.budget; renderBudget(m.budget); renderStatus(); }
     else if (m.t === "dm") {
       (dmThreads[m.aiId] = dmThreads[m.aiId] || []).push(m.msg);
@@ -2454,6 +2517,9 @@ body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-
     send({ t: "addAI", name: $("ainame").value.trim(), persona: $("aipersona").value.trim(), provider: $("aiprov").value, model: $("aimodel").value.trim(), apiKey: $("aikey").value.trim() });
     $("ainame").value = ""; $("aipersona").value = ""; $("aikey").value = ""; provChange();
   });
+  var ACTHINT = { quiet: "부르거나 꼭 필요할 때만 말합니다. AI끼리 이어서 떠들지 않아 호출도 적습니다.", normal: "사람이 한 번 말하면 AI들이 10마디까지 주고받습니다.", chatty: "AI들이 서로의 말에도 자주 끼어듭니다. 호출이 가장 많습니다." };
+  document.querySelectorAll('input[name="activity"]').forEach(function (r) { r.addEventListener("change", function () { if (r.checked) send({ t: "config", activity: r.value }); }); });
+  document.querySelectorAll('input[name="judge"]').forEach(function (r) { r.addEventListener("change", function () { if (r.checked) { send({ t: "config", judge: r.value }); toast(_t("설정을 적용했습니다.")); } }); });
   $("stminus").addEventListener("click", function () { $("stval").textContent = Math.max(1, Number($("stval").textContent) - 1); });
   $("stplus").addEventListener("click", function () { $("stval").textContent = Math.min(10, Number($("stval").textContent) + 1); });
   $("apply").addEventListener("click", function () {

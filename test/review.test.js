@@ -42,6 +42,13 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     const dv = ev.filter(e => e.t === 'deliv').pop();
     check('review card keeps the original for the compare view', dv && typeof dv.deliv.src === 'string' && dv.deliv.src.includes('끝문장QQQ'), dv && typeof dv.deliv.src);
     check('editor-in-chief saves the review card', dv && dv.deliv.by === '편집장' && /## 합의된 문제/.test(dv.deliv.text) && /## 고친 버전/.test(dv.deliv.text), JSON.stringify(dv && dv.deliv));
+    // 검토 카드 공유 페이지: 마크다운을 제목·목록으로 보여 주고, 요금제와 상관없이 '내 문서도 검토받기'로 이어진다
+    s({ t: 'share', kind: 'result' }); await sleep(400);
+    const sh = ev.filter(e => e.t === 'shared').pop();
+    const page = sh ? await (await fetch('http://127.0.0.1:' + port + sh.url)).text() : '';
+    check('shared review card renders headings and lists (not raw markdown)', /<h3>합의된 문제<\/h3>/.test(page) && /<li>목적 없음<\/li>/.test(page) && !page.includes('## 합의된'), page.slice(0, 200));
+    check('shared review card ends with "review my document too" (plus plan, no ad banner)', page.includes('href="/?mode=review"') && page.includes('내 문서도 검토받기') && !page.includes('class="badge"'), '');
+    check('shared review card is titled as a review card', /<title>검토 카드<\/title>/.test(page));
     // 짧은 추가 요청은 같은 문서를 계속 본다
     log.length = 0; s({ t: 'msg', text: '고친 버전 전체를 다시 써줘' }); await sleep(2500);
     check('short follow-up keeps reviewing the same document', log.length >= 1 && log.every(l => l.sys.includes('끝문장QQQ')), log.length);
