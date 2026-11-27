@@ -24,7 +24,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     check('share link created', sh && /^\/s\/[0-9a-f]{12}$/.test(sh.url), JSON.stringify(sh));
     const page = await (await fetch('http://127.0.0.1:' + port + sh.url)).text();
     check('share page has link-preview meta', /property="og:title"/.test(page) && /property="og:description"/.test(page), page.slice(0, 400));
-    check('free share carries remix link with mode only', /href="\/\?mode=debate"/.test(page) && /Debate 모드로 해보기/.test(page), page.slice(0, 900));
+    check('free share carries remix link with mode and the share marker only (no question text)', /href="\/\?mode=debate&ref=share"/.test(page) && /Debate 모드로 해보기/.test(page), page.slice(0, 900));
     check('remix link/page never leaks the asked question', !/비밀질문XYZ/.test(page), 'leak');
     // 존재하지 않는 공유 ID는 404, 이상한 mode 값은 무시
     const bad = await fetch('http://127.0.0.1:' + port + '/s/zzzzzzzzzzzz'); check('unknown share id → 404', bad.status === 404, bad.status);

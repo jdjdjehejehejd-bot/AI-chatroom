@@ -549,14 +549,14 @@ body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-
 #text { font-size:15px; }
 @media (prefers-reduced-motion: reduce) { .row, .typing .bubble i, .cc.live .av { animation:none !important; } }
 /* 검토실 원문 비교 */
-.dcmp { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:8px 0; }
+.dcmpgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:8px 0; }
 .dcol { min-width:0; border:1px solid var(--line); border-radius:12px; background:var(--surface2); padding:10px 12px; }
 .dcol > b { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
 .dtext { white-space:pre-wrap; word-break:break-word; font-size:13.5px; line-height:1.65; max-height:52vh; overflow:auto; }
 .dtext mark { border-radius:4px; padding:0 1px; color:inherit; }
 .dtext mark.del { background:rgba(220,38,38,.14); text-decoration:line-through; text-decoration-color:rgba(220,38,38,.55); }
 .dtext mark.ins { background:rgba(22,163,74,.16); }
-@media (max-width:560px) { .dcmp { grid-template-columns:1fr; } }
+@media (max-width:560px) { .dcmpgrid { grid-template-columns:1fr; } }
 /* AI 활동량 3단 선택 */
 .seg3 { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; background:var(--surface2); border:1px solid var(--line); border-radius:12px; padding:4px; }
 .seg3 label { position:relative; }
@@ -1183,12 +1183,14 @@ body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-
   document.querySelectorAll('input[name="jmode"]').forEach(function (r) {
     r.addEventListener("change", function () { jmode = r.value; $("jassetbox").hidden = inRoomUrl || jmode !== "asset"; showFlow(); });
   });
+  var fromShare = false;
   /* 공유 페이지의 "나도 해보기" 링크(?mode=debate)로 들어오면 그 모드를 미리 골라 둔다. 질문 내용은 링크에 싣지 않는다. */
   (function () {
     var pm = params.get("mode");
+    if (params.get("ref") === "share" && !inRoomUrl) fromShare = true;   // 공유 페이지에서 왔다는 표시만(내용은 없음). 새로 만드는 첫 방에 한 번 실린다
     if (inRoomUrl || !pm || !MODEINFO[pm]) return;
     var rr = document.querySelector('input[name="jmode"][value="' + pm + '"]');
-    if (rr) { rr.checked = true; jmode = pm; showFlow(); }
+    if (rr) { rr.checked = true; jmode = pm; showFlow(); setView("main"); }   // 폰에서도 방 목록이 아니라 바로 방 만들기 화면을 연다(공유 링크로 온 사람이 버튼을 찾지 못하던 문제)
   })();
   function resetRoomState() {
     meta = null; pipeDirty = false; deliv = null; dhist = []; viewVer = null; dmThreads = {}; dmUnread = {}; dmOpen = ""; dmTyping = {}; typing = {}; msgIndex = {}; closeProfile(); $("inbox").hidden = true; $("dm").hidden = true; dview = "preview"; errAI = null; budgetAlert = false; joined = false; colors = {}; colorCount = 0; aiShown = 0; last = null; lastDay = ""; dropTyping(); me = "";
@@ -1392,7 +1394,7 @@ body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-
     sock.onopen = function () {
       var j = { t: "join", room: roomId, name: name, key: dmKey(), consent: true };
       var snap = loadSnap(roomId); if (snap) j.restore = snap;   // 서버가 재시작돼 방을 잃었으면 이 기록으로 되살린다(방이 있으면 무시됨)
-      if (fresh && !inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; }
+      if (fresh && !inRoomUrl) { if (jmode === "asset" && pendingAsset) j.asset = pendingAsset; else if (MODEINFO[jmode]) j.mode = jmode; if (fromShare) { j.ref = "share"; fromShare = false; } }
       send(j);
     };
     sock.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (x) { return; } if (m.t === "state") { retry = 0; netbar(""); } onMsg(m); };
@@ -1948,7 +1950,7 @@ body { font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,-
     }
     box.appendChild(m);
     if (fixed && dview === "compare") {
-      var d = sentDiff(cur.src, fixed), grid = mk("div", "dcmp"); grid.id = "dcmpbox";
+      var d = sentDiff(cur.src, fixed), grid = mk("div", "dcmpgrid"); grid.id = "dcmpbox";
       grid.appendChild(diffPane(_t("원문"), d.a, "del")); grid.appendChild(diffPane(_t("고친 버전"), d.b, "ins"));
       box.appendChild(grid);
       var nch = d.b.filter(function (p) { return p[1]; }).length;

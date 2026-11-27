@@ -364,7 +364,36 @@ const FLOWS = ['free', 'asset', 'code', 'brainstorm', 'make', 'debate', 'review'
 /* 보관 중인 전체 기간의 익명 이벤트를 합산해 핵심 지표를 계산한다. 분모가 0이면 null.
    비용 상태: no_real_calls(실제 제공사 호출 0건, 비용 0이 아니라 "측정 데이터 없음") / fully_priced / incomplete(단가 없는 호출·토큰 미보고·실패 호출이 섞임. 실패 호출은 제공사가 usage를 주지 않으면 비용에 안 잡히므로 보수적으로 미확인 처리, 과소 값).
    실패한 호출의 비용은 제공사가 usage를 주지 않는 한 잡히지 않는다. */
-function computeKpi(ev) {
+/* 실행 계획의 관문(계획 문서 '실행 계획 · 5단계와 관문'). 숫자는 계획에서 정한 그대로이고, 표본이 작으므로 통과 여부는 참고용이다 */
+const GATES = { g0: { minCalls: 40, minSuccess: 0.95 }, g1: { minRated: 30, minUseful: 0.6, minAdopt: 0.3 } };
+function computeGates(tot, opts) {
+  const g = k => tot[k] || 0, pre = p => Object.entries(tot).filter(([k]) => k.startsWith(p)).reduce((a, [, v]) => a + v, 0);
+  const ratio = (a, b) => (b > 0 ? Math.round(a / b * 1000) / 1000 : null);
+  /* 관문 0: 재배포해도 방이 남고(저장소), 상업용 유료 API 실제 호출 40건 이상 성공률 95% 이상. 무료 풀·데모 호출은 세지 않는다 */
+  const paidOk = pre('call_ok.') - g('call_ok.free'), paidErr = pre('call_err.') - g('call_err.free'), paid = paidOk + paidErr;
+  const g0 = { persistent: !!opts.persistent, paidCalls: paid, successRate: ratio(paidOk, paid) };
+  g0.pass = g0.persistent && paid >= GATES.g0.minCalls && g0.successRate >= GATES.g0.minSuccess;
+  /* 관문 1: 검토 카드 평가 30건 중 60% 이상이 4~5점, 검토 카드 30% 이상이 복사·공유됨 */
+  let rated = 0, useful = 0; for (let n = 1; n <= 5; n++) { const c = g('rating.' + n + '.review'); rated += c; if (n >= 4) useful += c; }
+  const cards = g('deliverable_saved.review') || g('run_with_deliverable.review'), adopted = g('deliv_adopted.review');
+  const g1 = { rated, usefulRate: ratio(useful, rated), cards, adopted, adoptRate: ratio(adopted, cards) };
+  g1.pass = rated >= GATES.g1.minRated && g1.usefulRate >= GATES.g1.minUseful && g1.adoptRate != null && g1.adoptRate >= GATES.g1.minAdopt;
+  /* 관문 2: 공유를 연 사람 중 새 방을 만들어 첫 작업을 끝낸 사람이 있다 */
+  const g2 = { views: pre('share_view.'), rooms: g('share_room'), completed: g('share_room_done') };
+  g2.pass = g2.completed >= 1;
+  /* 관문 3: 쓸모 있는 작업 하나당 원가가 빠짐없이 잰다(실제 유료 호출이 있고, 단가 없는 호출·토큰 미보고·유료 실패가 없음) */
+  const unpriced = pre('cost_unpriced.'), missing = pre('tok_missing.');
+  let usefulAll = 0; for (let n = 4; n <= 5; n++) usefulAll += g('rating.' + n);
+  const g3 = { paidCalls: paid, unpriced, tokMissing: missing, paidFailed: paidErr, useful: usefulAll, costUsd: Math.round(pre('cost_micro.') / 1e6 * 10000) / 10000 };
+  g3.perUsefulUsd = usefulAll > 0 && g3.costUsd > 0 ? Math.round(g3.costUsd / usefulAll * 10000) / 10000 : null;
+  g3.pass = paid > 0 && unpriced === 0 && missing === 0 && paidErr === 0 && g3.perUsefulUsd != null;
+  /* Run 단위 평균(종류별): 호출 수·걸린 시간·비용 */
+  const runs = {};
+  for (const k of Object.keys(tot)) { const m = /^run_n\.(.+)$/.exec(k); if (!m) continue; const kind = m[1], n = tot[k];
+    runs[kind] = { n, avgCalls: ratio(g('run_calls.' + kind), n), avgSec: Math.round(g('run_ms.' + kind) / n / 100) / 10, avgCostUsd: g('run_cost_micro.' + kind) ? Math.round(g('run_cost_micro.' + kind) / n) / 1e6 : null }; }
+  return { g0, g1, g2, g3, runs, thresholds: GATES };
+}
+function computeKpi(ev, opts = {}) {
   const tot = {};
   for (const d of Object.values(ev)) for (const [k, v] of Object.entries(d)) tot[k] = (tot[k] || 0) + v;
   const pre = p => Object.entries(tot).filter(([k]) => k.startsWith(p)).reduce((a, [, v]) => a + v, 0);
@@ -394,6 +423,7 @@ function computeKpi(ev) {
     returns: { d1: g('room_return.d1'), d2_7: g('room_return.d2_7'), d8p: g('room_return.d8p') },
     providerErrorRate: ratio(pre('call_err.'), realCalls),
     managed: { today: managedToday(), dailyCap: MANAGED_DAILY_CALLS || null, usdToday: Math.round(managedUsdToday() * 10000) / 10000, usdCap: MANAGED_DAILY_USD || null, blockedTotal: g('managed_blocked') },
+    gates: computeGates(tot, opts),
     cost: { status: costStatus, usd: round4(costUsd), perAdoptedUsd: adopted > 0 && costUsd > 0 ? round4(costUsd / adopted) : null, perUsefulUsd: rt.useful > 0 && costUsd > 0 ? round4(costUsd / rt.useful) : null, realCalls, freeCalls: pre('cost_free.'), unpricedCalls: unpriced, tokMissingCalls: missing, failedCallsUnverified: failedCalls },
     byFlow
   };
@@ -1358,6 +1388,7 @@ function runEnd(room, status) {
   r.status = status || (room.runErr ? 'failed' : 'done'); r.endedAt = Date.now(); r.ms = r.endedAt - r.startedAt;
   r.calls = room.runCalls; r.tokIn = room.runTok.in; r.tokOut = room.runTok.out; r.tokMissing = room.runTok.missing; r.deliv = room.runDeliv ? ((room.deliv && room.deliv.v) || true) : false;
   room.runs = (room.runs || []).concat([r]).slice(-RUN_KEEP);
+  if (r.status === 'done' && r.calls > 0 && room.stats.ref === 'share' && !room.stats.refDone) { room.stats.refDone = 1; trackF('share_room_done', room); }
   if (r.calls > 0) { track('run_n.' + r.kind); track('run_calls.' + r.kind, r.calls); track('run_ms.' + r.kind, r.ms); if (r.costMicro) track('run_cost_micro.' + r.kind, r.costMicro); }
   if (store.enabled) dirty.add(room.id);
   broadcast(room, { t: 'run', run: r });
@@ -1908,6 +1939,8 @@ function join(ws, m) {
       else if (r.asset.ais.length > planOf(room).ais) assetErr = planOf(room).label + ' 플랜은 AI를 최대 ' + planOf(room).ais + '명까지 쓸 수 있습니다.';
       else { applyAsset(room, r.asset); libAdd(room, r.asset, name); }
     }
+    /* 공유 페이지에서 '내 문서도 검토받기'·'나도 해보기'로 온 사람이 새 방을 만들었으면 표시해 두고, 첫 작업을 끝내면 한 번 센다(관문 2) */
+    if (m.ref === 'share' && !assetErr) { room.stats.ref = 'share'; trackF('share_room', room); }
   }
   if (room.clients.size >= LIMITS.humans) return send(ws, { t: 'err', text: '방이 가득 찼습니다.' });
   if ((room.banned || []).includes(ws.user ? ws.user.sub : 'name:' + name)) return send(ws, { t: 'err', code: 'KICKED', text: '이 방에서 내보내져 입장할 수 없습니다.' });
@@ -2494,7 +2527,7 @@ const server = http.createServer(async (req, res) => {
   if (u === '/admin/events' && req.method === 'GET') {
     const tok = (process.env.ADMIN_TOKEN || ''), got = String(req.headers.authorization || '').replace(/^Bearer /, '');
     if (!tok || got.length !== tok.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(tok))) return json(401, { error: 'unauthorized' });
-    return json(200, { events, kpi: computeKpi(events), pricing: { configured: Object.keys(PRICES).length, version: process.env.MODEL_PRICES_VERSION || '' } });
+    return json(200, { events, kpi: computeKpi(events, { persistent: store.enabled }), pricing: { configured: Object.keys(PRICES).length, version: process.env.MODEL_PRICES_VERSION || '' } });
   }
   if (u === '/admin/reports/resolve' && req.method === 'POST') {
     const tok = (process.env.ADMIN_TOKEN || ''), got = String(req.headers.authorization || '').replace(/^Bearer /, '');
@@ -2708,6 +2741,8 @@ const server = http.createServer(async (req, res) => {
     if (!r || r.exp < Date.now()) { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('만료되었거나 없는 링크입니다.'); }
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
       'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data: https:; font-src data: https:; base-uri 'none'; form-action 'none'" });
+    /* 공유 페이지를 연 사람 수(관문 2의 분모). 메신저·SNS 미리보기 봇은 세지 않는다 */
+    if (req.method === 'GET' && !/bot|crawl|spider|preview|facebookexternalhit|slack|kakaotalk|discord|telegram|whatsapp|line\//i.test(String(req.headers['user-agent'] || ''))) track('share_view.' + (r.kind === 'result' ? (r.mode || 'free') : 'chat'));
     return res.end(sharePage(r));
   }
   if (u === '/health') { res.writeHead(200); return res.end('ok'); }
