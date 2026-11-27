@@ -1,7 +1,9 @@
 /* 방 권한 규칙 표(README "방 권한"): 방장이 있는 방은 설정 변경이 방장 전용, 게스트가 만든 방은 모두가 같은 권한. */
 const { spawn } = require('child_process'), fs = require('fs'), os = require('os'), path = require('path');
 const ROOT = path.resolve(__dirname, '..'); const WS = require('ws');
-const sleep = ms => new Promise(r => setTimeout(r, ms)); const res = []; const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + d)); };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+/* 느린 CI(Node 22에서 실제로 실패)에서도 고정 대기 대신 사건이 올 때까지 최대 3초 기다린다 */
+const until = async (f, ms = 3000) => { for (let t = 0; t < ms; t += 50) { const v = f(); if (v) return v; await sleep(50); } return f(); }; const res = []; const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : ' :: ' + d)); };
 let out = ''; const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'perm-')); const PORT = 3335, B = 'http://127.0.0.1:' + PORT;
 const sv = spawn('node', ['server.js'], { cwd: ROOT, env: Object.assign({}, process.env, { PORT: String(PORT), DATA_DIR: dir, DEMO_DELAY_MS: '20', SESSION_SECRET: 'as', EMAIL_DEV_LOG: '1', REQUIRE_LOGIN: '0' }) });
 sv.stdout.on('data', d => out += d); sv.stderr.on('data', d => out += d);
@@ -34,11 +36,11 @@ const denied = (c, from) => c.ev.slice(from).filter(e => e.t === 'err' && /방�
   await sleep(5200);
   // 3) 방장 삭제 권한: 다른 사람의 메시지는 방장만 지울 수 있다
   O.s({ t: 'msg', text: '방장 글' }); await sleep(250);
-  const mid = M.ev.find(e => e.t === 'msg' && e.msg.text === '방장 글').msg.id;
+  const mid = (await until(() => M.ev.find(e => e.t === 'msg' && e.msg.text === '방장 글'))).msg.id;
   const n1 = M.ev.length; M.s({ t: 'delmsg', id: mid }); await sleep(250);
   check('non-owner cannot delete others\' messages', M.ev.slice(n1).some(e => e.t === 'err') && !M.ev.slice(n1).some(e => e.t === 'msgdel'));
   M.s({ t: 'msg', text: '내 글' }); await sleep(250);
-  const mine = O.ev.find(e => e.t === 'msg' && e.msg.text === '내 글').msg.id;
+  const mine = (await until(() => O.ev.find(e => e.t === 'msg' && e.msg.text === '내 글'))).msg.id;
   O.s({ t: 'delmsg', id: mine }); await sleep(250);
   check('owner may delete a participant\'s message', O.ev.some(e => e.t === 'msgdel' && e.id === mine));
   sv.kill(); console.log(res.every(Boolean) ? 'ALL OK' : 'SOME FAILED ' + res.filter(x => !x).length); process.exit(0);
