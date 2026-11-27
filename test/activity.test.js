@@ -33,6 +33,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     calls.length = 0; prompts.length = 0; e0 = ev.length; s({ t: 'msg', text: '다들 오늘 어땠어' }); await sleep(2500);
     check('quiet: only reactions to the human line, no AI-to-AI follow-ups', aiMsgs(e0) <= 3 && aiMsgs(e0) >= 1, aiMsgs(e0));
     check('quiet: no extra judge calls after AI lines (calls ≤ AIs)', calls.length <= 3, calls.length);
+    check('quiet: no "talked a lot, taking a break" notice after a few lines', !ev.slice(e0).some(e => e.t === 'msg' && e.msg.code === 'STREAK_LIMIT'));
     // 조용이어도 @로 부르면 답한다(AI가 다른 AI를 불러도)
     e0 = ev.length; s({ t: 'msg', text: '@가 한마디' }); await sleep(2000);
     check('quiet: a called AI still answers', ev.slice(e0).some(e => e.t === 'msg' && e.msg.kind === 'ai' && e.msg.who === '가'));

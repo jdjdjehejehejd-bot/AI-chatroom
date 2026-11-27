@@ -1335,6 +1335,7 @@ const TYPE_MIN_MS = Number(process.env.CHAT_TYPE_MIN_MS || 250), TYPE_PER_CHAR_M
 const JIT_MIN = Number(process.env.CHAT_JITTER_MIN_MS || 100), JIT_MAX = Math.max(JIT_MIN, Number(process.env.CHAT_JITTER_MAX_MS || 900));
 /* AI 활동량(방 설정): 조용 = 불렸을 때·사람 말에만 반응하고 AI끼리 이어 떠들지 않음, 보통 = 사람 말 하나에 AI 말 10번까지,
    수다 = 안전선(CHAT_SAFETY_MAX)까지. 서버가 강제한다(화면에서 고르는 것만으로 제한하지 않는다) */
+/* 조용 방에서는 한도에 닿아도 '한참 이야기해서 쉽니다' 안내를 띄우지 않는다(AI 말이 몇 마디뿐이라 어색함, 실사용 QA) */
 const ACTIVITY = { quiet: { cap: 3, wakeOnAI: false }, normal: { cap: 10, wakeOnAI: true }, chatty: { cap: Infinity, wakeOnAI: true } };
 const DEFAULT_ACTIVITY = ACTIVITY[process.env.DEFAULT_ACTIVITY] ? process.env.DEFAULT_ACTIVITY : 'normal';
 const activityOf = room => ACTIVITY[room.activity] ? room.activity : DEFAULT_ACTIVITY;
@@ -1492,7 +1493,7 @@ async function chatThink(room, ai) {
      (동시에 생각하던 AI가 같은 대화를 두 번 판단해 혼자 연달아 말하던 경쟁 상태의 원인. 호출 비용도 아낀다) */
   if (!ai.forceReply && !ai.dmPending && ai.chatSeen != null && lastOtherSeq(room, ai) === ai.chatSeen && !calledSince(room, ai)) return chatIdle(room);
   if (st.sinceHuman >= chatCap(room, st)) {
-    if (!st.noted && !st.capOverride) { st.noted = true; system(room, 'AI들이 한참 이야기해서 잠시 쉽니다. 누가 말하면 다시 이어집니다.', 'STREAK_LIMIT'); }
+    if (!st.noted && !st.capOverride && activityOf(room) !== 'quiet') { st.noted = true; system(room, 'AI들이 한참 이야기해서 잠시 쉽니다. 누가 말하면 다시 이어집니다.', 'STREAK_LIMIT'); }
     return chatIdle(room);
   }
   if (![...room.clients].some(c => c.readyState === 1)) return chatIdle(room);   // 보는 사람이 없으면 떠들지 않는다
@@ -1589,7 +1590,7 @@ async function chatThink(room, ai) {
   if (gen !== room.gen || !freeChatActive(room)) return chatIdle(room);
   if (isPass(text)) room.stats.passes = (room.stats.passes || 0) + 1;
   else if (st.sinceHuman >= chatCap(room, st)) {
-    if (!st.noted) { st.noted = true; system(room, 'AI들이 한참 이야기해서 잠시 쉽니다. 누가 말하면 다시 이어집니다.', 'STREAK_LIMIT'); }
+    if (!st.noted && activityOf(room) !== 'quiet') { st.noted = true; system(room, 'AI들이 한참 이야기해서 잠시 쉽니다. 누가 말하면 다시 이어집니다.', 'STREAK_LIMIT'); }
   } else {
     room.lastAI = ai;
     const ex = extractAIDMs(room, ai, text);
