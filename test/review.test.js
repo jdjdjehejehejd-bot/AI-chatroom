@@ -12,7 +12,7 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     const who = (/AI 참가자 "([^"]+)"/.exec(sys) || [])[1] || '';
     log.push({ who, model: j.model, sys, user, at: Date.now() });
     if (who && who === failWho) { rq.writeHead(400, { 'content-type': 'application/json' }); return rq.end('{"error":{"message":"bad request"}}'); }
-    const text = who === '편집장' ? '종합했습니다.\n```markdown\n## 한 줄 평가\n좋음\n\n## 합의된 문제\n- 목적 없음\n\n## 갈리는 문제\n- 길이\n\n## 고친 버전\n고친 글\n\n## 확인 필요\n- 수치\n```' : who + ' 의견: 1) 목적이 없음';
+    const text = who === '편집장' ? '종합했습니다.\n```markdown\n## 한 줄 평가\n좋음\n\n## 합의된 문제\n- 목적 없음\n\n## 갈리는 문제\n- 길이\n\n## 고친 버전\n고친 글. 응답률 78%로 개선\n\n## 확인 필요\n- 수치\n```' : who + ' 의견: 1) 목적이 없음';
     setTimeout(() => { rq.writeHead(200, { 'content-type': 'application/json' }); rq.end(JSON.stringify({ choices: [{ message: { content: text } }], usage: { prompt_tokens: 10, completion_tokens: 5 } })); }, who === '편집장' ? 0 : delay);
   }); });
   await new Promise(r => mock.listen(4131, '127.0.0.1', r));
@@ -41,6 +41,8 @@ const check = (n, c, d) => { res.push(c); console.log((c ? 'PASS ' : 'FAIL ') + 
     check('each reviewer runs on a different model', new Set(log.map(l => l.model)).size === 4, log.map(l => l.model).join(','));
     const dv = ev.filter(e => e.t === 'deliv').pop();
     check('review card keeps the original for the compare view', dv && typeof dv.deliv.src === 'string' && dv.deliv.src.includes('끝문장QQQ'), dv && typeof dv.deliv.src);
+    check('numbers in the revised version that are not in the original are flagged', dv && JSON.stringify(dv.deliv.novel) === '["78%"]' && ev.some(e => e.t === 'msg' && e.msg.code === 'REVIEW_NOVEL_NUMBERS' && e.msg.text.includes('78%')), JSON.stringify(dv && dv.deliv.novel));
+    check('the editor prompt forbids invented figures and asks for [placeholders]', log.find(l => l.who === '편집장').sys.includes('대괄호 자리표시'));
     check('editor-in-chief saves the review card', dv && dv.deliv.by === '편집장' && /## 합의된 문제/.test(dv.deliv.text) && /## 고친 버전/.test(dv.deliv.text), JSON.stringify(dv && dv.deliv));
     // 검토 카드 공유 페이지: 마크다운을 제목·목록으로 보여 주고, 요금제와 상관없이 '내 문서도 검토받기'로 이어진다
     s({ t: 'share', kind: 'result' }); await sleep(400);

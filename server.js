@@ -734,9 +734,19 @@ function harvestDeliverable(room, ai, text) {
   if (!room.mode && last[2].trim().length < FREE_DELIV_MIN) return;   // 모드 없는 방은 짧은 예시 코드는 산출물로 치지 않는다
   room.deliv = { lang: (last[1] || 'text').toLowerCase().slice(0, 12), text: last[2].trim().slice(0, DELIV_MAX), by: ai.name, v: ((room.deliv && room.deliv.v) || 0) + 1, ts: Date.now() };
   if (room.mode === 'review' && room.reviewDoc) room.deliv.src = room.reviewDoc;   // 검토실: 원문을 함께 보관해 '원문과 비교' 화면을 만든다
+  /* 검토실 안전장치: 고친 버전에 원문에 없는 숫자가 있으면(대괄호 자리표시는 제외) 지어낸 수치일 수 있으므로 표시하고 알린다.
+     실모델 QA: 편집장이 '응답률 78%, n=182', '463명'처럼 원문에 없는 수치를 사실처럼 써 넣었다 */
+  if (room.deliv.src) {
+    const fixed = (/(^|\n)##\s*고친 버전[^\n]*\n([\s\S]*?)(?=\n##\s|$)/.exec(room.deliv.text) || [])[2] || '';
+    const nums = t => (t.replace(/\[[^\]]*\]/g, ' ').match(/\d[\d,.]*\s*(%|퍼센트|명|원|억|만|천|분|시간|일|개월|년|곳|개|배|건)?/g) || []).map(x => x.replace(/[\s,]/g, '').replace(/\.$/, ''));
+    const srcN = new Set(nums(room.deliv.src).map(x => x.replace(/\D+$/, '')));
+    const novel = [...new Set(nums(fixed).filter(x => !srcN.has(x.replace(/\D+$/, ''))))].slice(0, 12);
+    if (novel.length) room.deliv.novel = novel;
+  }
   room.delivReq = room.lastReq || ''; room.compare = null;
   pushHist(room); trackF('deliverable_saved', room); room.runDeliv = true; funnel(room, 'deliverable');
   broadcast(room, { t: 'deliv', deliv: room.deliv, hist: histMeta(room) });
+  if (room.deliv.novel) system(room, '고친 버전에 원문에 없는 숫자가 있습니다: ' + room.deliv.novel.join(', ') + '. AI가 지어낸 값일 수 있으니 사실인지 확인한 뒤 쓰세요.', 'REVIEW_NOVEL_NUMBERS');
 }
 /* 산출물 버전 기록: 최근 {HIST_MAX}개를 방에 보관한다. */
 const HIST_MAX = 8;
@@ -2259,6 +2269,7 @@ function handle(ws, m) {
       if (!h || !room.deliv) return;
       room.deliv = { lang: h.lang, text: h.text, by: h.by, v: room.deliv.v + 1, ts: Date.now(), from: h.v };
       if (h.src) room.deliv.src = h.src;
+      if (h.novel) room.deliv.novel = h.novel;
       pushHist(room); track('deliverable_restored');
       system(room, name + ' 님이 산출물 v' + h.v + '을(를) 되돌려 v' + room.deliv.v + '으로 저장했습니다.', 'DELIV_RESTORED');
       return broadcast(room, { t: 'deliv', deliv: room.deliv, hist: histMeta(room) });

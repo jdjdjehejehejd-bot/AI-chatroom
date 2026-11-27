@@ -38,5 +38,5 @@ const cl=(room,name,key)=>new Promise(r=>{const ws=new WS('ws://127.0.0.1:3308/w
  const old2=Object.assign({},old,{id:'oldplus1',plan:'plus'});fs.writeFileSync(path.join(dir,'rooms','oldplus1.json'),JSON.stringify(old2));
  sv=start();await sleep(900);
  check('free room older than 7d purged, plus room kept',!fs.existsSync(path.join(dir,'rooms','oldroom1.json'))&&fs.existsSync(path.join(dir,'rooms','oldplus1.json')));
- console.log(res.every(Boolean)?'ALL OK':'SOME FAILED');sv.kill();fs.rmSync(dir,{recursive:true,force:true});process.exit(0);
+ console.log(res.every(Boolean)?'ALL OK':'SOME FAILED');sv.kill();await new Promise(r=>{if(sv.exitCode!==null)return r();sv.on('exit',r)});fs.rmSync(dir,{recursive:true,force:true});process.exit(0);   /* 서버가 종료하며 마지막 저장을 끝낸 뒤 지운다(지우는 중에 파일이 생겨 ENOTEMPTY로 실패하던 경쟁) */
 })();
